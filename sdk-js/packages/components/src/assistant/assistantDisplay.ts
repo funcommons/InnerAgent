@@ -13,6 +13,7 @@
  */
 import type { AgentMessage, TimelineItem } from '@inneragent/sdk-core'
 import { statusIsRunning } from '@inneragent/sdk-core'
+import type { AssistantMessageAttachmentView } from './assistantMessageAttachments'
 
 /** 会话行状态 → i18n key (旧 statusLabel) */
 export function conversationStatusKey(status?: string): string {
@@ -88,6 +89,8 @@ export function buildSegments(messages: AgentMessage[], activeRunId?: string): M
 
 export interface RenderableMessageSegment extends MessageSegment {
   timeline: TimelineItem[]
+  /** [P2 #14] 用户消息附件视图(image 缩略图 / file 文件卡, 消息区渲染输入) */
+  attachments?: AssistantMessageAttachmentView[]
 }
 
 /** 批量确认条上已勾选数量/统一决定 (旧 tool-confirmation-batch-bar 内部逻辑) */

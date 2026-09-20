@@ -29,7 +29,9 @@ import IaButton from '../ui/IaButton.vue'
 import IaEmpty from '../ui/IaEmpty.vue'
 import AssistantTimeline, { type AssistantToolConfirmation } from './AssistantTimeline.vue'
 import AssistantToolConfirmBar from './AssistantToolConfirmBar.vue'
+import AssistantAttachmentChip from './AssistantAttachmentChip.vue'
 import { buildSegments, type RenderableMessageSegment } from './assistantDisplay'
+import { messageAttachments } from './assistantMessageAttachments'
 import { useAssistantMessageScroll } from './useAssistantMessageScroll'
 
 const props = defineProps<{ conversationId: string }>()
@@ -56,6 +58,8 @@ const segments = computed<RenderableMessageSegment[]>(() =>
   buildSegments(runtime.value?.messages ?? [], activeRunId.value).map((segment) => ({
     ...segment,
     timeline: messagesToTimeline(segment.assistant),
+    // [P2 #14] 用户消息附件视图(发送后气泡与历史回放同路径)
+    attachments: segment.user ? messageAttachments(segment.user) : [],
   })))
 
 const liveTimeline = computed<TimelineItem[]>(() =>
@@ -206,7 +210,20 @@ function hasContent(): boolean {
 
         <template v-for="segment in segments" :key="segment.key">
           <div v-if="segment.user" class="assistant-messages__user" data-testid="assistant-user-bubble">
-            <p>{{ segment.user.content }}</p>
+            <p v-if="segment.user.content">{{ segment.user.content }}</p>
+            <!-- [P2 #14] 消息区附件渲染: 缩略图(image)/文件卡(file), 复用 composer chip -->
+            <div
+              v-if="segment.attachments?.length"
+              class="assistant-messages__user-attachments"
+              data-testid="assistant-user-attachments"
+            >
+              <AssistantAttachmentChip
+                v-for="attachment in segment.attachments ?? []"
+                :key="attachment.id"
+                :attachment="attachment"
+                :test-id="`assistant-message-attachment-${attachment.id}`"
+              />
+            </div>
           </div>
           <AssistantTimeline class="assistant-timeline-host" :items="segment.timeline" />
         </template>
@@ -382,7 +399,9 @@ function hasContent(): boolean {
 
 .assistant-messages__user {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 
   p {
     margin: 0;
@@ -396,6 +415,15 @@ function hasContent(): boolean {
     white-space: pre-wrap;
     word-break: break-word;
   }
+}
+
+/* [P2 #14] 消息区附件行(缩略图/文件卡, 复用 composer chip 组件) */
+.assistant-messages__user-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 85%;
 }
 
 .assistant-messages__error {

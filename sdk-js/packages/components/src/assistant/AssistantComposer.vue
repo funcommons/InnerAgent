@@ -39,7 +39,7 @@ import {
 import IaButton from '../ui/IaButton.vue'
 import IaSelect from '../ui/IaSelect.vue'
 import IaTag from '../ui/IaTag.vue'
-import SafeImage from '../ui/SafeImage.vue'
+import AssistantAttachmentChip from './AssistantAttachmentChip.vue'
 import type { SelectOption } from '../ui/IaSelect.vue'
 import {
   detectReferenceTrigger,
@@ -61,7 +61,6 @@ import {
   attachmentCompatibilityError,
   attachmentAccept,
   multimodalCapabilitySummary,
-  formatFileSize,
   AssistantAttachmentError,
   type AssistantAttachment,
   type AssistantLocalizedMessage,
@@ -499,12 +498,6 @@ function onPaste(event: ClipboardEvent): void {
   void addFiles(files).catch((error: unknown) => { sendError.value = attachmentError(error) })
 }
 
-function attachmentIcon(attachment: AssistantAttachment): string {
-  if (attachment.inputType === 'video') return 'ri-movie-2-line'
-  if (attachment.inputType === 'audio') return 'ri-headphone-line'
-  return 'ri-file-text-line'
-}
-
 // ---- 提交 / 停止 ----
 const submitting = ref(false)
 const sendError = ref<string | null>(null)
@@ -716,39 +709,15 @@ onMounted(() => {
     </div>
 
     <div v-if="attachments.length" class="assistant-composer__attachments" data-testid="assistant-attachments">
-      <div
+      <!-- [P2 #14] chip 组件化: 与消息区用户气泡附件渲染同组件(AssistantAttachmentChip) -->
+      <AssistantAttachmentChip
         v-for="attachment in attachments"
         :key="attachment.id"
-        class="assistant-composer__attachment"
-        :data-testid="`assistant-attachment-${attachment.id}`"
-        :title="`${attachment.name} · ${attachment.transport.toUpperCase()}`"
-      >
-        <SafeImage
-          v-if="attachment.inputType === 'image' && attachment.previewUrl"
-          :src="attachment.previewUrl"
-          :alt="attachment.name"
-          class="assistant-composer__attachment-thumb"
-        />
-        <span v-else class="assistant-composer__attachment-icon">
-          <i :class="attachmentIcon(attachment)" />
-        </span>
-        <span class="assistant-composer__attachment-meta">
-          <span class="assistant-composer__attachment-name">{{ attachment.name }}</span>
-          <span class="assistant-composer__attachment-size">
-            {{ formatFileSize(attachment.size) }} · {{ attachment.transport.toUpperCase() }}
-          </span>
-        </span>
-        <button
-          type="button"
-          class="assistant-composer__attachment-remove fc-button-ghost"
-          :data-testid="`assistant-attachment-remove-${attachment.id}`"
-          :disabled="submitting || running"
-          :aria-label="t('assistant.attachment-remove')"
-          @click="removeAttachment(attachment.id)"
-        >
-          <i class="ri-close-line" />
-        </button>
-      </div>
+        :attachment="attachment"
+        :removable="true"
+        :remove-disabled="submitting || running"
+        @remove="removeAttachment(attachment.id)"
+      />
     </div>
 
     <textarea
@@ -973,77 +942,6 @@ onMounted(() => {
   gap: 8px;
   overflow-x: auto;
   padding: 0 2px 8px;
-}
-
-.assistant-composer__attachment {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 140px;
-  max-width: 190px;
-  padding: 6px;
-  border-radius: var(--app-radius-md);
-  border: 1px solid var(--app-separator, var(--el-border-color-lighter));
-}
-
-.assistant-composer__attachment-thumb {
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
-  border-radius: var(--app-radius-sm);
-  object-fit: cover;
-}
-
-.assistant-composer__attachment-icon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
-  border-radius: var(--app-radius-sm);
-  color: var(--app-text-secondary);
-  font-size: 18px;
-}
-
-.assistant-composer__attachment-meta {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 4px;
-}
-
-.assistant-composer__attachment-name {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--app-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.assistant-composer__attachment-size {
-  font-size: 9px;
-  color: var(--app-text-secondary);
-}
-
-.assistant-composer__attachment-remove {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: var(--app-radius-full, 9999px);
-  background: none;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--app-text-secondary);
-
-  &:hover { color: var(--app-text); }
 }
 
 .assistant-composer__input {

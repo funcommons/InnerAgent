@@ -484,21 +484,30 @@ export interface WebhookConfigSaveReq {
   events?: WebhookEvent[]
 }
 
-/** 投递记录(签名验证与 5 次指数退避重试的可观测面;任务 #18b 真实契约形) */
+/**
+ * 投递记录(签名验证与 5 次指数退避重试的可观测面;任务 #18b 真实契约形)。
+ * 线上时间字段为 epoch 毫秒(api 层归一为 ISO);status 为投递状态机
+ * PENDING/FAILED/SUCCESS/EXHAUSTED(EXHAUSTED 仅可手动 redeliver 复活)。
+ */
 export interface WebhookDelivery {
   id: number
+  /** 所属应用(多行同值,单应用部署固定) */
+  appId?: number
   event: WebhookEvent
   runId: string
   url: string
-  /** 本次投递是否成功 */
+  /** 最近一次尝试是否成功(2xx) */
   success: boolean
+  /** 投递状态机(PENDING 待投递/FAILED 退避中/SUCCESS 成功/EXHAUSTED 重试耗尽) */
+  status?: 'PENDING' | 'FAILED' | 'SUCCESS' | 'EXHAUSTED'
   attempt: number
   /** 最大 5 次(方案 §7.1) */
   maxAttempts: number
   httpStatus: number | null
   responseSummary: string | null
   nextRetryAt: IsoDateTime | null
-  deliveredAt: IsoDateTime
+  /** 首次投递成功时间(PENDING/FAILED 行为 null) */
+  deliveredAt: IsoDateTime | null
 }
 
 export interface WebhookDeliveryPageReq extends PageQuery {

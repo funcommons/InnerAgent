@@ -1,6 +1,8 @@
 /**
- * [new] Webhook store(视图清单 #6,占位契约:方案 §7.1 定 HMAC+5 次退避、
- * Q5 双密钥并存未建模;配置/投递记录字段自拟,见 types.ts 头清单 #7)。
+ * [new] Webhook store(视图清单 #6)。
+ * deliveries 域已接真实端点(任务 #18b:/admin/webhook-deliveries + redeliver);
+ * config 域(/webhooks/config)端点待服务端落地(跟踪:99-优化建议.md #2),
+ * 加载失败置 configUnavailable,视图显「服务端能力未开通」占位(衔接 #9)。
  */
 import { defineStore } from 'pinia'
 import { webhookAdminApi } from '@/api/admin'
@@ -14,6 +16,14 @@ export const WEBHOOK_EVENTS: Array<{ value: WebhookEvent; label: string }> = [
   { value: 'run.resource-limit', label: '资源上限触发(run.resource-limit)' },
 ]
 
+/** 投递状态机字典(#18b) */
+export const DELIVERY_STATUS: Record<string, { label: string; tag: 'success' | 'warning' | 'danger' | 'info' }> = {
+  PENDING: { label: '待投递', tag: 'info' },
+  FAILED: { label: '退避重试中', tag: 'warning' },
+  SUCCESS: { label: '成功', tag: 'success' },
+  EXHAUSTED: { label: '重试耗尽', tag: 'danger' },
+}
+
 export interface DeliveryFilters extends PageQuery {
   event: WebhookEvent | ''
   success: boolean | null
@@ -23,6 +33,8 @@ export const useWebhooksStore = defineStore('webhooks', {
   state: () => ({
     config: null as WebhookConfig | null,
     configForm: { url: '', secret: '', enabled: false, events: [] as WebhookEvent[] },
+    /** config 端点不可达/未落地 → 视图显「服务端能力未开通」占位 */
+    configUnavailable: false,
     deliveries: [] as WebhookDelivery[],
     deliveriesTotal: 0,
     loading: false,
@@ -30,7 +42,14 @@ export const useWebhooksStore = defineStore('webhooks', {
   }),
   actions: {
     async loadConfig() {
-      this.config = await webhookAdminApi.getConfig()
+      this.configUnavailable = false
+      try {
+        this.config = await webhookAdminApi.getConfig()
+      } catch {
+        // 端点 404/未授权(待服务端落地)→ 占位态,不弹错误
+        this.configUnavailable = true
+        return
+      }
       this.configForm = {
         url: this.config.url,
         secret: '', // 只写:留空不改
@@ -68,8 +87,9 @@ export const useWebhooksStore = defineStore('webhooks', {
         this.loading = false
       }
     },
-    async simulateFailure(event: WebhookEvent, runId: string) {
-      const d = await webhookAdminApi.simulateFailure(event, runId)
+    /** 手动重投(#18b:SUCCESS/FAILED/EXHAUSTED → PENDING,清空尝试历史) */
+    async redeliver(id: number) {
+      const d = await webhookAdminApi.redeliver(id)
       await this.loadDeliveries()
       return d
     },

@@ -301,21 +301,46 @@ describe('admin API 客户端', () => {
     })
   })
 
-  describe('Webhook(mock 域:服务端未实现)', () => {
-    it('saveConfig:PUT /webhooks/config;deliveries 分页', async () => {
+  describe('Webhook(deliveries=任务 #18b 真契约)', () => {
+    it('saveConfig:PUT /webhooks/config(端点待服务端,形状即未来契约)', async () => {
       const { state, respond } = capture({ appId: 1, url: 'https://host/callback', secretMasked: '••••', enabled: true, events: ['run.finished'] })
       server.use(mswHttp.put('/ia/api/v1/admin/webhooks/config', respond))
       const resp = await webhookAdminApi.saveConfig({ url: 'https://host/callback', secret: 's3cret', events: ['run.finished'] })
       expect(state.body).toEqual({ url: 'https://host/callback', secret: 's3cret', events: ['run.finished'] })
       expect(resp.secretMasked).toBe('••••')
+    })
 
-      const { state: s2, respond: r2 } = capture({ list: [], total: 0, pageNo: 1, pageSize: 10 })
-      server.use(mswHttp.get('/ia/api/v1/admin/webhooks/deliveries', r2))
-      await webhookAdminApi.deliveries({ event: 'run.failed', success: false, pageNo: 1, pageSize: 10 })
-      const url = new URL(s2.req!.url)
-      expect(url.pathname).toBe('/ia/api/v1/admin/webhooks/deliveries')
+    it('deliveries:GET /webhook-deliveries(#18b 真路径);线上 epoch 毫秒归一为 ISO', async () => {
+      const { state, respond } = capture({
+        list: [{
+          id: 71, appId: 1, event: 'run.finished', runId: 'run-2040', url: 'https://host/callback',
+          success: true, status: 'SUCCESS', attempt: 1, maxAttempts: 5, httpStatus: 200,
+          responseSummary: 'OK', nextRetryAt: null, deliveredAt: 1758350315000,
+        }],
+        total: 1, pageNo: 1, pageSize: 10,
+      })
+      server.use(mswHttp.get('/ia/api/v1/admin/webhook-deliveries', respond))
+      const page = await webhookAdminApi.deliveries({ event: 'run.failed', success: false, pageNo: 1, pageSize: 10 })
+      const url = new URL(state.req!.url)
+      expect(url.pathname).toBe('/ia/api/v1/admin/webhook-deliveries')
       expect(url.searchParams.get('event')).toBe('run.failed')
       expect(url.searchParams.get('success')).toBe('false')
+      expect(page.list[0]!.deliveredAt).toBe(new Date(1758350315000).toISOString())
+      expect(page.list[0]!.status).toBe('SUCCESS')
+    })
+
+    it('redeliver:POST /webhook-deliveries/{id}/redeliver(#18b 手动重投)', async () => {
+      const { state, respond } = capture({
+        id: 72, appId: 1, event: 'run.failed', runId: 'run-2041', url: 'https://host/callback',
+        success: false, status: 'PENDING', attempt: 0, maxAttempts: 5,
+        httpStatus: null, responseSummary: null, nextRetryAt: null, deliveredAt: null,
+      })
+      server.use(mswHttp.post('/ia/api/v1/admin/webhook-deliveries/72/redeliver', respond))
+      const d = await webhookAdminApi.redeliver(72)
+      expect(state.req!.method).toBe('POST')
+      expect(state.req!.url).toContain('/webhook-deliveries/72/redeliver')
+      expect(d.status).toBe('PENDING')
+      expect(d.attempt).toBe(0)
     })
   })
 

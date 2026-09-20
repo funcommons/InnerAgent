@@ -194,7 +194,7 @@ export const seedCircuitEvents: CircuitBreakerEvent[] = [
   { id: 63, type: 'resume', runId: null, reason: '人工恢复', operator: 'admin', occurredAt: '2026-09-18T10:00:00Z' },
 ]
 
-// ==================== Webhook(服务端未实现,mock) ====================
+// ==================== Webhook(deliveries=任务 #18b 契约形;config 待服务端) ====================
 
 export const seedWebhookConfig: WebhookConfig = {
   appId: 1,
@@ -204,10 +204,12 @@ export const seedWebhookConfig: WebhookConfig = {
   events: ['run.finished', 'run.failed', 'run.cancelled'],
 }
 
+/** 种子覆盖投递状态机全集:PENDING/FAILED/SUCCESS(含重试后成功) */
 export const seedDeliveries: WebhookDelivery[] = [
-  { id: 71, event: 'run.finished', runId: 'run-2040', url: 'https://demo.example.com/ia/callback', success: true, attempt: 1, maxAttempts: 5, httpStatus: 200, responseSummary: 'OK', nextRetryAt: null, deliveredAt: '2026-09-20T07:58:35Z' },
-  { id: 72, event: 'run.failed', runId: 'run-2041', url: 'https://demo.example.com/ia/callback', success: false, attempt: 3, maxAttempts: 5, httpStatus: 503, responseSummary: 'Service Unavailable', nextRetryAt: '2026-09-20T08:16:00Z', deliveredAt: '2026-09-20T07:59:10Z' },
-  { id: 73, event: 'run.cancelled', runId: 'run-2042', url: 'https://demo.example.com/ia/callback', success: true, attempt: 2, maxAttempts: 5, httpStatus: 200, responseSummary: 'OK(重试 1 次后成功)', nextRetryAt: null, deliveredAt: '2026-09-19T17:02:00Z' },
+  { id: 71, appId: 1, event: 'run.finished', runId: 'run-2040', url: 'https://demo.example.com/ia/callback', success: true, status: 'SUCCESS', attempt: 1, maxAttempts: 5, httpStatus: 200, responseSummary: 'OK', nextRetryAt: null, deliveredAt: '2026-09-20T07:58:35Z' },
+  { id: 72, appId: 1, event: 'run.failed', runId: 'run-2041', url: 'https://demo.example.com/ia/callback', success: false, status: 'FAILED', attempt: 3, maxAttempts: 5, httpStatus: 503, responseSummary: 'Service Unavailable', nextRetryAt: '2026-09-20T08:16:00Z', deliveredAt: null },
+  { id: 73, appId: 1, event: 'run.cancelled', runId: 'run-2042', url: 'https://demo.example.com/ia/callback', success: true, status: 'SUCCESS', attempt: 2, maxAttempts: 5, httpStatus: 200, responseSummary: 'OK(重试 1 次后成功)', nextRetryAt: null, deliveredAt: '2026-09-19T17:02:00Z' },
+  { id: 74, appId: 1, event: 'run.finished', runId: 'run-2043', url: 'https://demo.example.com/ia/callback', success: false, status: 'PENDING', attempt: 0, maxAttempts: 5, httpStatus: null, responseSummary: null, nextRetryAt: null, deliveredAt: null },
 ]
 
 // ==================== 内存存储与重置 ====================

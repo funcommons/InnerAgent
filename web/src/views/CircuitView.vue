@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * [new] 熔断与紧急停用视图(视图清单 #6,占位契约:方案 §4.7 定参数与行为,
- * API 形态自拟,见 src/api/types.ts 头清单 #6)。
+ * [new] 熔断与紧急停用视图(视图清单 #6;契约形状=《02-技术方案》§4.7)。
  * 应用级总开关(≤5s 生效,经 Redis 取消通道)+ 单运行终止 + 资源上限表单 + 事件流。
+ * 管理端点待服务端落地(跟踪:99-优化建议.md #2):加载失败显「服务端能力未开通」
+ * 占位,不渲染可交互但必败的表单(优化建议 #2/#9)。
  */
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { VideoPause, VideoPlay, WarningFilled } from '@element-plus/icons-vue'
+import { Refresh, VideoPause, VideoPlay, WarningFilled } from '@element-plus/icons-vue'
 import { useCircuitStore, LIMIT_FIELDS, DEFAULT_LIMITS } from '@/stores/circuit'
 import { apiErrorMessage } from '@/stores/apps'
 
@@ -95,11 +96,18 @@ async function terminateRun() {
 
 <template>
   <div class="view" v-loading="store.loading">
-    <el-alert
-      type="warning" :closable="false" show-icon class="mb12"
-      title="占位视图:资源上限七参数取《02-技术方案》§4.7 默认值;熔断/事件 API 形态为自拟契约,待 P2 正式任务对齐。"
-    />
+    <!-- 服务端能力未开通占位(优化建议 #2/#9):不给可交互但必败的表单 -->
+    <el-card v-if="store.unavailable" shadow="never" class="unavailable-card">
+      <el-empty description="服务端能力未开通">
+        <div class="unavailable-hint">
+          熔断与资源上限的管理端点尚未在当前服务端启用(能力跟踪:
+          test-report/2026-09-21-02/99-优化建议.md #2)。
+        </div>
+        <el-button :icon="Refresh" @click="store.load()">重新检测</el-button>
+      </el-empty>
+    </el-card>
 
+    <template v-else>
     <el-row :gutter="12">
       <el-col :span="10">
         <el-card shadow="never">
@@ -180,11 +188,14 @@ async function terminateRun() {
         </el-timeline-item>
       </el-timeline>
     </el-card>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .view { display: flex; flex-direction: column; gap: 12px; }
+.unavailable-card :deep(.el-empty) { padding: 40px 0; }
+.unavailable-hint { color: #909399; font-size: 12px; margin-bottom: 16px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .form-hint { color: #909399; font-size: 12px; width: 100%; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }

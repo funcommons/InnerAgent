@@ -1,20 +1,24 @@
 /**
- * [new] msw 请求处理器全集(P2-pre 阶段唯一"后端")。
- * P2 对齐:apps/tools/grants 三域行为按服务端真实控制器逐条镜像
- * (AdminAppController/AdminToolController/AdminGrantController + 对应 Service);
- * 信封 {code,msg,data},错误 HTTP 状态=业务 code;认证对齐 AdminTokenFilter 双轨
- * (DEF-01:Bearer 会话 token 无效 401;X-IA-Admin-Key 缺失/无效 403 缺省封闭)。
- * 仍为 mock 的域(服务端未实现,保持原语义):audit-logs(行形已对齐 ia_audit_log)、
- * model-configs(依赖并行任务)、circuit-breaker、webhooks。
+ * [new] msw 请求处理器全集(dev 模式演示后端/单测拦截层)。
+ * 行为按服务端真实控制器逐条镜像(AdminAppController/AdminToolController/
+ * AdminGrantController/AdminAuditController/AdminModelConfigController/
+ * WebhookDeliveryAdminController + 对应 Service);信封 {code,msg,data},
+ * 错误 HTTP 状态=业务 code;认证对齐 AdminTokenFilter 双轨(DEF-01:Bearer
+ * 会话 token 无效 401;X-IA-Admin-Key 缺失/无效 403 缺省封闭)。
+ * 待服务端落地的端点暂由本层供数(跟踪:99-优化建议.md #2):circuit-breaker
+ * 全域、/webhooks/config 配置域;落地后 msw 仅作 dev 演示,不参与联调。
  *
  * 动作语义镜像(真实 Service):
- *   - apps:appKey 重复 409;非法 PEM 400;status 仅 0/1 生效;删除前 404 校验
+ *   - apps:appKey 重复 409;非法 PEM 400;status 仅 0/1 生效;删除前 404 校验;
+ *     公钥轮换 V9 语义(同值不算轮换,值变化置 signKeyRotatedAt+新指纹)
  *   - tools:serverKey 仅字母/数字/连字符 400;FQN 唯一 409;删除/资金/凭据类
  *     关键词强制高危且不可下调 400;活刷新分诊 unchanged/compatible/breaking
  *     (mock 以「新 schema 含 required 判 breaking」,联调以服务端分诊矩阵为准);
  *     breaking 级联失效授权(schema_breaking);confirm/reject 无待确认 → 400
  *   - grants:permanent 携带会话/conversation 缺会话 → 400;工具未注册 404、
  *     已停用 400;同作用域有效授权重复 → 409;撤销可携 decisionNote
+ *   - webhook-deliveries:#18b 线上行形(时间=epoch 毫秒);redeliver 对
+ *     PENDING 重复重投 → 409,重投重置 PENDING 并清空尝试历史
  */
 import { http, HttpResponse } from 'msw'
 import type { DefaultBodyType } from 'msw'
@@ -704,7 +708,7 @@ const circuitHandlers = [
   }),
 ]
 
-// ==================== Webhook(mock 域:服务端未实现) ====================
+// ==================== Webhook(deliveries=任务 #18b 真路径镜像;config 待服务端) ====================
 
 const webhookHandlers = [
   http.get('/ia/api/v1/admin/webhooks/config', ({ request }) => {
@@ -727,36 +731,69 @@ const webhookHandlers = [
     if (denied) return denied
     return ok({ ok: true, signatureValid: true })
   }),
-  http.get('/ia/api/v1/admin/webhooks/deliveries', ({ request }) => {
+  // 镜像 WebhookDeliveryAdminController(GET /admin/webhook-deliveries):
+  // 线上时间字段为 epoch 毫秒(web/api 层负责归一为 ISO)
+  http.get('/ia/api/v1/admin/webhook-deliveries', ({ request }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied
     const url = new URL(request.url)
     const event = url.searchParams.get('event')
     const success = url.searchParams.get('success')
-    let list = [...store.deliveries].sort((a, b) => b.deliveredAt.localeCompare(a.deliveredAt))
+    const byDeliveredDesc = (a: WebhookDelivery, b: WebhookDelivery) =>
+      String(b.deliveredAt ?? b.nextRetryAt ?? '').localeCompare(String(a.deliveredAt ?? a.nextRetryAt ?? ''))
+    let list = [...store.deliveries].sort(byDeliveredDesc)
     if (event) list = list.filter(d => d.event === event)
     if (success !== null) list = list.filter(d => String(d.success) === success)
-    return ok(paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10)))
+    const page = paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10))
+    return ok({
+      ...page,
+      list: page.list.map(d => ({
+        id: d.id,
+        appId: d.appId,
+        event: d.event,
+        runId: d.runId,
+        url: d.url,
+        success: d.success,
+        status: d.status,
+        attempt: d.attempt,
+        maxAttempts: d.maxAttempts,
+        httpStatus: d.httpStatus,
+        responseSummary: d.responseSummary,
+        nextRetryAt: d.nextRetryAt ? Date.parse(d.nextRetryAt) : null,
+        deliveredAt: d.deliveredAt ? Date.parse(d.deliveredAt) : null,
+      })),
+    })
   }),
-  http.post('/ia/api/v1/admin/webhooks/deliveries/simulate-failure', async ({ request }) => {
+  // 镜像 POST /admin/webhook-deliveries/{id}/redeliver:SUCCESS/FAILED/EXHAUSTED →
+  // PENDING,清空尝试历史;PENDING 重复重投 → 409(镜像 WebhookDeliveryAdminService)
+  http.post('/ia/api/v1/admin/webhook-deliveries/:id/redeliver', ({ request, params }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied
-    const body = (await request.json()) as { event?: WebhookEvent; runId?: string }
-    const delivery: WebhookDelivery = {
-      id: genId(),
-      event: (body.event ?? 'run.failed'),
-      runId: body.runId ?? `run-${genId()}`,
-      url: store.webhookConfig.url,
-      success: false,
-      attempt: 1,
-      maxAttempts: 5,
-      httpStatus: 503,
-      responseSummary: '[mock] 模拟宿主 5xx,进入指数退避重试',
-      nextRetryAt: new Date(Date.now() + 60_000).toISOString(),
-      deliveredAt: nowIso(),
-    }
-    store.deliveries.unshift(delivery)
-    return ok(delivery)
+    const d = store.deliveries.find(x => x.id === Number(params.id))
+    if (!d) return fail(404, `投递记录不存在: ${params.id}`)
+    if (d.status === 'PENDING') return fail(409, '该投递已在待投递队列中,无需重投')
+    d.status = 'PENDING'
+    d.success = false
+    d.attempt = 0
+    d.httpStatus = null
+    d.responseSummary = '手动重投(重置回 PENDING)'
+    d.nextRetryAt = null
+    d.deliveredAt = null
+    return ok({
+      id: d.id,
+      appId: d.appId,
+      event: d.event,
+      runId: d.runId,
+      url: d.url,
+      success: d.success,
+      status: d.status,
+      attempt: d.attempt,
+      maxAttempts: d.maxAttempts,
+      httpStatus: d.httpStatus,
+      responseSummary: d.responseSummary,
+      nextRetryAt: null,
+      deliveredAt: null,
+    })
   }),
 ]
 

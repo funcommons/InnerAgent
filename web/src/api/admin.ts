@@ -1,15 +1,19 @@
 /**
  * [new] 管理 API 客户端全集(`/ia/api/v1/admin/*`)。
- * 契约类型见 ./types.ts;P2 已对齐服务端真实控制器:
- *   - AdminAppController:/admin/apps(CRUD;公钥登记/轮换=PUT signPublicKey)
+ * 契约类型见 ./types.ts;已对齐服务端真实控制器:
+ *   - AdminAppController:/admin/apps(CRUD;公钥登记/轮换=PUT signPublicKey,V9 宽限期)
  *   - AdminToolController:/admin/tools(注册/列表/详情/schema 历史/更新/活刷新
  *     分诊 schema+confirm+reject/启停/注销)
  *   - AdminGrantController:/admin/grants(授予/列表/撤销)
- * apps/tools/grants 列表均为数组、无服务端分页;audit-logs 为 mock 域(服务端
- * 未实现);model-configs 依赖并行任务(联调时核对);circuit/webhooks 保持 mock。
+ *   - AdminAuditController:/admin/audit-logs(分页/过滤/字典,W5)
+ *   - AdminModelConfigController:/admin/model-configs(CRUD/连通性测试)
+ *   - WebhookDeliveryAdminController:/admin/webhook-deliveries(分页/手动重投,#18b)
+ * apps/tools/grants 列表为服务端全量数组(分页在管理站客户端完成);
+ * circuit 与 /webhooks/config 管理端点待服务端落地(跟踪:99-优化建议.md #2),
+ * api 层按契约形状调用,失败时由视图显「服务端能力未开通」占位。
  */
 import { http } from './request'
-import type { PageResult } from './common'
+import type { IsoDateTime, PageResult } from './common'
 import type {
   AuditLogQuery,
   CircuitBreakerEvent,
@@ -41,7 +45,6 @@ import type {
   WebhookConfigSaveReq,
   WebhookDelivery,
   WebhookDeliveryPageReq,
-  WebhookEvent,
 } from './types'
 
 const BASE = '/ia/api/v1/admin'
@@ -154,16 +157,65 @@ export const circuitAdminApi = {
     http.post<CircuitBreakerEvent>(`${BASE}/circuit-breaker/terminate-run`, data),
 }
 
-// ==================== Webhook(mock 域:服务端未实现,P2 后续) ====================
+// ==================== Webhook(deliveries 已落地任务 #18b;config 待服务端,见 #2) ====================
+
+/**
+ * #18b 线上行形(DeliveryView):时间字段为 epoch 毫秒。
+ * deliveries() 负责归一为 WebhookDelivery 的 ISO 展示形。
+ */
+interface RawDelivery {
+  id: number
+  appId?: number
+  event: WebhookDelivery['event']
+  runId: string
+  url: string
+  success: boolean
+  status?: WebhookDelivery['status']
+  attempt: number
+  maxAttempts: number
+  httpStatus: number | null
+  responseSummary: string | null
+  nextRetryAt?: number | null
+  deliveredAt?: number | null
+}
+
+function epochToIso(ms: number | null | undefined): IsoDateTime | null {
+  return typeof ms === 'number' ? new Date(ms).toISOString() : null
+}
+
+function toDelivery(raw: RawDelivery): WebhookDelivery {
+  return {
+    id: raw.id,
+    appId: raw.appId,
+    event: raw.event,
+    runId: raw.runId,
+    url: raw.url,
+    success: raw.success,
+    status: raw.status,
+    attempt: raw.attempt,
+    maxAttempts: raw.maxAttempts,
+    httpStatus: raw.httpStatus,
+    responseSummary: raw.responseSummary,
+    nextRetryAt: epochToIso(raw.nextRetryAt),
+    deliveredAt: epochToIso(raw.deliveredAt),
+  }
+}
 
 export const webhookAdminApi = {
+  /** config 域:配置本体在 ia_app(webhookUrl/webhookSecret 走 apps 域);
+   *  /webhooks/config 端点待服务端落地(跟踪:99-优化建议.md #2),失败时 UI 显占位 */
   getConfig: () => http.get<WebhookConfig>(`${BASE}/webhooks/config`),
   saveConfig: (data: WebhookConfigSaveReq) => http.put<WebhookConfig>(`${BASE}/webhooks/config`, data),
-  /** 发送测试回调(HMAC 签名可验) */
+  /** 发送测试回调(HMAC 签名可验;端点待服务端落地,同 #2) */
   testConfig: () => http.post<{ ok: boolean; signatureValid: boolean }>(`${BASE}/webhooks/config/test`),
-  deliveries: (params: WebhookDeliveryPageReq = {}) =>
-    http.get<PageResult<WebhookDelivery>>(`${BASE}/webhooks/deliveries${buildQuery({ ...params })}`),
-  /** 模拟宿主 5xx 触发退避重试(P2 联调用;mock 即返回可重试投递) */
-  simulateFailure: (event: WebhookEvent, runId: string) =>
-    http.post<WebhookDelivery>(`${BASE}/webhooks/deliveries/simulate-failure`, { event, runId }),
+  /** 投递记录分页(任务 #18b:GET /admin/webhook-deliveries;时间归一为 ISO) */
+  deliveries: async (params: WebhookDeliveryPageReq = {}): Promise<PageResult<WebhookDelivery>> => {
+    const page = await http.get<PageResult<RawDelivery>>(`${BASE}/webhook-deliveries${buildQuery({ ...params })}`)
+    return { ...page, list: page.list.map(toDelivery) }
+  },
+  /** 手动重投(任务 #18b:POST /webhook-deliveries/{id}/redeliver;SUCCESS/FAILED/EXHAUSTED → PENDING) */
+  redeliver: async (id: number): Promise<WebhookDelivery> => {
+    const raw = await http.post<RawDelivery>(`${BASE}/webhook-deliveries/${id}/redeliver`)
+    return toDelivery(raw)
+  },
 }

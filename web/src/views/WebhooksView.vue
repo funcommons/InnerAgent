@@ -1,23 +1,25 @@
 <script setup lang="ts">
 /**
- * [new] Webhook 视图(视图清单 #6,占位契约)。
- * 终态通知配置(HMAC 签名,5 次指数退避,方案 §7.1)+ 投递记录(可观测面,自拟)。
+ * [new] Webhook 视图(视图清单 #6)。
+ * 投递记录已接真实端点(任务 #18b:/admin/webhook-deliveries,支持手动重投);
+ * 终态通知配置域(/webhooks/config)端点待服务端落地(跟踪:99-优化建议.md #2),
+ * 加载失败显「服务端能力未开通」占位(衔接 #9),不渲染必败表单。
  */
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Refresh, Promotion } from '@element-plus/icons-vue'
-import { useWebhooksStore, WEBHOOK_EVENTS } from '@/stores/webhooks'
+import { onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh, RefreshRight } from '@element-plus/icons-vue'
+import { useWebhooksStore, WEBHOOK_EVENTS, DELIVERY_STATUS } from '@/stores/webhooks'
 import { apiErrorMessage } from '@/stores/apps'
-import type { WebhookEvent } from '@/api/types'
+import type { WebhookDelivery } from '@/api/types'
 
 const store = useWebhooksStore()
 
 const saving = ref(false)
 const testing = ref(false)
-const simForm = reactive({ event: 'run.failed' as WebhookEvent, runId: '' })
-const simulating = ref(false)
+const redeliveringId = ref<number | null>(null)
 
 const eventLabel = (v: string) => WEBHOOK_EVENTS.find(e => e.value === v)?.label ?? v
+const statusMeta = (v: string) => DELIVERY_STATUS[v]
 
 onMounted(() => {
   void store.loadConfig()
@@ -61,31 +63,41 @@ async function sendTest() {
   }
 }
 
-async function simulateFailure() {
-  simulating.value = true
+/** 手动重投(#18b:重置回 PENDING,清空尝试历史;PENDING 重复重投服务端 409) */
+async function redeliver(row: WebhookDelivery) {
+  const confirmed = await ElMessageBox.confirm(
+    `将 ${row.runId} 的投递记录重置回待投递队列(清空尝试历史,立即重新投递)。继续?`,
+    '手动重投',
+    { type: 'warning', confirmButtonText: '重投', cancelButtonText: '取消' },
+  ).then(() => true).catch(() => false)
+  if (!confirmed) return
+  redeliveringId.value = row.id
   try {
-    await store.simulateFailure(simForm.event, simForm.runId.trim() || `run-${Date.now()}`)
-    ElMessage.success('已模拟一次失败投递(503),进入指数退避重试')
+    await store.redeliver(row.id)
+    ElMessage.success('已重置回待投递队列')
   } catch (err) {
-    ElMessage.error(apiErrorMessage(err, '模拟失败'))
+    ElMessage.error(apiErrorMessage(err, '重投失败'))
   } finally {
-    simulating.value = false
+    redeliveringId.value = null
   }
 }
 </script>
 
 <template>
   <div class="view">
-    <el-alert
-      type="warning" :closable="false" show-icon class="mb12"
-      title="占位视图:HMAC 签名与 5 次指数退避重试语义见《02-技术方案》§7.1;配置/投递记录字段为自拟契约,双密钥并存(Q5)未建模,待 P2 对齐。"
-    />
-
     <el-row :gutter="12">
       <el-col :span="12">
         <el-card shadow="never">
           <template #header><span>终态通知配置</span></template>
-          <el-form label-width="110px">
+          <!-- 配置端点待服务端落地 → 占位(优化建议 #2/#9) -->
+          <el-empty v-if="store.configUnavailable" description="服务端能力未开通">
+            <div class="dim unavailable-hint">
+              Webhook 配置管理端点尚未在当前服务端启用(能力跟踪:99-优化建议.md #2);
+              现阶段配置可经应用管理域(webhookUrl/webhookSecret)维护。
+            </div>
+            <el-button :icon="Refresh" @click="store.loadConfig()">重新检测</el-button>
+          </el-empty>
+          <el-form v-else label-width="110px">
             <el-form-item label="回调地址">
               <el-input v-model="store.configForm.url" placeholder="https://host.example.com/ia/callback" />
             </el-form-item>
@@ -108,82 +120,87 @@ async function simulateFailure() {
             </el-form-item>
             <div class="actions">
               <el-button type="primary" :loading="saving" @click="saveConfig">保存</el-button>
-              <el-button :icon="Promotion" :loading="testing" @click="sendTest">发送测试回调</el-button>
+              <el-button :icon="RefreshRight" :loading="testing" @click="sendTest">发送测试回调</el-button>
             </div>
           </el-form>
+        </el-card>
+
+        <el-card shadow="never" class="mt12">
+          <p class="dim">
+            重试策略:最多 5 次,指数退避;签名头 X-IA-Signature(HMAC-SHA256),宿主以同一密钥验签;
+            重试耗尽(EXHAUSTED)的投递可经下方「重投」手动复活。
+          </p>
         </el-card>
       </el-col>
 
       <el-col :span="12">
         <el-card shadow="never">
-          <template #header><span>投递演练(P2 联调用)</span></template>
-          <el-form label-width="110px">
-            <el-form-item label="事件">
-              <el-select v-model="simForm.event">
-                <el-option v-for="e in WEBHOOK_EVENTS" :key="e.value" :label="e.label" :value="e.value" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="Run ID">
-              <el-input v-model="simForm.runId" placeholder="留空自动生成" class="mono" />
-            </el-form-item>
-            <el-button type="warning" :loading="simulating" @click="simulateFailure">模拟宿主 5xx(触发退避)</el-button>
-          </el-form>
-          <p class="dim mt12">
-            重试策略:最多 5 次,指数退避;签名头 X-IA-Signature(HMAC-SHA256),宿主以同一密钥验签。
-          </p>
+          <template #header><span>投递记录(任务 #18b 真实端点)</span></template>
+          <div class="toolbar">
+            <el-select v-model="store.filters.event" class="toolbar__event" placeholder="事件" clearable @change="search">
+              <el-option v-for="e in WEBHOOK_EVENTS" :key="e.value" :label="e.label" :value="e.value" />
+            </el-select>
+            <el-select v-model="store.filters.success" class="toolbar__status" placeholder="投递结果" clearable @change="search">
+              <el-option label="成功" :value="true" />
+              <el-option label="失败" :value="false" />
+            </el-select>
+            <el-button :icon="Refresh" @click="store.loadDeliveries()">刷新</el-button>
+          </div>
+          <el-table v-loading="store.loading" :data="store.deliveries" row-key="id" class="mt12">
+            <el-table-column label="时间" min-width="150">
+              <template #default="{ row }">
+                <span v-if="row.deliveredAt" class="mono">{{ row.deliveredAt }}</span>
+                <span v-else class="dim">待投递</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="事件" min-width="150">
+              <template #default="{ row }">{{ eventLabel(row.event) }}</template>
+            </el-table-column>
+            <el-table-column label="Run" min-width="100">
+              <template #default="{ row }"><span class="mono">{{ row.runId }}</span></template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag :type="statusMeta(row.status)?.tag ?? (row.success ? 'success' : 'danger')" size="small">
+                  {{ statusMeta(row.status)?.label ?? (row.success ? '成功' : '失败') }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="尝试" width="60" align="center">
+              <template #default="{ row }">{{ row.attempt }}/{{ row.maxAttempts }}</template>
+            </el-table-column>
+            <el-table-column label="HTTP" width="70" align="center">
+              <template #default="{ row }">{{ row.httpStatus ?? '—' }}</template>
+            </el-table-column>
+            <el-table-column label="下次重试" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.nextRetryAt" class="retry">{{ row.nextRetryAt }}</span>
+                <span v-else class="dim">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="90" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  text type="primary" size="small" :icon="RefreshRight"
+                  :disabled="row.status === 'PENDING'"
+                  :loading="redeliveringId === row.id"
+                  @click="redeliver(row)"
+                >
+                  重投
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-pagination
+            v-model:current-page="store.filters.pageNo"
+            v-model:page-size="store.filters.pageSize"
+            class="pager" layout="total, sizes, prev, pager, next"
+            :total="store.deliveriesTotal" :page-sizes="[10, 20, 50]"
+            @current-change="store.loadDeliveries()" @size-change="store.loadDeliveries()"
+          />
         </el-card>
       </el-col>
     </el-row>
-
-    <el-card shadow="never">
-      <template #header>
-        <div class="toolbar">
-          <span>投递记录</span>
-          <el-select v-model="store.filters.event" class="toolbar__event" placeholder="事件" clearable @change="search">
-            <el-option v-for="e in WEBHOOK_EVENTS" :key="e.value" :label="e.label" :value="e.value" />
-          </el-select>
-          <el-select v-model="store.filters.success" class="toolbar__status" placeholder="投递结果" clearable @change="search">
-            <el-option label="成功" :value="true" />
-            <el-option label="失败" :value="false" />
-          </el-select>
-          <el-button :icon="Refresh" @click="store.loadDeliveries()">刷新</el-button>
-        </div>
-      </template>
-      <el-table v-loading="store.loading" :data="store.deliveries" row-key="id">
-        <el-table-column prop="deliveredAt" label="时间" min-width="160" show-overflow-tooltip />
-        <el-table-column label="事件" min-width="180">
-          <template #default="{ row }">{{ eventLabel(row.event) }}</template>
-        </el-table-column>
-        <el-table-column label="Run" min-width="110">
-          <template #default="{ row }"><span class="mono">{{ row.runId }}</span></template>
-        </el-table-column>
-        <el-table-column label="结果" width="80">
-          <template #default="{ row }">
-            <el-tag :type="row.success ? 'success' : 'danger'" size="small">{{ row.success ? '成功' : '失败' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="尝试" width="70" align="center">
-          <template #default="{ row }">{{ row.attempt }}/{{ row.maxAttempts }}</template>
-        </el-table-column>
-        <el-table-column label="HTTP" width="80" align="center">
-          <template #default="{ row }">{{ row.httpStatus ?? '—' }}</template>
-        </el-table-column>
-        <el-table-column label="下次重试" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.nextRetryAt" class="retry">{{ row.nextRetryAt }}</span>
-            <span v-else class="dim">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="responseSummary" label="响应摘要" min-width="150" show-overflow-tooltip />
-      </el-table>
-      <el-pagination
-        v-model:current-page="store.filters.pageNo"
-        v-model:page-size="store.filters.pageSize"
-        class="pager" layout="total, sizes, prev, pager, next"
-        :total="store.deliveriesTotal" :page-sizes="[10, 20, 50]"
-        @current-change="store.loadDeliveries()" @size-change="store.loadDeliveries()"
-      />
-    </el-card>
   </div>
 </template>
 
@@ -196,7 +213,7 @@ async function simulateFailure() {
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 .dim { color: #909399; font-size: 12px; }
 .mt12 { margin-top: 12px; }
-.mb12 { margin-bottom: 12px; }
 .pager { margin-top: 12px; justify-content: flex-end; }
 .retry { color: #e6a23c; font-size: 12px; }
+.unavailable-hint { margin-bottom: 12px; }
 </style>

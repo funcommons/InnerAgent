@@ -38,6 +38,7 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
     private final RunLeaseGuard leaseGuard;
     private final ObjectMapper objectMapper;
     private final AgentScopeMcpRegistry mcpRegistry;
+    private final ObjectProvider<ActTokenSupplier> actTokenSuppliers;
 
     public PlatformAgentKernelToolRegistry(
             ToolExecutorRegistry executors,
@@ -48,7 +49,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             AgentRuntimeSchedulers schedulers,
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper,
-            AgentScopeMcpRegistry mcpRegistry) {
+            AgentScopeMcpRegistry mcpRegistry,
+            ObjectProvider<ActTokenSupplier> actTokenSuppliers) {
         this.executors = Objects.requireNonNull(executors, "executors must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -59,6 +61,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
         this.leaseGuard = Objects.requireNonNull(leaseGuard, "leaseGuard must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.mcpRegistry = Objects.requireNonNull(mcpRegistry, "mcpRegistry must not be null");
+        this.actTokenSuppliers = Objects.requireNonNull(
+                actTokenSuppliers, "actTokenSuppliers must not be null");
     }
 
     @Override
@@ -102,7 +106,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                     requireManifest(
                             expected, schema, executor.isReadOnly(), executor.isConcurrencySafe());
                     toolkit.registerAgentTool(new AgentScopeToolAdapter(
-                            executor, schema, schedulers.toolBlocking(), leaseGuard, objectMapper));
+                            executor, schema, schedulers.toolBlocking(), leaseGuard, objectMapper,
+                            actTokenSuppliers.getIfAvailable()));
                 } else if (child != null) {
                     AgentScopeToolSchema.PreparedSchema schema =
                             AgentScopeToolSchema.prepareSubAgent(

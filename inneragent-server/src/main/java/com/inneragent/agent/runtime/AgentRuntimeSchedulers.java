@@ -2,6 +2,7 @@ package com.inneragent.agent.runtime;
 
 import com.inneragent.platform.config.AgentScopeRuntimeProperties;
 import com.inneragent.agent.run.AgentRuntimeMetrics;
+import com.inneragent.platform.context.AppContext;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
@@ -104,14 +105,16 @@ public final class AgentRuntimeSchedulers implements AutoCloseable {
                     }
                     throw new SchedulerOverloadedException(overloadCode, name, rejectedExecutor.isShutdown());
                 }) {
-            // Reactor 跨调度器 hop 不传播 ThreadLocal：提交任务时捕获租户上下文，
-            // 在工作线程内恢复，保证 Agent 运行链路按发起请求的租户过滤 SQL。
+            // Reactor 跨调度器 hop 不传播 ThreadLocal：提交任务时捕获租户/应用上下文，
+            // 在工作线程内恢复，保证 Agent 运行链路按发起请求的租户与应用过滤 SQL。
             // Agent 运行边界的阻塞操作均以全局唯一 runId 定位数据且入口已鉴权，
-            // 提交线程自身已丢失租户上下文（如 agentscope 内部线程）时按系统模式执行
+            // 提交线程自身已丢失租户上下文（如 agentscope 内部线程）时按系统模式执行；
+            // app_id 无系统模式，缺省按单应用默认 1 注入（[adapt] P1-T1 双列隔离）
             @Override
             public void execute(Runnable command) {
                 Long tenantId = TenantContext.getTenantId();
                 boolean ignoreTenant = TenantContext.isIgnored();
+                Long appId = AppContext.getAppId();
                 super.execute(() -> {
                     try {
                         if (ignoreTenant || tenantId == null) {
@@ -119,9 +122,13 @@ public final class AgentRuntimeSchedulers implements AutoCloseable {
                         } else {
                             TenantContext.setTenantId(tenantId);
                         }
+                        if (appId != null) {
+                            AppContext.setAppId(appId);
+                        }
                         command.run();
                     } finally {
                         TenantContext.clear();
+                        AppContext.clear();
                     }
                 });
             }

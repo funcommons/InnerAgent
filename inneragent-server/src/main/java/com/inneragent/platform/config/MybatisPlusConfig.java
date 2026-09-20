@@ -7,11 +7,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * MyBatis-Plus 拦截器装配：分页 + 乐观锁。
+ * MyBatis-Plus 拦截器装配：双列行级隔离 + 分页 + 乐观锁。
  *
  * <p>[adapt] 自融光 config/MybatisPlusConfig.java 移植(包名 fusion -> platform)。
- * 注意：未注册 TenantLineInnerInterceptor——InnerAgent 的 app_id/tenant_id 双列行级
- * 隔离属 P1 范围，届时以 MybatisPlusTenantLineHandler 形式补充并保持先于分页拦截器注册。
+ * P1-T1 起注册 {@link AppTenantLineInnerInterceptor}（app_id + tenant_id 双列，
+ * 组合两个 TenantLineInnerInterceptor 实现细节见其类注释），<strong>必须先于
+ * 分页拦截器注册</strong>（顺序语义与融光 TenantLineInnerInterceptor 一致）。
  */
 @Configuration
 public class MybatisPlusConfig {
@@ -19,7 +20,8 @@ public class MybatisPlusConfig {
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        // P1 接入多租户时,TenantLineInnerInterceptor 必须先于分页拦截器注册
+        // 双列行级拦截(P1-T1):先于分页拦截器注册
+        interceptor.addInnerInterceptor(new AppTenantLineInnerInterceptor());
         interceptor.addInnerInterceptor(new PaginationInnerInterceptor());
         interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
         return interceptor;

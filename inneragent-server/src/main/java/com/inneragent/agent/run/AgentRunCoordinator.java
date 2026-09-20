@@ -11,11 +11,13 @@ import com.inneragent.agent.run.model.ChildRunAdmission;
 import com.inneragent.agent.run.model.ChildRunIdentityConflictException;
 import com.inneragent.agent.run.model.StartAgentRunCommand;
 import com.inneragent.platform.tenant.TenantContext;
+import com.inneragent.platform.context.UserContext;
 import com.inneragent.agent.run.model.StartChildAgentRunCommand;
 import com.inneragent.agent.run.model.StartedAgentRun;
 import com.inneragent.agent.run.kernel.AgentKernelSnapshot;
 import com.inneragent.agent.state.AgentStateCleanupPolicyService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -33,16 +35,17 @@ import java.util.Objects;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AgentRunCoordinator {
 
     private static final long INITIAL_OWNER_EPOCH = 1L;
 
     /**
-     * P0 演示链路还没有租户体系:会话 tenant_id 落 DDL 默认值 0,
-     * 而运行时内核上下文(ToolExecutionContext)要求正数租户,
-     * 这里对缺失租户回填演示租户 1;接入真实认证后由会话携带真实租户,不再触发。
+     * 内核工具执行上下文(ToolExecutionContext)要求正数租户的最低保障值:
+     * 仅当会话行与当前身份上下文都缺失租户时兜底(P0 演示链路遗留数据形态),
+     * embed 认证下 UserContext 已带宿主声明的真实租户,不会触发。
      */
-    private static final long DEMO_TENANT_ID = 1L;
+    private static final long FALLBACK_TENANT_ID = 1L;
 
     private final AgentRunRepository runRepository;
     private final AgentMessageAllocator messageAllocator;
@@ -250,8 +253,25 @@ public class AgentRunCoordinator {
         return persisted;
     }
 
+    /**
+     * [adapt] P0 演示租户回填补丁的语义修正(P1-T1):租户不再无条件回填演示租户,
+     * 而是按身份优先级解析——① 会话行已有正数租户(embed 认证下由 TenantContext
+     * 随 INSERT 注入)直接沿用;② 其次取当前线程 UserContext 携带的租户
+     * (02-技术方案 §4.2:运行链路在 embed 认证下 UserContext 已带真实 tenantId);
+     * ③ 两者皆缺时才以正数租户兜底,满足内核 ToolExecutionContext 的正数约束,
+     * 并 WARN 提示数据未携带租户归属。
+     */
     private static Long normalizeTenantId(Long tenantId) {
-        return tenantId != null && tenantId > 0 ? tenantId : DEMO_TENANT_ID;
+        if (tenantId != null && tenantId > 0) {
+            return tenantId;
+        }
+        Long contextTenantId = UserContext.getTenantId();
+        if (contextTenantId != null && contextTenantId > 0) {
+            return contextTenantId;
+        }
+        log.warn("Agent run resolved no tenant from conversation/UserContext; "
+                + "falling back to tenant {}. Persisted tenantId={}", FALLBACK_TENANT_ID, tenantId);
+        return FALLBACK_TENANT_ID;
     }
 
     private LocalDateTime leaseUntil(

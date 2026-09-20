@@ -28,10 +28,18 @@ import java.util.Objects;
 /** Adapts a platform tool to the strict AgentScope V2 {@link ToolBase} contract. */
 public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(AgentScopeToolAdapter.class);
+
     private final ToolExecutor toolExecutor;
     private final Scheduler toolScheduler;
     private final RunLeaseGuard leaseGuard;
     private final ObjectMapper objectMapper;
+    /**
+     * act token 供给挂点（P1-T1 预留，P1-T2 由 MCP 工具适配器接管）；
+     * null 表示不携带 X-IA-Act（本地内置工具缺省态）。
+     */
+    private final ActTokenSupplier actTokenSupplier;
 
     public AgentScopeToolAdapter(
             ToolExecutor toolExecutor,
@@ -39,11 +47,22 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             Scheduler toolScheduler,
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper) {
+        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper, null);
+    }
+
+    public AgentScopeToolAdapter(
+            ToolExecutor toolExecutor,
+            AgentScopeToolSchema.PreparedSchema schema,
+            Scheduler toolScheduler,
+            RunLeaseGuard leaseGuard,
+            ObjectMapper objectMapper,
+            ActTokenSupplier actTokenSupplier) {
         super(builder(toolExecutor, schema));
         this.toolExecutor = Objects.requireNonNull(toolExecutor, "toolExecutor must not be null");
         this.toolScheduler = Objects.requireNonNull(toolScheduler, "toolScheduler must not be null");
         this.leaseGuard = Objects.requireNonNull(leaseGuard, "leaseGuard must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.actTokenSupplier = actTokenSupplier;
     }
 
     @Override
@@ -56,6 +75,15 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                     requireContext(
                             runtime,
                             com.inneragent.agent.context.ToolExecutionContext.class);
+            // act token 挂点(P1-T1):P2/T2 前缺省无供给方,DEBUG 说明本地工具不外发令牌;
+            // 签发失败由供给方降级返回 null,不阻断工具执行
+            String actToken = actTokenSupplier == null
+                    ? null
+                    : actTokenSupplier.supply(run.runId(), toolContext, getName());
+            if (actToken == null) {
+                log.debug("Tool call without X-IA-Act token (no supplier/degraded): tool={}, runId={}",
+                        getName(), run.runId());
+            }
             Duration remaining = remaining(run);
             Map<String, Object> input = Objects.requireNonNull(
                     param.getInput(), "AgentScope tool input must not be null");

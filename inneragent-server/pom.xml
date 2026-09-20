@@ -84,6 +84,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!-- embed/act 双级令牌(P1-T1,技术方案 §6.1):OAuth2 JOSE 模块带 nimbus-jose-jwt,
+			embed token 验签与 act token(RS256)签发/JWKS 发布共用 -->
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-oauth2-jose</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>

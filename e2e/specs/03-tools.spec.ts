@@ -6,11 +6,10 @@
  * (unchanged/compatible/breaking→confirm|reject)、breaking 级联失效授权、
  * 停用/启用(级联 tool_disabled)、schema 历史(V14 留痕)。
  *
- * DEF-02(已定级,见报告):管理站 UI「刷新」按钮以空体调用分诊端点,
- * 服务端把「空 schema vs 现库 schema」判为 compatible(nested_schema_changed),
- * 响应 effectiveSchemaSha256 退化为空串指纹(库内 schema 因 MP 空值跳过更新而幸存,
- * 但指纹/历史留痕失真)。本文件用独立无 schema 工具验证 unchanged 档,
- * 并单列一个 DEF-02 取证用例(断言观察值,不定级在测试内)。
+ * DEF-02(已修复,回归口径):管理站 UI「刷新」按钮的空体分诊现按
+ * 「未重发 schema」处理 → verdict=unchanged(schema_not_resent),指纹基准
+ * 保持现库值,空串指纹绝不入库。本文件用独立无 schema 工具验证 unchanged 档,
+ * 并单列一个 DEF-02 回归用例(R1 取证断言已反转)。
  *
  * 稳定性:worker 可能在用例失败后重启并重求值本模块(名称会变),
  * 故所有用例经「现查库取 id + API 自建前置」自洽,分诊前先归位基准 schema。
@@ -33,7 +32,6 @@ const V1 = JSON.stringify({ type: 'object', properties: { name: { type: 'string'
 const V2 = JSON.stringify({ type: 'object', properties: { name: { type: 'string' }, age: { type: 'integer' } } })
 const V3 = JSON.stringify({ type: 'object', properties: { name: { type: 'string' }, age: { type: 'integer' } }, required: ['name', 'age'] })
 const V4 = JSON.stringify({ type: 'object', properties: { name: { type: 'number' }, age: { type: 'integer' } }, required: ['name', 'age'] })
-const SHA256_OF_EMPTY = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 
 /** 确保普通工具存在(不存在则注册,基准 schema V1) */
 async function ensureNormalTool(request: import('@playwright/test').APIRequestContext) {
@@ -183,31 +181,34 @@ test('分诊 unchanged:无 schema 工具上 UI「刷新」→ 静默刷新', asy
   expect((await history.json()).data.some((h: { outcome: string }) => h.outcome === 'silent_refresh')).toBe(true)
 })
 
-test('DEF-02 取证:UI「刷新」路径的空体分诊对有 schema 工具判 compatible', async ({ request }) => {
-  // 前置:普通工具带 V1 schema
+test('DEF-02 回归:UI「刷新」空体分诊 → unchanged,指纹基准不被空串覆写', async ({ request }) => {
+  // 前置:普通工具带 V1 schema(归位并取当前指纹基准)
   await normalizeSchema(request, V1)
   const id = normalToolId()
+  const before = (await (await request.get(`/ia/api/v1/admin/tools/${id}`)).json()).data
+  const shaBaseline = before.schemaSha256 as string
+  expect(shaBaseline).toMatch(/^[0-9a-f]{64}$/)
   // 模拟管理站「刷新」按钮的空体调用
   const resp = await request.post(`/ia/api/v1/admin/tools/${id}/schema`, { data: {} })
   expect(resp.status()).toBe(200)
   const body = await resp.json()
-  // 观察值(缺陷):应为 unchanged(现库对比),实际 compatible
-  expect(body.data.verdict).toBe('compatible')
-  expect(body.data.reasons).toContain('nested_schema_changed')
-  expect(body.data.effectiveSchemaSha256).toBe(SHA256_OF_EMPTY) // 空串指纹
+  // 修复口径(DEF-02):空体 = 未重发 schema → unchanged,理由 schema_not_resent
+  expect(body.data.verdict).toBe('unchanged')
+  expect(body.data.reasons).toContain('schema_not_resent')
+  expect(body.data.effectiveSchemaSha256).toBe(shaBaseline) // 指纹保持现库值,不退化为空串指纹
   saveJson('L3-05b-DEF02-空体分诊-响应.json', body)
 
-  // 库内 schema 内容因 MP 空值跳过更新而幸存,但指纹列已被持久化为空串指纹(内容与指纹脱节落库)
+  // 库内指纹与 schema 内容保持一致,无 pending
   const tool = await request.get(`/ia/api/v1/admin/tools/${id}`)
   const after = (await tool.json()).data
   expect(after.parametersSchema).not.toBeNull()
-  expect(after.schemaSha256).toBe(SHA256_OF_EMPTY) // 观察值(缺陷):指纹列与 schema 内容脱节
+  expect(after.schemaSha256).toBe(shaBaseline)
+  expect(after.pendingSchemaSha256).toBeNull()
   saveJson('L3-05b-DEF02-刷新后工具实态.json', after)
   saveText('L3-05b-DEF02-结论.txt',
-    'UI「刷新」空体分诊:verdict=compatible(应 unchanged)、effectiveSchemaSha256=空串指纹,\n' +
-    '且 schema_sha256 列被持久化为空串指纹 —— parameters_schema 内容与指纹脱节落库,\n' +
-    '后续以指纹为基准的分诊/授权快照失真;分诊历史新增 compatible/applied 失真行。\n' +
-    '修复意见见报告 DEF-02(P1)。')
+    'UI「刷新」空体分诊(修复后回归口径):verdict=unchanged(schema_not_resent),\n' +
+    'effectiveSchemaSha256 保持现库指纹;空串指纹不覆写 schema_sha256、不落 pending,\n' +
+    '历史留痕为 silent_refresh —— 指纹链路与授权快照基准不再失真(DEF-02 修复验证)。')
   // 归位:重新刷回 V1,供后续用例使用
   await normalizeSchema(request, V1)
 })
@@ -372,7 +373,8 @@ test('schema 历史:全链路留痕(applied/pending_review/rejected/silent_refre
   const outcomes = history.map((h) => `${h.triage}/${h.outcome}`)
   saveJson('L3-12-schema历史.json', history)
   saveText('L3-12-schema历史-结论序列.txt', outcomes.join('\n'))
-  // 注册(applied)+ DEF-02 取证/归位产生的 compatible/applied + breaking 待审×2 + 确认 applied + rejected
+  // 注册(applied)+ compatible/applied(L3-06;DEF-02 空体/归位现为 silent_refresh)
+  // + breaking 待审×2 + 确认 applied + rejected
   expect(outcomes.filter((o) => o === 'breaking/pending_review').length).toBeGreaterThanOrEqual(2)
   expect(outcomes).toContain('breaking/applied')
   expect(outcomes).toContain('breaking/rejected')

@@ -1,6 +1,7 @@
 package com.inneragent.platform.toolhub;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.inneragent.agent.kernel.AgentKernelToolManifest;
 import com.inneragent.agent.tool.ToolExecutor;
 import com.inneragent.agent.tool.ToolExecutorRegistry;
 import com.inneragent.platform.common.BusinessException;
@@ -243,6 +244,45 @@ class ToolRegistryServiceTests {
         assertThat(entry.getSchemaSha256())
                 .isEqualTo(ToolSchemaFingerprint.of(new ObjectMapper(), SCHEMA_V1));
         verify(auditService, never()).append(any());
+    }
+
+    @Test
+    @DisplayName("DEF-02:空体分诊(未重发 schema)→ unchanged,指纹基准不被空串指纹覆写")
+    void emptyBodyRefreshKeepsFingerprintAndWritesNoPending() {
+        ToolRegistryEntry entry = persisted(command("list_users", SCHEMA_V1, ANNOTATIONS_RO, null));
+        entry.setSchemaSha256(ToolSchemaFingerprint.of(new ObjectMapper(), SCHEMA_V1));
+        String baseline = entry.getSchemaSha256();
+
+        // UI「刷新」按钮的空体调用:null 与空白两种形态
+        ToolRegistryService.SchemaTriageResult nullBody =
+                service.refreshSchema(11L, null, null, null);
+        ToolRegistryService.SchemaTriageResult blankBody =
+                service.refreshSchema(11L, "   ", ANNOTATIONS_RO, null);
+
+        assertThat(nullBody.verdict()).isEqualTo("unchanged");
+        assertThat(nullBody.reasons()).containsExactly("schema_not_resent");
+        assertThat(blankBody.verdict()).isEqualTo("unchanged");
+        // 指纹基准保持现库值,绝不退化为空串指纹;schema 内容与 pending 不动
+        assertThat(entry.getSchemaSha256()).isEqualTo(baseline);
+        assertThat(entry.getParametersSchema()).isNotNull();
+        assertThat(entry.getRevalidateRequired()).isFalse();
+        assertThat(entry.getPendingSchemaSha256()).isNull();
+        // 历史留痕为 silent_refresh,且 new_sha256 保持现库指纹(空串指纹禁止入库)
+        ArgumentCaptor<ToolSchemaHistory> history =
+                ArgumentCaptor.forClass(ToolSchemaHistory.class);
+        verify(historyMapper, Mockito.times(3)).insert(history.capture()); // 注册 1 行 + 空体刷新 2 行
+        assertThat(history.getAllValues())
+                .filteredOn(row -> ToolRegistryService.OUTCOME_SILENT_REFRESH.equals(row.getOutcome()))
+                .hasSize(2)
+                .allSatisfy(row -> {
+                    assertThat(row.getNewSha256()).isEqualTo(baseline);
+                    assertThat(row.getPreviousSha256()).isEqualTo(baseline);
+                });
+        assertThat(history.getAllValues())
+                .noneMatch(row -> AgentKernelToolManifest.schemaSha256("")
+                        .equals(row.getNewSha256())); // 空串指纹绝不入库
+        // 未重发 schema 不触发授权级联
+        verify(grantMapper, never()).selectActiveByFqn(anyString());
     }
 
     @Test

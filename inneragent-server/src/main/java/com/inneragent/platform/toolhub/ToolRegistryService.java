@@ -169,6 +169,8 @@ public class ToolRegistryService {
     /**
      * 宿主重发 schema + 注解 → 分诊:
      * <ul>
+     *   <li>未重发 schema(空/空白,DEF-02):一律 unchanged,静默处理——
+     *       指纹基准保持现库值,不落 pending,不级联失效;</li>
      *   <li>unchanged:静默刷新(仅元数据/时间戳);</li>
      *   <li>compatible:立即生效 + 留审计(纯增量,存量授权不受影响);</li>
      *   <li>breaking:不生效;暂存 pending_*,置 revalidate_required=TRUE,
@@ -187,11 +189,21 @@ public class ToolRegistryService {
         ToolAnnotations nextAnnotations =
                 ToolAnnotations.parse(objectMapper, nextAnnotationsJson);
 
-        SchemaTriage triage = triageService.triage(
-                entry.getParametersSchema(), previousAnnotations, nextSchemaJson, nextAnnotations);
+        // DEF-02:空/空白 next schema = 未重发 schema(UI「刷新」空体调用),
+        // 一律 unchanged——不改指纹、不落 pending、不级联失效;
+        // 历史留痕的 new_sha256 保持现库指纹,空串指纹绝不入库。
+        boolean schemaResent = nextSchemaJson != null && !nextSchemaJson.isBlank();
+        SchemaTriage triage = schemaResent
+                ? triageService.triage(
+                        entry.getParametersSchema(), previousAnnotations,
+                        nextSchemaJson, nextAnnotations)
+                : new SchemaTriage(SchemaTriageService.Verdict.UNCHANGED,
+                        List.of("schema_not_resent"));
 
         String nextCanonical = ToolSchemaFingerprint.canonicalJson(objectMapper, nextSchemaJson);
-        String nextFingerprint = ToolSchemaFingerprint.of(objectMapper, nextCanonical);
+        String nextFingerprint = schemaResent
+                ? ToolSchemaFingerprint.of(objectMapper, nextCanonical)
+                : entry.getSchemaSha256();
 
         switch (triage.verdict()) {
             case UNCHANGED -> {
@@ -204,6 +216,10 @@ public class ToolRegistryService {
                         "unchanged", OUTCOME_SILENT_REFRESH, triage.reasons());
             }
             case COMPATIBLE -> {
+                // DEF-02 防御栅栏:空 schema 不能应用为生效内容(空指纹禁止入库)
+                if (nextCanonical.isEmpty()) {
+                    throw new BusinessException(400, "空 schema 不能应用为生效内容(空指纹禁止入库)");
+                }
                 entry.setParametersSchema(nextCanonical.isEmpty() ? null : nextCanonical);
                 entry.setAnnotationsJson(nextAnnotations.rawJson());
                 entry.setSchemaSha256(nextFingerprint);
@@ -224,6 +240,10 @@ public class ToolRegistryService {
                         "triage=compatible; reasons=" + triage.reasons(), null, null));
             }
             case BREAKING -> {
+                // DEF-02 防御栅栏:空 schema 不能暂存为待确认内容(空指纹禁止入库)
+                if (nextCanonical.isEmpty()) {
+                    throw new BusinessException(400, "空 schema 不能暂存为待确认内容(空指纹禁止入库)");
+                }
                 entry.setPendingSchema(nextCanonical.isEmpty() ? null : nextCanonical);
                 entry.setPendingAnnotationsJson(nextAnnotations.rawJson());
                 entry.setPendingSchemaSha256(nextFingerprint);

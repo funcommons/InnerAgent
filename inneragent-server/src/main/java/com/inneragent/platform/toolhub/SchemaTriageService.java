@@ -54,11 +54,18 @@ public class SchemaTriageService {
 
     /**
      * 对比旧(schema+注解)与新(schema+注解),给出分诊结论。
+     *
+     * <p>DEF-02:next schema 为空/空白视为「未重发 schema」(如管理站「刷新」
+     * 按钮的空体调用),无从比对,一律 {@link Verdict#UNCHANGED}——绝不把
+     * 「现库 schema vs 空串」判成差异(空串指纹 e3b0c442… 不参与分诊)。
      */
     public SchemaTriage triage(String previousSchemaJson,
                                ToolAnnotations previousAnnotations,
                                String nextSchemaJson,
                                ToolAnnotations nextAnnotations) {
+        if (nextSchemaJson == null || nextSchemaJson.isBlank()) {
+            return new SchemaTriage(Verdict.UNCHANGED, List.of("schema_not_resent"));
+        }
         ToolAnnotations previous = previousAnnotations == null
                 ? ToolAnnotations.empty() : previousAnnotations;
         ToolAnnotations next = nextAnnotations == null ? ToolAnnotations.empty() : nextAnnotations;

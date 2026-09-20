@@ -141,6 +141,33 @@ class SchemaTriageServiceTests {
     }
 
     @Test
+    @DisplayName("DEF-02:空/空白 next schema = 未重发 → unchanged(schema_not_resent)")
+    void blankNextSchemaMeansNotResentAndIsUnchanged() {
+        SchemaTriage nullSchema = service.triage(
+                BASE_SCHEMA, ToolAnnotations.empty(), null, ToolAnnotations.empty());
+        SchemaTriage blankSchema = service.triage(
+                BASE_SCHEMA, ToolAnnotations.empty(), "   ", ToolAnnotations.empty());
+
+        assertThat(nullSchema.verdict()).isEqualTo(SchemaTriageService.Verdict.UNCHANGED);
+        assertThat(nullSchema.reasons()).containsExactly("schema_not_resent");
+        assertThat(blankSchema.verdict()).isEqualTo(SchemaTriageService.Verdict.UNCHANGED);
+        assertThat(blankSchema.reasons()).containsExactly("schema_not_resent");
+    }
+
+    @Test
+    @DisplayName("DEF-02:未重发 schema 不得把「注解未变」误判成 compatible/breaking")
+    void blankNextSchemaIgnoresAnnotationComparison() {
+        // 空体调用即使携带注解翻转,也因「未重发 schema」走 unchanged(不落 pending/不改指纹)
+        SchemaTriage triage = service.triage(
+                BASE_SCHEMA,
+                new ToolAnnotations("{\"readOnlyHint\":true}", true, null, null, null),
+                "",
+                new ToolAnnotations("{\"readOnlyHint\":false}", false, null, null, null));
+        assertThat(triage.verdict()).isEqualTo(SchemaTriageService.Verdict.UNCHANGED);
+        assertThat(triage.reasons()).containsExactly("schema_not_resent");
+    }
+
+    @Test
     @DisplayName("指纹不同但顶层矩阵无差异(嵌套变化)→ compatible(nested_schema_changed)")
     void nestedOnlyChangeIsCompatible() {
         SchemaTriage triage = service.triage(

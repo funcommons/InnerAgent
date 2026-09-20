@@ -9,12 +9,13 @@
  *     审计列形:ia_audit_log(ToolAuditLog);信封 CommonResult{code,msg,data},
  *     错误 HTTP 状态=业务 code(400/403/404/409…)。
  *
- * ── 原「契约空缺 / 自拟字段清单」8 项逐条裁决(P2 任务 #13)──────────────────
- *  1. 路径:apps/tools/grants 已对齐真实控制器(三域列表均返回数组、无服务端分页;
- *     分页 pageNo/pageSize 仅保留在服务端未实现域)。audit-logs 路径维持 mock 形
- *     (服务端未实现);model-configs 路径维持原形(依赖并行任务,联调时核对)。
- *  2. ia_app.signKeyFingerprint/signKeyUpdatedAt:服务端无 → 已删除;公钥登记/轮换
- *     统一走 PUT /apps/{id} {signPublicKey}(无独立端点、无指纹/时间回显)。
+ * ── 「契约空缺 / 自拟字段清单」裁决沿革(随服务端落地滚动更新)────────────────
+ *  1. 路径:apps/tools/grants/audit-logs/model-configs 已全部对齐真实控制器。
+ *     apps/tools/grants 列表返回数组、无服务端分页(分页在管理站客户端完成);
+ *     audit-logs/model-configs/webhook-deliveries 为服务端 PageResult 分页。
+ *  2. ia_app 公钥轮换(V9 已落地):PUT /apps/{id} {signPublicKey} 即登记/轮换,
+ *     响应回 signKeyFingerprint/signKeyRotatedAt;旧公钥进入 72h 验签宽限期
+ *     (inneragent.auth.embed-key-grace,双公钥并存,见 AdminAppService/DbAppSigningKeyProvider)。
  *  3. ia_tool_registry:fqn ✓(`mcp__<serverKey>__<toolName>`);注解为原始 JSON
  *     字符串 annotationsJson;自拟的 serverName/transport/credentialMasked/
  *     healthStatus/lastSyncedAt/writeOperation → 删(真实形:credentialsEnc 加密
@@ -25,14 +26,16 @@
  *     scope∈conversation|permanent(原 'session' → 'conversation');source∈
  *     live-confirm|admin(原 'admin-grant' → 'admin');userId 为 number;
  *     授予请求按 toolName(服务端解析 FQN),非 toolFqn。
- *  5. ia_audit_log:查询端点服务端未实现(P2 后续,整域保持 mock);展示字段已
- *     对齐真实列 decision/decision_source/params_masked_json/error_text/
- *     duration_ms/create_time;自拟的 resultStatus/confirmedBy/latencyMs/occurredAt
- *     → 删。确认等待超时(run 终态 CANCELLED,confirmation-expired)服务端未单独
- *     落审计决策,mock 以 decision=denied + errorText 表意。
- *  6. 熔断与资源上限:服务端未实现,保持 mock(P2 后续)。
- *  7. webhook:服务端无独立端点(ia_app 本体已含 webhookUrl/webhookSecret,配置
- *     走 apps 域);deliveries 投递记录保持 mock(P2 后续)。
+ *  5. ia_audit_log:查询端点已落地(AdminAuditController,W5):分页/过滤/字典
+ *     端点字段名对齐真实列 decision/decision_source/params_masked_json/
+ *     error_text/duration_ms/create_time;decision_source 值域含 V8 增补的
+ *     expired(以 GET /audit-logs/dictionary 下发值域为准)。
+ *  6. 熔断与资源上限:管理端点待服务端落地(跟踪:test-report/2026-09-21-02/
+ *     99-优化建议.md #2),api 层按 mock 形状调用,失败时 UI 显「服务端能力未开通」。
+ *  7. webhook:deliveries 已落地(WebhookDeliveryAdminController,任务 #18b,
+ *     路径 /admin/webhook-deliveries + POST /{id}/redeliver);config 域配置本体
+ *     在 ia_app(webhookUrl/webhookSecret 走 apps 域),/webhooks/config 端点
+ *     待服务端落地(跟踪:99-优化建议.md #2)。
  *  8. id 为数据库自增 number ✓;appId 单应用部署(ADR-10)由服务端行级拦截器注入,
  *     管理站请求体不再强制携带。
  */
@@ -40,7 +43,12 @@ import type { IsoDateTime, PageQuery } from './common'
 
 // ==================== 应用(ia_app,AdminAppController) ====================
 
-/** ia_app 行(服务端直接序列化实体;webhookSecret 随实体明文回显,见 P2 报告项) */
+/**
+ * ia_app 响应视图(P2-key AdminAppService.AppView 契约形):
+ * - webhookSecret 为 write-only,任何响应不回明文,仅回 webhookSecretMasked 掩码;
+ * - signKeyFingerprint/signKeyRotatedAt 由服务端 V9 轮换语义回显
+ *   (PEM → DER SHA-256 hex 前 16 位;rotatedAt 为轮换时刻,首次登记为 null)。
+ */
 export interface IaApp {
   id: number
   /** 应用唯一标识(embed token iss;唯一约束冲突 → 409) */
@@ -48,17 +56,20 @@ export interface IaApp {
   name: string
   /** embed token 验签公钥(RSA PEM,X509/PKCS#8;非法 PEM → 400) */
   signPublicKey: string | null
+  /** 公钥指纹(公钥 DER 的 SHA-256 hex 前 16 位;宿主侧比对锚点,见 AdminAppService.fingerprintOf) */
+  signKeyFingerprint: string | null
+  /** 最近一次公钥轮换时间(同值重复 PUT 不算轮换;首次登记为 null) */
+  signKeyRotatedAt: IsoDateTime | null
   /** 终态通知 Webhook 回调地址(可空) */
   webhookUrl: string | null
-  /** Webhook 回调签名密钥(可空) */
-  webhookSecret: string | null
+  /** Webhook 签名密钥掩码(明文 write-only 永不回显;仅创建时一次性可见) */
+  webhookSecretMasked: string | null
   /** 会话保留天数(超期物理清理,默认 180,ADR-9;注册固定 180,不可经 API 修改) */
   conversationRetentionDays: number
   /** 0-禁用 1-启用 */
   status: number
   createTime: IsoDateTime | null
   updateTime: IsoDateTime | null
-  deleted: boolean
 }
 
 export interface IaAppCreateReq {
@@ -324,7 +335,7 @@ export interface IaAuditLog {
   createTime: IsoDateTime | null
 }
 
-/** 审计过滤(mock 形:服务端查询端点未实现;字段名对齐真实列) */
+/** 审计过滤(对齐 AdminAuditController 查询参数;from/to 为 ISO 本地日期时间,无时区后缀) */
 export interface AuditLogQuery extends PageQuery {
   appId?: number
   userId?: number
@@ -337,8 +348,8 @@ export interface AuditLogQuery extends PageQuery {
 }
 
 // ==================== 模型配置(ia_model_api_config,方案 §4.4) ====================
-// ⚠ 依赖并行任务:服务端落 GET/POST /ia/api/v1/admin/model-configs、PUT/DELETE /{id}、
-// POST /{id}/test(密钥掩码)。路径/动作已按该契约,字段形联调时核对。
+// 已落地(AdminModelConfigController):GET/POST /admin/model-configs、
+// PUT/DELETE /{id}、POST /{id}/test;apiKey/appSecret/proxyPassword write-only 掩码。
 
 /** 文本协议五类(与参考实现对齐,PRD §6.3);图像/视频列已剥离 */
 export type ModelPlatform = 'openai_compatible' | 'anthropic' | 'gemini' | 'dashscope' | 'ollama'
@@ -394,7 +405,8 @@ export interface ModelConnectivityResult {
 }
 
 // ==================== 熔断与资源上限(方案 §4.7) ====================
-// ⚠ 服务端未实现(P2 后续):整域保持 mock(路径/字段为脚手架自拟形)。
+// 管理端点待服务端落地(跟踪:test-report/2026-09-21-02/99-优化建议.md #2);
+// api 层按下方形状调用真端点,联调 404 时 UI 显「服务端能力未开通」占位。
 
 /** 单运行/宿主 MCP 资源上限(§4.7 全套默认值) */
 export interface ResourceLimits {
@@ -414,7 +426,7 @@ export interface ResourceLimits {
   confirmTimeoutHours: number
 }
 
-/** 熔断事件(紧急停用/单运行终止/上限触发,展示用,mock 形) */
+/** 熔断事件(紧急停用/单运行终止/上限触发,展示用;端点待服务端落地,见上) */
 export interface CircuitBreakerEvent {
   id: number
   type: 'limit-triggered' | 'emergency-stop' | 'resume' | 'run-terminated'
@@ -448,8 +460,9 @@ export interface TerminateRunReq {
 }
 
 // ==================== Webhook(终态通知,方案 §7.1/Q5) ====================
-// ⚠ 服务端未实现(P2 后续):配置本体已在 ia_app(webhookUrl/webhookSecret,见
-// apps 域),deliveries 投递记录保持 mock(签名验证/5 次退避可观测面)。
+// deliveries 已落地(WebhookDeliveryAdminController,任务 #18b):分页形见下,
+// 时间字段为 epoch 毫秒(api 层归一为 ISO);config 端点待服务端落地
+// (跟踪:99-优化建议.md #2),配置本体在 ia_app(webhookUrl/webhookSecret,apps 域)。
 
 export interface WebhookConfig {
   appId: number
@@ -471,7 +484,7 @@ export interface WebhookConfigSaveReq {
   events?: WebhookEvent[]
 }
 
-/** 投递记录(签名验证与 5 次指数退避重试的可观测面,mock 形) */
+/** 投递记录(签名验证与 5 次指数退避重试的可观测面;任务 #18b 真实契约形) */
 export interface WebhookDelivery {
   id: number
   event: WebhookEvent

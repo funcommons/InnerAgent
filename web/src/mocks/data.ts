@@ -28,7 +28,7 @@ export function genId(): number {
 const PEM_DEMO = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAdemo\n-----END PUBLIC KEY-----'
 const PEM_LEGACY = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8Aold\n-----END PUBLIC KEY-----'
 
-// ==================== 应用(ia_app 真实列形) ====================
+// ==================== 应用(ia_app 响应视图形,P2-key AppView) ====================
 
 export const seedApps: IaApp[] = [
   {
@@ -36,39 +36,42 @@ export const seedApps: IaApp[] = [
     appKey: 'demo-app',
     name: '演示宿主应用',
     signPublicKey: PEM_DEMO,
+    signKeyFingerprint: 'a1b2c3d4e5f60718',
+    signKeyRotatedAt: '2026-09-10T02:00:00Z',
     webhookUrl: 'https://demo.example.com/ia/callback',
-    webhookSecret: 'whsec-demo-secret-9f2e',
+    webhookSecretMasked: 'whse••••9f2e',
     conversationRetentionDays: 180,
     status: 1,
     createTime: '2026-09-01T00:00:00Z',
     updateTime: '2026-09-10T02:00:00Z',
-    deleted: false,
   },
   {
     id: 2,
     appKey: 'shop-app',
     name: '商城后台',
     signPublicKey: null,
+    signKeyFingerprint: null,
+    signKeyRotatedAt: null,
     webhookUrl: null,
-    webhookSecret: null,
+    webhookSecretMasked: null,
     conversationRetentionDays: 180,
     status: 1,
     createTime: '2026-09-12T00:00:00Z',
     updateTime: '2026-09-12T00:00:00Z',
-    deleted: false,
   },
   {
     id: 3,
     appKey: 'legacy-app',
     name: '旧版归档应用',
     signPublicKey: PEM_LEGACY,
+    signKeyFingerprint: '0f9e8d7c6b5a4321',
+    signKeyRotatedAt: '2026-07-01T00:00:00Z',
     webhookUrl: null,
-    webhookSecret: null,
+    webhookSecretMasked: null,
     conversationRetentionDays: 180,
     status: 0,
     createTime: '2026-07-01T00:00:00Z',
     updateTime: '2026-09-18T09:30:00Z',
-    deleted: false,
   },
 ]
 
@@ -259,6 +262,20 @@ export function maskKey(value: string): string {
   if (!value) return ''
   if (value.length <= 8) return '••••••••'
   return value.slice(0, 4) + '••••' + value.slice(-4)
+}
+
+/**
+ * 公钥指纹(mock 不做真 DER 摘要;镜像 AdminAppService.fingerprintOf 输出形:
+ * 公钥 DER SHA-256 hex 前 16 位)
+ */
+export function fakeFingerprint(seed: string): string {
+  let h1 = 0x811c9dc5
+  let h2 = 0x1000193
+  for (const ch of seed) {
+    h1 = ((h1 ^ ch.charCodeAt(0)) * 0x01000193) >>> 0
+    h2 = ((h2 + ch.charCodeAt(0)) * 0x85ebca6b) >>> 0
+  }
+  return (h1.toString(16) + h2.toString(16)).padStart(16, '0').slice(0, 16)
 }
 
 /** 模拟 sha256 指纹(mock 不做真哈希,保证格式一致;服务端为 canonical JSON SHA-256) */

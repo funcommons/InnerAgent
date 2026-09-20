@@ -50,8 +50,8 @@ export const useAppsStore = defineStore('apps', {
       return app
     },
     /**
-     * 公钥登记/轮换(同一端点 PUT signPublicKey;服务端无指纹回显,
-     * 双公钥宽限期语义待服务端,P2 报告项)。
+     * 公钥登记/轮换(同一端点 PUT signPublicKey;V9 双公钥宽限期语义,
+     * 响应回 signKeyFingerprint/signKeyRotatedAt,同值重复 PUT 不算轮换)。
      */
     async updateSignKey(id: number, signPublicKey: string): Promise<IaApp> {
       const app = await appAdminApi.updateSignKey(id, signPublicKey)

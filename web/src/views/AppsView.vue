@@ -2,9 +2,10 @@
 /**
  * [new] 应用管理视图(视图清单 #2)。
  * ia_app 列表 / 创建 / 编辑 / embed 签发公钥登记与轮换。
- * P2 对齐:公钥登记/轮换 = PUT /apps/{id} {signPublicKey}(服务端无指纹/
- * 更新时间回显,无双公钥宽限期语义——待服务端,P2 报告项);创建必填公钥;
- * 保留期列对应 conversationRetentionDays(注册固定 180,不可经 API 修改)。
+ * P2-key 对齐:公钥登记/轮换 = PUT /apps/{id} {signPublicKey};响应回
+ * signKeyFingerprint/signKeyRotatedAt;轮换走服务端 V9 双公钥宽限期语义
+ * (旧公钥 72h 验签宽限,inneragent.auth.embed-key-grace 可配);
+ * webhookSecret 为 write-only,仅创建时一次性可见,回显仅 webhookSecretMasked。
  */
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -106,8 +107,10 @@ async function saveKey() {
   }
   if (keyMode.value === 'rotate') {
     const confirmed = await ElMessageBox.confirm(
-      // 待服务端:双公钥并存宽限期语义未实现,当前为直接替换(P2 报告项)
-      '当前为直接替换:新公钥立即生效,进行中签发的旧 embed token 将验签失败。双公钥宽限期语义待服务端(P2 后续)。继续?',
+      // 宽限期语义与服务端 V9 迁移同源:ia_app.previous_sign_public_key +
+      // sign_key_rotated_at;宽限期 inneragent.auth.embed-key-grace(默认 72h),
+      // 验签链见服务端 DbAppSigningKeyProvider(双公钥并存,旧 token 宽限期内仍可用)
+      '轮换后新公钥立即生效;旧公钥保留 72 小时验证宽限,期间双公钥并存,存量 embed token 在宽限期内仍可正常验签。请确认新公钥已在宿主侧就绪后再切换签发。继续?',
       '公钥轮换确认',
       { type: 'warning', confirmButtonText: '确认轮换', cancelButtonText: '取消' },
     ).then(() => true).catch(() => false)
@@ -241,13 +244,14 @@ async function saveKey() {
       :title="keyMode === 'register' ? `登记 embed 签发公钥:${keyApp?.name}` : `轮换 embed 签发公钥:${keyApp?.name}`"
       width="620px"
     >
+      <!-- 宽限期文案与服务端 V9 迁移/DbAppSigningKeyProvider 双公钥语义同源(embed-key-grace 默认 72h) -->
       <el-alert
         v-if="keyMode === 'rotate'"
         type="warning"
         :closable="false"
         show-icon
         class="rotate-alert"
-        title="待服务端:双公钥并存宽限期语义未实现,当前为直接替换(旧 embed token 立即验签失败)。"
+        title="轮换后新公钥立即生效;旧公钥保留 72 小时验证宽限,期间双公钥并存,存量 embed token 在宽限期内仍可正常验签。"
       />
       <el-form label-width="90px">
         <el-form-item label="RSA 公钥" required>

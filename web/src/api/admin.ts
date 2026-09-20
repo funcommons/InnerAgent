@@ -71,7 +71,8 @@ export const appAdminApi = {
   remove: (id: number) => http.delete<boolean>(`${BASE}/apps/${id}`),
   /**
    * 公钥登记/轮换(同一端点:PUT /apps/{id} {signPublicKey})。
-   * 服务端无指纹/更新时间回显,无双公钥宽限期语义(P2 报告项,UI 已置灰说明)。
+   * P2-key V9:值变化即轮换(旧公钥进 72h 验签宽限期,双公钥并存),
+   * 响应回 signKeyFingerprint/signKeyRotatedAt(见 AdminAppService.rotateSignKey)。
    */
   updateSignKey: (id: number, signPublicKey: string) =>
     http.put<IaApp>(`${BASE}/apps/${id}`, { signPublicKey }),

@@ -30,7 +30,7 @@ import type {
   WebhookDelivery,
   WebhookEvent,
 } from '@/api/types'
-import { fakeSha256, genId, maskKey, resetMockData, store } from './data'
+import { fakeSha256, fakeFingerprint, genId, maskKey, resetMockData, store } from './data'
 
 /** mock 登录约定 key(引导模式任意非空亦可;此值供测试断言) */
 export const MOCK_ADMIN_KEY = 'ia-admin-mock-key'
@@ -145,7 +145,7 @@ const appHandlers = [
   http.post('/ia/api/v1/admin/apps', async ({ request }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied
-    const body = (await request.json()) as Partial<IaApp>
+    const body = (await request.json()) as Partial<IaApp> & { webhookSecret?: string }
     if (!body.appKey || !body.name || !body.signPublicKey) {
       return fail(400, 'appKey/name/signPublicKey 不能为空')
     }
@@ -161,13 +161,15 @@ const appHandlers = [
       appKey: body.appKey,
       name: body.name,
       signPublicKey: body.signPublicKey,
+      // 首次登记不算轮换(P2-key:rotateSignKey 仅在「同值不同」时置 rotatedAt)
+      signKeyFingerprint: fakeFingerprint(body.signPublicKey),
+      signKeyRotatedAt: null,
       webhookUrl: body.webhookUrl ?? null,
-      webhookSecret: body.webhookSecret ?? null,
+      webhookSecretMasked: maskKey(body.webhookSecret ?? ''),
       conversationRetentionDays: 180,
       status: 1,
       createTime: now,
       updateTime: now,
-      deleted: false,
     }
     store.apps.unshift(app)
     return ok(app)
@@ -180,13 +182,23 @@ const appHandlers = [
     const body = (await request.json()) as Record<string, unknown>
     if (typeof body.name === 'string' && body.name.trim()) app.name = body.name.trim()
     if (typeof body.signPublicKey === 'string' && body.signPublicKey.trim()) {
-      if (!looksLikePem(body.signPublicKey)) {
+      const pem = body.signPublicKey.trim()
+      if (!looksLikePem(pem)) {
         return fail(400, 'signPublicKey 不是合法的 RSA 公钥 PEM')
       }
-      app.signPublicKey = body.signPublicKey.trim()
+      // 轮换语义(镜像 AdminAppService.rotateSignKey):同值重复 PUT 不算轮换;
+      // 不同值 → rotatedAt=now + 新指纹(旧公钥进 72h 宽限期,V9)
+      if (pem !== app.signPublicKey) {
+        app.signKeyRotatedAt = nowIso()
+        app.signKeyFingerprint = fakeFingerprint(pem)
+      }
+      app.signPublicKey = pem
     }
     if (typeof body.webhookUrl === 'string') app.webhookUrl = body.webhookUrl.trim() || null
-    if (typeof body.webhookSecret === 'string') app.webhookSecret = body.webhookSecret.trim() || null
+    // write-only:空/缺省 = 不修改;非空 = 重置。响应仅回掩码(明文永不回显)
+    if (typeof body.webhookSecret === 'string' && body.webhookSecret.trim()) {
+      app.webhookSecretMasked = maskKey(body.webhookSecret.trim())
+    }
     if (body.status === 0 || body.status === 1) app.status = body.status
     app.updateTime = nowIso()
     return ok(app)

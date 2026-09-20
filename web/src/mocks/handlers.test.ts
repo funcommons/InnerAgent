@@ -37,10 +37,14 @@ describe('mock 后端:应用管理(真实契约形)', () => {
     expect(Array.isArray(all)).toBe(true)
     expect(all).toHaveLength(3)
     expect(all.map(a => a.appKey)).toContain('demo-app')
-    // 行形 = ia_app 真实列(无 signKeyFingerprint/retentionDays 自拟字段)
+    // 行形 = P2-key AppView:回指纹/轮换时间/密钥掩码;明文 webhookSecret 永不回显
     expect(all[0]).toHaveProperty('conversationRetentionDays')
-    expect(all[0]).not.toHaveProperty('signKeyFingerprint')
-    expect(all[0]).not.toHaveProperty('retentionDays')
+    expect(all[0]).toHaveProperty('signKeyFingerprint')
+    expect(all[0]).toHaveProperty('signKeyRotatedAt')
+    expect(all[0]!.webhookSecretMasked).toContain('••••')
+    const raw = all[0] as unknown as Record<string, unknown>
+    expect(raw['webhookSecret']).toBeUndefined()
+    expect(raw['deleted']).toBeUndefined()
   })
 
   it('创建应用:请求形=真实契约(必含 signPublicKey);appKey 重复 → 409', async () => {
@@ -49,7 +53,9 @@ describe('mock 后端:应用管理(真实契约形)', () => {
     expect(created.status).toBe(1)
     expect(created.conversationRetentionDays).toBe(180)
     expect(created.signPublicKey).toBe(pem)
-    expect(created.deleted).toBe(false)
+    // 首次登记不算轮换(P2-key:rotatedAt 为 null,指纹已生成)
+    expect(created.signKeyRotatedAt).toBeNull()
+    expect(created.signKeyFingerprint).toMatch(/^[0-9a-f]{16}$/)
 
     const err = await appAdminApi.create({ appKey: 'new-app', name: '重复', signPublicKey: pem }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
@@ -64,12 +70,19 @@ describe('mock 后端:应用管理(真实契约形)', () => {
     expect((err as ApiError).message).toContain('RSA 公钥 PEM')
   })
 
-  it('公钥登记/轮换:PUT signPublicKey 同一端点;status 仅 0/1 生效', async () => {
+  it('公钥登记/轮换:PUT signPublicKey 同一端点;V9 轮换语义(同值不算轮换);status 仅 0/1 生效', async () => {
     const target = (await appAdminApi.list()).find(a => !a.signPublicKey)!
     const registered = await appAdminApi.updateSignKey(target.id, '-----BEGIN PUBLIC KEY-----\nAAA\n-----END PUBLIC KEY-----')
     expect(registered.signPublicKey).toContain('BEGIN PUBLIC KEY')
     const rotated = await appAdminApi.updateSignKey(target.id, '-----BEGIN PUBLIC KEY-----\nBBB\n-----END PUBLIC KEY-----')
     expect(rotated.signPublicKey).toContain('BBB')
+    // PUT 值变化即轮换(镜像 rotateSignKey:current=null 亦视为变化,rotatedAt=now)
+    expect(rotated.signKeyRotatedAt).toBeTruthy()
+    const fingerprintBefore = rotated.signKeyFingerprint
+    // 同值重复 PUT 不算轮换(P2-key rotateSignKey 语义)
+    const again = await appAdminApi.updateSignKey(target.id, '-----BEGIN PUBLIC KEY-----\nBBB\n-----END PUBLIC KEY-----')
+    expect(again.signKeyRotatedAt).toBe(rotated.signKeyRotatedAt)
+    expect(again.signKeyFingerprint).toBe(fingerprintBefore)
     // 非法状态值不生效(服务端仅 0/1 写入)
     const untouched = await appAdminApi.update(target.id, { status: 5 as never })
     expect(untouched.status).toBe(1)

@@ -1,11 +1,12 @@
 /**
  * [new] 应用管理 store:列表/筛选/CRUD/公钥登记与轮换。
- * 视图清单 #2(ia_app)。
+ * 视图清单 #2(ia_app)。P2 对齐:服务端列表返回全量数组(无分页/过滤),
+ * 关键字/状态过滤与分页在客户端完成;公钥登记/轮换统一走 PUT signPublicKey。
  */
 import { defineStore } from 'pinia'
 import { appAdminApi } from '@/api/admin'
 import { ApiError } from '@/api/errorCodes'
-import type { IaApp, IaAppCreateReq, IaAppPublicKeyResp, IaAppUpdateReq } from '@/api/types'
+import type { IaApp, IaAppCreateReq, IaAppUpdateReq } from '@/api/types'
 import type { PageQuery } from '@/api/common'
 
 export interface AppFilters extends PageQuery {
@@ -24,14 +25,16 @@ export const useAppsStore = defineStore('apps', {
     async load() {
       this.loading = true
       try {
-        const page = await appAdminApi.page({
-          keyword: this.filters.keyword || undefined,
-          status: this.filters.status ?? undefined,
-          pageNo: this.filters.pageNo,
-          pageSize: this.filters.pageSize,
-        })
-        this.list = page.list
-        this.total = page.total
+        const all = await appAdminApi.list()
+        const kw = this.filters.keyword.trim()
+        let filtered = all
+        if (kw) filtered = filtered.filter(a => a.name.includes(kw) || a.appKey.includes(kw))
+        if (this.filters.status !== null) filtered = filtered.filter(a => a.status === this.filters.status)
+        this.total = filtered.length
+        const pageNo = this.filters.pageNo ?? 1
+        const pageSize = this.filters.pageSize ?? 10
+        const start = (pageNo - 1) * pageSize
+        this.list = filtered.slice(start, start + pageSize)
       } finally {
         this.loading = false
       }
@@ -46,16 +49,24 @@ export const useAppsStore = defineStore('apps', {
       await this.load()
       return app
     },
-    async registerPublicKey(id: number, publicKey: string): Promise<IaAppPublicKeyResp> {
-      return appAdminApi.registerPublicKey(id, { publicKey })
+    /**
+     * 公钥登记/轮换(同一端点 PUT signPublicKey;服务端无指纹回显,
+     * 双公钥宽限期语义待服务端,P2 报告项)。
+     */
+    async updateSignKey(id: number, signPublicKey: string): Promise<IaApp> {
+      const app = await appAdminApi.updateSignKey(id, signPublicKey)
+      await this.load()
+      return app
     },
-    async rotateKey(id: number, publicKey: string): Promise<IaAppPublicKeyResp> {
-      return appAdminApi.rotateKey(id, { publicKey })
+    /** 注销应用(逻辑删除) */
+    async remove(id: number): Promise<void> {
+      await appAdminApi.remove(id)
+      await this.load()
     },
   },
 })
 
-/** PEM 公钥宽松校验:必须含 BEGIN/END PUBLIC KEY 包裹(UI 层校验,服务端为准) */
+/** PEM 公钥宽松校验:必须含 BEGIN/END PUBLIC KEY 包裹(UI 层校验,服务端 RSA 解析为准) */
 export function isValidPemPublicKey(pem: string): boolean {
   return pem.includes('-----BEGIN PUBLIC KEY-----') && pem.includes('-----END PUBLIC KEY-----')
 }

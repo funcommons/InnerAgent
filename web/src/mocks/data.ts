@@ -2,6 +2,8 @@
  * [new] msw mock 数据种子与内存存储。
  * 时间锚定 2026-09-20(契约时间基线);动作类 handler 直接改写内存数组。
  * resetMockData() 在每条用例后恢复种子(setup.ts 调用)。
+ * P2 对齐:种子形 = 服务端真实实体形(AppRegistration/ToolRegistryEntry/
+ * ToolGrant/ia_audit_log 列);审计域端点服务端未实现,但行形已对齐真实列。
  */
 import type {
   CircuitBreakerEvent,
@@ -10,6 +12,7 @@ import type {
   IaModelApiConfig,
   IaToolGrant,
   IaToolRegistry,
+  IaToolSchemaHistory,
   ResourceLimits,
   WebhookConfig,
   WebhookDelivery,
@@ -22,152 +25,146 @@ export function genId(): number {
   return nextId++
 }
 
-// ==================== 应用 ====================
+const PEM_DEMO = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAdemo\n-----END PUBLIC KEY-----'
+const PEM_LEGACY = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8Aold\n-----END PUBLIC KEY-----'
+
+// ==================== 应用(ia_app 真实列形) ====================
 
 export const seedApps: IaApp[] = [
   {
     id: 1,
     appKey: 'demo-app',
     name: '演示宿主应用',
-    status: 1,
-    signPublicKey: '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAdemo\n-----END PUBLIC KEY-----',
-    signKeyFingerprint: 'sha256:1a2b3c4d5e6f7081',
-    signKeyUpdatedAt: '2026-09-10T02:00:00Z',
-    retentionDays: 180,
-    emergencyStopped: false,
-    emergencyStopReason: null,
+    signPublicKey: PEM_DEMO,
     webhookUrl: 'https://demo.example.com/ia/callback',
-    webhookSecretMasked: 'whsec-••••9f2e',
-    webhookEnabled: true,
-    remark: '内置演练宿主(demo-host)',
+    webhookSecret: 'whsec-demo-secret-9f2e',
+    conversationRetentionDays: 180,
+    status: 1,
     createTime: '2026-09-01T00:00:00Z',
     updateTime: '2026-09-10T02:00:00Z',
+    deleted: false,
   },
   {
     id: 2,
     appKey: 'shop-app',
     name: '商城后台',
-    status: 1,
     signPublicKey: null,
-    signKeyFingerprint: null,
-    signKeyUpdatedAt: null,
-    retentionDays: 90,
-    emergencyStopped: false,
-    emergencyStopReason: null,
     webhookUrl: null,
-    webhookSecretMasked: null,
-    webhookEnabled: false,
-    remark: '待登记公钥,embed token 尚不可用',
+    webhookSecret: null,
+    conversationRetentionDays: 180,
+    status: 1,
     createTime: '2026-09-12T00:00:00Z',
     updateTime: '2026-09-12T00:00:00Z',
+    deleted: false,
   },
   {
     id: 3,
     appKey: 'legacy-app',
     name: '旧版归档应用',
-    status: 0,
-    signPublicKey: '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8Aold\n-----END PUBLIC KEY-----',
-    signKeyFingerprint: 'sha256:ffff00001111',
-    signKeyUpdatedAt: '2026-08-01T00:00:00Z',
-    retentionDays: 180,
-    emergencyStopped: true,
-    emergencyStopReason: '成本异常演练',
+    signPublicKey: PEM_LEGACY,
     webhookUrl: null,
-    webhookSecretMasked: null,
-    webhookEnabled: false,
-    remark: null,
+    webhookSecret: null,
+    conversationRetentionDays: 180,
+    status: 0,
     createTime: '2026-07-01T00:00:00Z',
     updateTime: '2026-09-18T09:30:00Z',
+    deleted: false,
   },
 ]
 
-// ==================== 工具注册表 ====================
+// ==================== 工具注册表(ia_tool_registry 真实列形) ====================
 
 function tool(partial: Partial<IaToolRegistry> & Pick<IaToolRegistry, 'id' | 'serverKey' | 'toolName'>): IaToolRegistry {
   const fqn = `mcp__${partial.serverKey}__${partial.toolName}`
   return {
     appId: 1,
-    serverName: partial.serverKey === 'demo_host' ? '演示宿主 MCP' : 'CRM 系统 MCP',
-    endpoint: partial.serverKey === 'demo_host' ? 'http://demo-host:8080/ia-mcp' : 'http://crm:9090/mcp',
-    transport: 'streamable_http',
-    credentialMasked: '••••',
     fqn,
     description: '',
-    inputSchema: { type: 'object', properties: {} },
-    schemaFingerprint: `sha256:${String(partial.id).padStart(4, '0')}fp`,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    parametersSchema: '{"type":"object","properties":{}}',
+    annotationsJson: '{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":false}',
     riskLevel: 'medium',
-    writeOperation: true,
-    adminPolicy: 'default',
+    adminPolicy: null,
     resumeSafe: false,
-    healthStatus: 'healthy',
-    healthMessage: null,
-    lastSyncedAt: MOCK_TIME,
-    status: 1,
+    concurrencySafe: false,
+    source: partial.serverKey === 'crm' ? 'third_party' : 'host_app',
+    endpointUrl: partial.serverKey === 'crm' ? 'http://crm:9090/mcp' : null,
+    credentialsEnc: null,
+    schemaSha256: `sha256:${String(partial.id).padStart(4, '0')}fp`,
+    toolVersion: null,
+    revalidateRequired: false,
+    pendingSchema: null,
+    pendingAnnotationsJson: null,
+    pendingSchemaSha256: null,
+    pendingRefreshAt: null,
+    enabled: true,
+    lastTestStatus: null,
     createTime: '2026-09-05T00:00:00Z',
     updateTime: MOCK_TIME,
+    deleted: false,
     ...partial,
   }
 }
 
 export const seedTools: IaToolRegistry[] = [
-  tool({ id: 1, serverKey: 'demo_host', toolName: 'get_user', description: '按 ID 查询用户信息', riskLevel: 'low', writeOperation: false, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, resumeSafe: true }),
-  tool({ id: 2, serverKey: 'demo_host', toolName: 'update_user', description: '更新用户资料字段', riskLevel: 'high', annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } }),
-  tool({ id: 3, serverKey: 'demo_host', toolName: 'reset_password', description: '重置用户密码(高危:凭据类)', riskLevel: 'critical', annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } }),
-  tool({ id: 4, serverKey: 'demo_host', toolName: 'list_login_records', description: '查询登录记录(只读)', riskLevel: 'low', writeOperation: false, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, resumeSafe: true }),
-  tool({ id: 5, serverKey: 'demo_host', toolName: 'delete_flow', description: '删除流程(高危:删除类)', riskLevel: 'critical', adminPolicy: 'force-ask', healthStatus: 'unhealthy', healthMessage: '连通性测试超时(2026-09-19)', annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } }),
-  tool({ id: 6, serverKey: 'crm', toolName: 'search_customers', description: '检索客户(三方 MCP,一律确认)', serverName: 'CRM 系统 MCP', endpoint: 'http://crm:9090/mcp', riskLevel: 'medium', writeOperation: false, adminPolicy: 'force-ask', annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } }),
-  tool({ id: 7, serverKey: 'crm', toolName: 'update_customer_note', description: '写入 CRM 客户备注', serverName: 'CRM 系统 MCP', endpoint: 'http://crm:9090/mcp', riskLevel: 'high', annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true } }),
-  tool({ id: 8, serverKey: 'demo_host', toolName: 'refresh_cache', description: '刷新宿主缓存(幂等写)', riskLevel: 'medium', resumeSafe: true, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } }),
-  tool({ id: 9, serverKey: 'demo_host', toolName: 'export_users', description: '导出用户清单(停用示例)', riskLevel: 'medium', status: 0, healthStatus: 'unknown', healthMessage: '已停用', annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }),
+  tool({ id: 1, serverKey: 'demo_host', toolName: 'get_user', description: '按 ID 查询用户信息', riskLevel: 'low', resumeSafe: true, annotationsJson: '{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}' }),
+  tool({ id: 2, serverKey: 'demo_host', toolName: 'update_user', description: '更新用户资料字段', riskLevel: 'high' }),
+  // 凭据类关键词(password)强制高危,且管理员不可下调(服务端 400)
+  tool({ id: 3, serverKey: 'demo_host', toolName: 'reset_password', description: '重置用户密码(高危:凭据类)', riskLevel: 'high', annotationsJson: '{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":false}' }),
+  tool({ id: 4, serverKey: 'demo_host', toolName: 'list_login_records', description: '查询登录记录(只读)', riskLevel: 'low', resumeSafe: true, annotationsJson: '{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}' }),
+  // 删除类关键词(delete)强制高危;lastTestStatus 为最近体检结果(真实列)
+  tool({ id: 5, serverKey: 'demo_host', toolName: 'delete_flow', description: '删除流程(高危:删除类)', riskLevel: 'high', adminPolicy: 'force-ask', lastTestStatus: '连通性测试超时(2026-09-19)', annotationsJson: '{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":false}' }),
+  tool({ id: 6, serverKey: 'crm', toolName: 'search_customers', description: '检索客户(三方 MCP,一律确认)', riskLevel: 'medium', adminPolicy: 'force-ask', annotationsJson: '{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}' }),
+  tool({ id: 7, serverKey: 'crm', toolName: 'update_customer_note', description: '写入 CRM 客户备注', riskLevel: 'high', annotationsJson: '{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":true}' }),
+  tool({ id: 8, serverKey: 'demo_host', toolName: 'refresh_cache', description: '刷新宿主缓存(幂等写)', riskLevel: 'medium', resumeSafe: true, annotationsJson: '{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}' }),
+  tool({ id: 9, serverKey: 'demo_host', toolName: 'export_users', description: '导出用户清单(停用示例)', riskLevel: 'medium', enabled: false }),
 ]
 
-// ==================== 工具授权 ====================
+// ==================== 工具授权(ia_tool_grant 真实列形) ====================
 
 export const seedGrants: IaToolGrant[] = [
-  { id: 21, appId: 1, userId: 'user-12993', toolFqn: 'mcp__demo_host__update_user', scope: 'permanent', conversationId: null, grantedRiskLevel: 'high', schemaFingerprint: 'sha256:0002fp', source: 'user-grant', invalid: false, invalidReason: null, grantedAt: '2026-09-08T10:00:00Z' },
-  { id: 22, appId: 1, userId: 'user-20001', toolFqn: 'mcp__demo_host__update_user', scope: 'session', conversationId: 'conv-777', grantedRiskLevel: 'high', schemaFingerprint: 'sha256:0002fp', source: 'user-grant', invalid: false, invalidReason: null, grantedAt: '2026-09-19T14:20:00Z' },
-  { id: 23, appId: 1, userId: 'user-12993', toolFqn: 'mcp__demo_host__reset_password', scope: 'permanent', conversationId: null, grantedRiskLevel: 'medium', schemaFingerprint: 'sha256:0003fp', source: 'user-grant', invalid: true, invalidReason: 'risk-upgraded', grantedAt: '2026-09-02T08:00:00Z' },
-  { id: 24, appId: 1, userId: 'user-30077', toolFqn: 'mcp__crm__update_customer_note', scope: 'permanent', conversationId: null, grantedRiskLevel: 'high', schemaFingerprint: 'sha256:old-fp', source: 'user-grant', invalid: true, invalidReason: 'schema-changed', grantedAt: '2026-09-06T09:00:00Z' },
-  { id: 25, appId: 1, userId: 'user-30077', toolFqn: 'mcp__demo_host__export_users', scope: 'permanent', conversationId: null, grantedRiskLevel: 'medium', schemaFingerprint: 'sha256:0009fp', source: 'user-grant', invalid: true, invalidReason: 'tool-disabled', grantedAt: '2026-09-05T09:00:00Z' },
+  { id: 21, appId: 1, userId: 12993, toolFqn: 'mcp__demo_host__update_user', scope: 'permanent', conversationId: null, riskAtGrant: 'high', schemaSha256: 'sha256:0002fp', source: 'live-confirm', invalidated: false, invalidatedReason: null, decisionNote: '用户在确认卡选择「总是允许」', tenantId: 0, createTime: '2026-09-08T10:00:00Z', updateTime: '2026-09-08T10:00:00Z', deleted: false },
+  { id: 22, appId: 1, userId: 20001, toolFqn: 'mcp__demo_host__update_user', scope: 'conversation', conversationId: 'conv-777', riskAtGrant: 'high', schemaSha256: 'sha256:0002fp', source: 'live-confirm', invalidated: false, invalidatedReason: null, decisionNote: '本会话允许', tenantId: 0, createTime: '2026-09-19T14:20:00Z', updateTime: '2026-09-19T14:20:00Z', deleted: false },
+  { id: 23, appId: 1, userId: 12993, toolFqn: 'mcp__demo_host__reset_password', scope: 'permanent', conversationId: null, riskAtGrant: 'medium', schemaSha256: 'sha256:0003fp', source: 'admin', invalidated: true, invalidatedReason: 'risk_upgrade', decisionNote: '管理站代授(后风险升级失效)', tenantId: 0, createTime: '2026-09-02T08:00:00Z', updateTime: '2026-09-10T08:00:00Z', deleted: false },
+  { id: 24, appId: 1, userId: 30077, toolFqn: 'mcp__crm__update_customer_note', scope: 'permanent', conversationId: null, riskAtGrant: 'high', schemaSha256: 'sha256:old-fp', source: 'live-confirm', invalidated: true, invalidatedReason: 'schema_breaking', decisionNote: null, tenantId: 0, createTime: '2026-09-06T09:00:00Z', updateTime: '2026-09-12T09:00:00Z', deleted: false },
+  { id: 25, appId: 1, userId: 30077, toolFqn: 'mcp__demo_host__export_users', scope: 'permanent', conversationId: null, riskAtGrant: 'medium', schemaSha256: 'sha256:0009fp', source: 'admin', invalidated: true, invalidatedReason: 'tool_disabled', decisionNote: '工具停用级联失效', tenantId: 0, createTime: '2026-09-05T09:00:00Z', updateTime: '2026-09-06T09:00:00Z', deleted: false },
 ]
 
-// ==================== 审计日志 ====================
+// ==================== 审计日志(ia_audit_log 真实列形;查询端点未实现,mock) ====================
 
-function audit(partial: Partial<IaAuditLog> & Pick<IaAuditLog, 'id' | 'toolFqn' | 'decisionSource' | 'resultStatus'>): IaAuditLog {
+function audit(partial: Partial<IaAuditLog> & Pick<IaAuditLog, 'id' | 'toolFqn' | 'decisionSource' | 'decision'>): IaAuditLog {
   return {
     appId: 1,
-    appKey: 'demo-app',
-    userId: 'user-12993',
-    tenantId: 'tenant-a',
+    tenantId: 0,
+    userId: 12993,
     conversationId: `conv-${1000 + (partial.id ?? 0)}`,
     runId: `run-${2000 + (partial.id ?? 0)}`,
-    paramsMasked: '{"userId":"12993","password":"••••••••"}',
-    errorMessage: null,
+    paramsMaskedJson: '{"userId":"12993","password":"••••••••"}',
+    resultSummary: null,
+    errorText: null,
     riskLevel: 'medium',
-    confirmedBy: null,
-    latencyMs: 420,
-    occurredAt: MOCK_TIME,
+    durationMs: 420,
+    createTime: MOCK_TIME,
     ...partial,
   }
 }
 
 export const seedAuditLogs: IaAuditLog[] = [
-  audit({ id: 31, toolFqn: 'mcp__demo_host__get_user', decisionSource: 'mode-default', resultStatus: 'success', riskLevel: 'low', paramsMasked: '{"userId":"12993"}', occurredAt: '2026-09-20T07:59:00Z' }),
-  audit({ id: 32, toolFqn: 'mcp__demo_host__reset_password', decisionSource: 'live-confirm', resultStatus: 'success', riskLevel: 'critical', confirmedBy: 'user-12993', occurredAt: '2026-09-20T07:58:30Z' }),
-  audit({ id: 33, toolFqn: 'mcp__demo_host__delete_flow', decisionSource: 'forced-policy', resultStatus: 'denied', riskLevel: 'critical', errorMessage: '用户拒绝:记录未被修改', confirmedBy: 'user-12993', occurredAt: '2026-09-19T18:12:00Z' }),
-  audit({ id: 34, toolFqn: 'mcp__demo_host__update_user', decisionSource: 'user-grant', resultStatus: 'success', riskLevel: 'high', occurredAt: '2026-09-19T16:40:00Z' }),
-  audit({ id: 35, toolFqn: 'mcp__demo_host__get_user', decisionSource: 'mode-default', resultStatus: 'failed', riskLevel: 'low', errorMessage: '宿主 MCP 超时', latencyMs: 30000, occurredAt: '2026-09-19T15:02:00Z' }),
-  audit({ id: 36, toolFqn: 'mcp__crm__search_customers', decisionSource: 'forced-policy', resultStatus: 'success', riskLevel: 'medium', userId: 'user-30077', occurredAt: '2026-09-18T11:00:00Z' }),
-  audit({ id: 37, toolFqn: 'mcp__demo_host__list_login_records', decisionSource: 'mode-default', resultStatus: 'success', riskLevel: 'low', userId: 'user-20001', paramsMasked: '{"userId":"20001","days":30}', occurredAt: '2026-09-18T10:30:00Z' }),
-  audit({ id: 38, toolFqn: 'mcp__demo_host__refresh_cache', decisionSource: 'mode-default', resultStatus: 'success', riskLevel: 'medium', occurredAt: '2026-09-17T09:00:00Z' }),
-  audit({ id: 39, toolFqn: 'mcp__demo_host__delete_flow', decisionSource: 'forced-policy', resultStatus: 'timeout', riskLevel: 'critical', errorMessage: '确认等待超时(24h)自动拒绝', occurredAt: '2026-09-16T08:00:00Z' }),
-  audit({ id: 40, toolFqn: 'mcp__demo_host__update_user', decisionSource: 'full-access', resultStatus: 'success', riskLevel: 'high', errorMessage: 'FULL_ACCESS 一次性确认已审计', userId: 'user-20001', occurredAt: '2026-09-15T13:00:00Z' }),
-  audit({ id: 41, toolFqn: 'mcp__crm__update_customer_note', decisionSource: 'live-confirm', resultStatus: 'denied', riskLevel: 'high', userId: 'user-30077', errorMessage: '用户拒绝:备注未写入', confirmedBy: 'user-30077', occurredAt: '2026-09-14T10:00:00Z' }),
-  audit({ id: 42, toolFqn: 'mcp__demo_host__reset_password', decisionSource: 'user-grant', resultStatus: 'denied', riskLevel: 'critical', errorMessage: '授权已失效(risk-upgraded)', occurredAt: '2026-09-13T08:00:00Z' }),
+  audit({ id: 31, toolFqn: 'mcp__demo_host__get_user', decisionSource: 'mode-default', decision: 'allowed', riskLevel: 'low', paramsMaskedJson: '{"userId":"12993"}', resultSummary: '查询完成', createTime: '2026-09-20T07:59:00Z' }),
+  audit({ id: 32, toolFqn: 'mcp__demo_host__reset_password', decisionSource: 'live-confirm', decision: 'allowed', riskLevel: 'high', resultSummary: '确认卡批准后执行', createTime: '2026-09-20T07:58:30Z' }),
+  audit({ id: 33, toolFqn: 'mcp__demo_host__delete_flow', decisionSource: 'forced-policy', decision: 'denied', riskLevel: 'high', errorText: '用户拒绝:记录未被修改', durationMs: null, createTime: '2026-09-19T18:12:00Z' }),
+  audit({ id: 34, toolFqn: 'mcp__demo_host__update_user', decisionSource: 'user-grant', decision: 'allowed', riskLevel: 'high', resultSummary: '命中「总是允许」授权', createTime: '2026-09-19T16:40:00Z' }),
+  audit({ id: 35, toolFqn: 'mcp__demo_host__get_user', decisionSource: 'mode-default', decision: 'allowed', riskLevel: 'low', paramsMaskedJson: '{"userId":"12993"}', errorText: '宿主 MCP 超时(执行失败)', durationMs: 30000, createTime: '2026-09-19T15:02:00Z' }),
+  audit({ id: 36, toolFqn: 'mcp__crm__search_customers', decisionSource: 'forced-policy', decision: 'allowed', riskLevel: 'medium', userId: 30077, resultSummary: '检索返回 8 条', createTime: '2026-09-18T11:00:00Z' }),
+  audit({ id: 37, toolFqn: 'mcp__demo_host__list_login_records', decisionSource: 'mode-default', decision: 'allowed', riskLevel: 'low', userId: 20001, paramsMaskedJson: '{"userId":"20001","days":30}', createTime: '2026-09-18T10:30:00Z' }),
+  audit({ id: 38, toolFqn: 'mcp__demo_host__refresh_cache', decisionSource: 'mode-default', decision: 'allowed', riskLevel: 'medium', createTime: '2026-09-17T09:00:00Z' }),
+  // 确认等待超时:run 终态 CANCELLED(confirmation-expired),服务端未单独落审计决策
+  audit({ id: 39, toolFqn: 'mcp__demo_host__delete_flow', decisionSource: 'forced-policy', decision: 'denied', riskLevel: 'high', errorText: '确认等待超时(24h)自动拒绝(confirmation-expired)', durationMs: null, createTime: '2026-09-16T08:00:00Z' }),
+  audit({ id: 40, toolFqn: 'mcp__demo_host__update_user', decisionSource: 'full-access', decision: 'allowed', riskLevel: 'high', userId: 20001, resultSummary: 'FULL_ACCESS 一次性确认已审计', createTime: '2026-09-15T13:00:00Z' }),
+  audit({ id: 41, toolFqn: 'mcp__crm__update_customer_note', decisionSource: 'live-confirm', decision: 'denied', riskLevel: 'high', userId: 30077, errorText: '用户拒绝:备注未写入', durationMs: null, createTime: '2026-09-14T10:00:00Z' }),
+  audit({ id: 42, toolFqn: 'mcp__demo_host__reset_password', decisionSource: 'user-grant', decision: 'denied', riskLevel: 'high', errorText: '授权已失效(risk_upgrade)', durationMs: null, createTime: '2026-09-13T08:00:00Z' }),
 ]
 
-// ==================== 模型配置 ====================
+// ==================== 模型配置(依赖并行任务,联调时核对) ====================
 
 export const seedModelConfigs: IaModelApiConfig[] = [
   { id: 51, name: 'DeepSeek 生产', platform: 'openai_compatible', apiUrl: 'https://api.deepseek.com', autoAppendV1Path: true, proxyType: 'none', proxyHost: null, proxyPort: null, proxyUsername: null, apiKeyMasked: 'sk-d1••••7a9f', status: 1, remark: '默认主模型配置', createTime: '2026-09-01T00:00:00Z', updateTime: '2026-09-15T00:00:00Z' },
@@ -176,7 +173,7 @@ export const seedModelConfigs: IaModelApiConfig[] = [
   { id: 54, name: '本地 Ollama', platform: 'ollama', apiUrl: 'http://localhost:11434', autoAppendV1Path: false, proxyType: 'none', proxyHost: null, proxyPort: null, proxyUsername: null, apiKeyMasked: '', status: 0, remark: '私有化备用(停用中)', createTime: '2026-09-03T00:00:00Z', updateTime: '2026-09-03T00:00:00Z' },
 ]
 
-// ==================== 熔断与资源上限(§4.7 默认值) ====================
+// ==================== 熔断与资源上限(§4.7 默认值;服务端未实现,mock) ====================
 
 export const seedLimits: ResourceLimits = {
   maxToolCallsPerRun: 32,
@@ -194,7 +191,7 @@ export const seedCircuitEvents: CircuitBreakerEvent[] = [
   { id: 63, type: 'resume', runId: null, reason: '人工恢复', operator: 'admin', occurredAt: '2026-09-18T10:00:00Z' },
 ]
 
-// ==================== Webhook ====================
+// ==================== Webhook(服务端未实现,mock) ====================
 
 export const seedWebhookConfig: WebhookConfig = {
   appId: 1,
@@ -215,6 +212,8 @@ export const seedDeliveries: WebhookDelivery[] = [
 export interface MockStore {
   apps: IaApp[]
   tools: IaToolRegistry[]
+  /** schema 指纹变更历史(ia_tool_schema_history,仅追加) */
+  schemaHistory: IaToolSchemaHistory[]
   grants: IaToolGrant[]
   auditLogs: IaAuditLog[]
   modelConfigs: IaModelApiConfig[]
@@ -228,6 +227,7 @@ export interface MockStore {
 export const store: MockStore = {
   apps: [],
   tools: [],
+  schemaHistory: [],
   grants: [],
   auditLogs: [],
   modelConfigs: [],
@@ -242,6 +242,7 @@ export const store: MockStore = {
 export function resetMockData(): void {
   store.apps = structuredClone(seedApps)
   store.tools = structuredClone(seedTools)
+  store.schemaHistory = []
   store.grants = structuredClone(seedGrants)
   store.auditLogs = structuredClone(seedAuditLogs)
   store.modelConfigs = structuredClone(seedModelConfigs)
@@ -260,7 +261,7 @@ export function maskKey(value: string): string {
   return value.slice(0, 4) + '••••' + value.slice(-4)
 }
 
-/** 模拟 sha256 指纹(mock 不做真哈希,保证格式一致) */
+/** 模拟 sha256 指纹(mock 不做真哈希,保证格式一致;服务端为 canonical JSON SHA-256) */
 export function fakeSha256(seed: string): string {
   let h = 0
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0

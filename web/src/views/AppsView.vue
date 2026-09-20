@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
  * [new] 应用管理视图(视图清单 #2)。
- * ia_app 列表 / 创建 / 编辑 / embed 签发密钥 RSA 公钥登记 / 密钥轮换 UI 占位。
- * 保留期字段对应 ADR-9(默认 180 天应用级可配)。
+ * ia_app 列表 / 创建 / 编辑 / embed 签发公钥登记与轮换。
+ * P2 对齐:公钥登记/轮换 = PUT /apps/{id} {signPublicKey}(服务端无指纹/
+ * 更新时间回显,无双公钥宽限期语义——待服务端,P2 报告项);创建必填公钥;
+ * 保留期列对应 conversationRetentionDays(注册固定 180,不可经 API 修改)。
  */
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -14,6 +16,7 @@ const store = useAppsStore()
 
 const statusText: Record<number, string> = { 1: '启用', 0: '停用' }
 const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' }
+const PEM_PLACEHOLDER = '-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----'
 
 onMounted(() => {
   void store.load()
@@ -28,38 +31,50 @@ function search() {
 const editVisible = ref(false)
 const editing = ref<IaApp | null>(null)
 const saving = ref(false)
-const editForm = reactive({ appKey: '', name: '', retentionDays: 180, remark: '' })
+const editForm = reactive({
+  appKey: '', name: '', signPublicKey: '', webhookUrl: '', webhookSecret: '', status: 1,
+})
 
 function openCreate() {
   editing.value = null
-  Object.assign(editForm, { appKey: '', name: '', retentionDays: 180, remark: '' })
+  Object.assign(editForm, { appKey: '', name: '', signPublicKey: '', webhookUrl: '', webhookSecret: '', status: 1 })
   editVisible.value = true
 }
 
 function openEdit(app: IaApp) {
   editing.value = app
-  Object.assign(editForm, { appKey: app.appKey, name: app.name, retentionDays: app.retentionDays, remark: app.remark ?? '' })
+  Object.assign(editForm, {
+    appKey: app.appKey, name: app.name, signPublicKey: '', webhookUrl: app.webhookUrl ?? '',
+    webhookSecret: '', status: app.status,
+  })
   editVisible.value = true
 }
 
 async function saveEdit() {
-  if (!editForm.name.trim() || (!editing.value && !editForm.appKey.trim())) {
-    ElMessage.warning('请填写 appKey 与名称')
+  if (!editForm.name.trim() || (!editing.value && (!editForm.appKey.trim() || !editForm.signPublicKey.trim()))) {
+    ElMessage.warning('请填写 appKey、名称与 RSA 公钥(注册必填)')
     return
   }
   saving.value = true
   try {
     if (editing.value) {
       await store.update(editing.value.id, {
-        name: editForm.name, retentionDays: editForm.retentionDays, remark: editForm.remark,
+        name: editForm.name,
+        webhookUrl: editForm.webhookUrl,
+        webhookSecret: editForm.webhookSecret || undefined,
+        status: editForm.status,
+        // 公钥留空表示不修改;填写即轮换(服务端 PUT 同一端点)
+        signPublicKey: editForm.signPublicKey.trim() || undefined,
       })
       ElMessage.success('已保存')
     } else {
       await store.create({
         appKey: editForm.appKey.trim(), name: editForm.name,
-        retentionDays: editForm.retentionDays, remark: editForm.remark,
+        signPublicKey: editForm.signPublicKey.trim(),
+        webhookUrl: editForm.webhookUrl || undefined,
+        webhookSecret: editForm.webhookSecret || undefined,
       })
-      ElMessage.success('应用已创建;下一步请登记 embed 签发公钥')
+      ElMessage.success('应用已注册')
     }
     editVisible.value = false
   } catch (err) {
@@ -69,7 +84,7 @@ async function saveEdit() {
   }
 }
 
-// ===== 公钥登记 / 轮换 =====
+// ===== 公钥登记 / 轮换(PUT signPublicKey 同一端点) =====
 const keyVisible = ref(false)
 const keyApp = ref<IaApp | null>(null)
 const keyMode = ref<'register' | 'rotate'>('register')
@@ -91,18 +106,17 @@ async function saveKey() {
   }
   if (keyMode.value === 'rotate') {
     const confirmed = await ElMessageBox.confirm(
-      '轮换后新 embed token 用新公钥签发;请确认宿主已部署双公钥宽限期(72h,自拟语义,P2 对齐)。继续?',
-      '密钥轮换确认',
+      // 待服务端:双公钥并存宽限期语义未实现,当前为直接替换(P2 报告项)
+      '当前为直接替换:新公钥立即生效,进行中签发的旧 embed token 将验签失败。双公钥宽限期语义待服务端(P2 后续)。继续?',
+      '公钥轮换确认',
       { type: 'warning', confirmButtonText: '确认轮换', cancelButtonText: '取消' },
     ).then(() => true).catch(() => false)
     if (!confirmed) return
   }
   keySaving.value = true
   try {
-    const resp = keyMode.value === 'register'
-      ? await store.registerPublicKey(keyApp.value.id, keyPem.value)
-      : await store.rotateKey(keyApp.value.id, keyPem.value)
-    ElMessage.success(`公钥已${keyMode.value === 'register' ? '登记' : '轮换'}:指纹 ${resp.fingerprint}`)
+    await store.updateSignKey(keyApp.value.id, keyPem.value.trim())
+    ElMessage.success(`公钥已${keyMode.value === 'register' ? '登记' : '轮换'}`)
     keyVisible.value = false
     await store.load()
   } catch (err) {
@@ -131,7 +145,7 @@ async function saveKey() {
         </el-select>
         <el-button :icon="Refresh" @click="search">查询</el-button>
         <div class="toolbar__spacer" />
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建应用</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">注册应用</el-button>
       </div>
     </el-card>
 
@@ -144,31 +158,23 @@ async function saveKey() {
             <el-tag :type="statusTag[row.status as number]" size="small">{{ statusText[row.status as number] }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="embed 公钥" min-width="180">
+        <el-table-column label="embed 公钥" width="110">
           <template #default="{ row }">
-            <template v-if="row.signKeyFingerprint">
-              <span class="mono fingerprint">{{ row.signKeyFingerprint }}</span>
-            </template>
+            <el-tag v-if="row.signPublicKey" type="success" size="small">已登记</el-tag>
             <el-tag v-else type="warning" size="small">未登记</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="retentionDays" label="保留期(天)" width="100" align="right" />
-        <el-table-column label="紧急停用" width="90">
+        <el-table-column prop="conversationRetentionDays" label="保留期(天)" width="105" align="right" />
+        <el-table-column label="Webhook" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-tag v-if="row.emergencyStopped" type="danger" size="small">已停用</el-tag>
-            <span v-else class="dim">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="Webhook" width="90">
-          <template #default="{ row }">
-            <el-tag v-if="row.webhookEnabled" type="success" size="small">已启用</el-tag>
-            <span v-else class="dim">—</span>
+            <span v-if="row.webhookUrl" class="mono">{{ row.webhookUrl }}</span>
+            <span v-else class="dim">未配置</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="230" fixed="right">
           <template #default="{ row }">
-            <el-button text type="primary" size="small" :icon="Key" @click="openKey(row, row.signKeyFingerprint ? 'rotate' : 'register')">
-              {{ row.signKeyFingerprint ? '轮换密钥' : '登记公钥' }}
+            <el-button text type="primary" size="small" :icon="Key" @click="openKey(row, row.signPublicKey ? 'rotate' : 'register')">
+              {{ row.signPublicKey ? '轮换公钥' : '登记公钥' }}
             </el-button>
             <el-button text type="primary" size="small" :icon="EditPen" @click="openEdit(row)">编辑</el-button>
           </template>
@@ -186,25 +192,41 @@ async function saveKey() {
       />
     </el-card>
 
-    <!-- 创建 / 编辑 -->
+    <!-- 注册 / 编辑 -->
     <el-dialog
       v-model="editVisible"
-      :title="editing ? `编辑应用:${editing.name}` : '新建应用'"
-      width="520px"
+      :title="editing ? `编辑应用:${editing.name}` : '注册应用'"
+      width="620px"
     >
       <el-form label-width="110px">
         <el-form-item label="appKey" required>
-          <el-input v-model="editForm.appKey" :disabled="!!editing" placeholder="唯一键,创建后不可改" maxlength="64" />
+          <el-input v-model="editForm.appKey" :disabled="!!editing" placeholder="唯一键,重复返回 409;创建后不可改" maxlength="64" />
         </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="editForm.name" maxlength="64" />
         </el-form-item>
-        <el-form-item label="会话保留期">
-          <el-input-number v-model="editForm.retentionDays" :min="1" :max="3650" />
-          <span class="form-hint">天(ADR-9:默认 180,到期物理清理;审计不受影响)</span>
+        <el-form-item
+          label="RSA 公钥"
+          :required="!editing"
+        >
+          <el-input
+            v-model="editForm.signPublicKey"
+            type="textarea"
+            :rows="5"
+            class="mono"
+            spellcheck="false"
+            :placeholder="editing ? '留空表示不修改;填写即轮换验签公钥' : PEM_PLACEHOLDER"
+          />
+          <div class="form-hint">embed token RS256 验签公钥(X509/PKCS#8 PEM);非法 PEM 服务端返回 400</div>
         </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="editForm.remark" type="textarea" :rows="2" maxlength="200" />
+        <el-form-item label="Webhook 地址">
+          <el-input v-model="editForm.webhookUrl" placeholder="终态通知回调地址(可空)" />
+        </el-form-item>
+        <el-form-item label="Webhook 密钥">
+          <el-input v-model="editForm.webhookSecret" type="password" show-password placeholder="HMAC 签名密钥(可空;留空不改)" />
+        </el-form-item>
+        <el-form-item v-if="editing" label="状态">
+          <el-switch v-model="editForm.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -220,13 +242,12 @@ async function saveKey() {
       width="620px"
     >
       <el-alert
-        v-if="keyMode === 'rotate' && keyApp?.signKeyFingerprint"
+        v-if="keyMode === 'rotate'"
         type="warning"
         :closable="false"
         show-icon
         class="rotate-alert"
-        title="轮换为占位流程:当前指纹与新指纹并存宽限期的服务端语义未定(P2 对齐),此处仅提交新公钥。"
-        :description="`当前指纹:${keyApp.signKeyFingerprint}`"
+        title="待服务端:双公钥并存宽限期语义未实现,当前为直接替换(旧 embed token 立即验签失败)。"
       />
       <el-form label-width="90px">
         <el-form-item label="RSA 公钥" required>
@@ -276,17 +297,16 @@ async function saveKey() {
 }
 .mono {
   font-family: ui-monospace, Menlo, Consolas, monospace;
-}
-.fingerprint {
   font-size: 12px;
 }
 .dim {
   color: #c0c4cc;
 }
 .form-hint {
-  margin-left: 8px;
   color: #909399;
   font-size: 12px;
+  width: 100%;
+  margin-top: 4px;
 }
 .rotate-alert {
   margin-bottom: 12px;

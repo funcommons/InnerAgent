@@ -1,94 +1,87 @@
 /**
  * [new] InnerAgent 管理 API 契约类型(`/ia/api/v1/admin/*`)。
  *
- * 依据:《02-技术方案》§5.1 ia_ 表清单、§7.1 API 清单、§4.7 资源上限默认值;
- * PRD §6.2.1 工具策略字段、§6.2.4 授权存储、§6.9 审计 decision_source。
+ * 契约来源(P2 对齐,任务 #13;以服务端代码为准,禁改服务端):
+ *   - com/inneragent/server/admin/AdminAppController(ia_app CRUD;公钥登记/轮换=PUT signPublicKey)
+ *   - com/inneragent/server/admin/AdminToolController(ia_tool_registry 注册/活刷新分诊/启停/schema 历史)
+ *   - com/inneragent/server/admin/AdminGrantController(ia_tool_grant 授予/列表/撤销)
+ *   - 实体形:AppRegistration / ToolRegistryEntry / ToolGrant / ToolSchemaHistory;
+ *     审计列形:ia_audit_log(ToolAuditLog);信封 CommonResult{code,msg,data},
+ *     错误 HTTP 状态=业务 code(400/403/404/409…)。
  *
- * ── 契约空缺 / 自拟字段清单(留给 P2 正式任务对齐)──────────────────────────
- * 技术方案仅给出 `/ia/api/v1/admin/*` 资源域名(定义/工具/模型/审计/熔断/webhook),
- * 未给出具体路径与字段。以下为本脚手架自拟,后端落地时逐条核对:
- *  1. 路径自拟:资源名复数(admin/apps|tools|tool-grants|audit-logs|model-configs|
- *     circuit-breaker|webhooks),分页 query 为 pageNo/pageSize(融光形)。
- *  2. ia_app.signKeyUpdatedAt/signKeyFingerprint:公钥登记/轮换 UI 需要,自拟。
- *  3. ia_tool_registry.fqn 格式 `mcp__<serverKey>__<tool>`(方案 §4.3 已定,字段名自拟);
- *     annotations 为 MCP hints 缓存(方案已定),healthStatus/lastSyncedAt 为工具体检 UI 所需,自拟。
- *  4. ia_tool_grant.invalidReason('risk-upgraded'|'schema-changed'|'tool-disabled'):
- *     授权自动失效展示所需,自拟(方案 S10 只定行为未定字段)。
- *  5. ia_audit_log.resultStatus('success'|'failed'|'denied'|'timeout')与
- *     confirmedBy/latencyMs/sensitiveMasked:PRD §6.8 审计列表展示所需,自拟。
- *  6. 熔断域拆为 resource-limits(§4.7 七参数)+ circuit-breaker(总开关/单运行终止/事件流),
- *     方案 §4.7 只定参数与行为,API 形态自拟。
- *  7. webhook:config(url/secret/events/enabled,挂 ia_app)+ deliveries 投递记录,
- *     方案 §7.1 webhook HMAC + 5 次退避、Q5 双密钥 72h 未建模,自拟 deliveries 便于 P2 对齐。
- *  8. 所有 id 用 number 自增(融光形);appId 单应用部署(ADR-10)仍强制携带。
+ * ── 原「契约空缺 / 自拟字段清单」8 项逐条裁决(P2 任务 #13)──────────────────
+ *  1. 路径:apps/tools/grants 已对齐真实控制器(三域列表均返回数组、无服务端分页;
+ *     分页 pageNo/pageSize 仅保留在服务端未实现域)。audit-logs 路径维持 mock 形
+ *     (服务端未实现);model-configs 路径维持原形(依赖并行任务,联调时核对)。
+ *  2. ia_app.signKeyFingerprint/signKeyUpdatedAt:服务端无 → 已删除;公钥登记/轮换
+ *     统一走 PUT /apps/{id} {signPublicKey}(无独立端点、无指纹/时间回显)。
+ *  3. ia_tool_registry:fqn ✓(`mcp__<serverKey>__<toolName>`);注解为原始 JSON
+ *     字符串 annotationsJson;自拟的 serverName/transport/credentialMasked/
+ *     healthStatus/lastSyncedAt/writeOperation → 删(真实形:credentialsEnc 加密
+ *     密文、lastTestStatus、revalidateRequired/pending* 分诊列)。
+ *  4. ia_tool_grant:invalid→invalidated;invalidReason→invalidatedReason
+ *     (risk_upgrade/schema_breaking/tool_disabled/tool_deleted);grantedRiskLevel
+ *     →riskAtGrant;schemaFingerprint→schemaSha256;grantedAt→createTime;
+ *     scope∈conversation|permanent(原 'session' → 'conversation');source∈
+ *     live-confirm|admin(原 'admin-grant' → 'admin');userId 为 number;
+ *     授予请求按 toolName(服务端解析 FQN),非 toolFqn。
+ *  5. ia_audit_log:查询端点服务端未实现(P2 后续,整域保持 mock);展示字段已
+ *     对齐真实列 decision/decision_source/params_masked_json/error_text/
+ *     duration_ms/create_time;自拟的 resultStatus/confirmedBy/latencyMs/occurredAt
+ *     → 删。确认等待超时(run 终态 CANCELLED,confirmation-expired)服务端未单独
+ *     落审计决策,mock 以 decision=denied + errorText 表意。
+ *  6. 熔断与资源上限:服务端未实现,保持 mock(P2 后续)。
+ *  7. webhook:服务端无独立端点(ia_app 本体已含 webhookUrl/webhookSecret,配置
+ *     走 apps 域);deliveries 投递记录保持 mock(P2 后续)。
+ *  8. id 为数据库自增 number ✓;appId 单应用部署(ADR-10)由服务端行级拦截器注入,
+ *     管理站请求体不再强制携带。
  */
 import type { IsoDateTime, PageQuery } from './common'
 
-// ==================== 应用(ia_app,方案 §5.1) ====================
+// ==================== 应用(ia_app,AdminAppController) ====================
 
+/** ia_app 行(服务端直接序列化实体;webhookSecret 随实体明文回显,见 P2 报告项) */
 export interface IaApp {
   id: number
-  /** 应用唯一键(embed token aud/iss 关联) */
+  /** 应用唯一标识(embed token iss;唯一约束冲突 → 409) */
   appKey: string
   name: string
-  /** 1=启用 0=停用 */
-  status: number
-  /** embed token 签发验签公钥(RSA PEM,《02-技术方案》§6.1) */
+  /** embed token 验签公钥(RSA PEM,X509/PKCS#8;非法 PEM → 400) */
   signPublicKey: string | null
-  /** 公钥指纹(sha256,自拟,供列表展示与轮换比对) */
-  signKeyFingerprint: string | null
-  signKeyUpdatedAt: IsoDateTime | null
-  /** 会话/消息/运行保留天数(ADR-9:默认 180,应用级可配) */
-  retentionDays: number
-  /** 应用级 Agent 总开关(紧急停用,§4.7) */
-  emergencyStopped: boolean
-  emergencyStopReason: string | null
-  /** 终态 webhook 配置(方案 §5.1 ia_app 含 webhook 配置) */
+  /** 终态通知 Webhook 回调地址(可空) */
   webhookUrl: string | null
-  /** HMAC 签名密钥(仅回显掩码) */
-  webhookSecretMasked: string | null
-  webhookEnabled: boolean
-  remark: string | null
-  createTime: IsoDateTime
-  updateTime: IsoDateTime
+  /** Webhook 回调签名密钥(可空) */
+  webhookSecret: string | null
+  /** 会话保留天数(超期物理清理,默认 180,ADR-9;注册固定 180,不可经 API 修改) */
+  conversationRetentionDays: number
+  /** 0-禁用 1-启用 */
+  status: number
+  createTime: IsoDateTime | null
+  updateTime: IsoDateTime | null
+  deleted: boolean
 }
 
 export interface IaAppCreateReq {
   appKey: string
   name: string
-  retentionDays?: number
-  remark?: string
-}
-
-export interface IaAppUpdateReq {
-  name?: string
-  status?: number
-  retentionDays?: number
+  /** 必填:注册时即须上传验签公钥(服务端 @NotBlank + RSA 解析强校验) */
+  signPublicKey: string
   webhookUrl?: string
   webhookSecret?: string
-  webhookEnabled?: boolean
-  remark?: string
 }
 
-/** RSA 公钥登记/轮换请求 */
-export interface IaAppPublicKeyReq {
-  publicKey: string
-}
-
-/** 公钥登记/轮换响应 */
-export interface IaAppPublicKeyResp {
-  fingerprint: string
-  updatedAt: IsoDateTime
-}
-
-export interface IaAppPageReq extends PageQuery {
-  keyword?: string
+/** 更新应用(公钥轮换/webhook/状态;全字段可选,服务端按非空生效) */
+export interface IaAppUpdateReq {
+  name?: string
+  signPublicKey?: string
+  webhookUrl?: string
+  webhookSecret?: string
   status?: number
 }
 
-// ==================== 工具注册(ia_tool_registry,方案 §4.3/§5.1) ====================
+// ==================== 工具注册(ia_tool_registry,AdminToolController) ====================
 
-/** MCP 工具注解缓存(仅可信宿主采信,作策略软输入) */
+/** MCP 注解(服务端存原始 JSON;此为解析后的展示形) */
 export interface ToolAnnotations {
   readOnlyHint: boolean | null
   destructiveHint: boolean | null
@@ -96,167 +89,256 @@ export interface ToolAnnotations {
   openWorldHint: boolean | null
 }
 
-export type ToolRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+/** 风险等级(落库小写码值;无 critical——删除/资金/凭据类强制 high 且不可下调) */
+export type ToolRiskLevel = 'low' | 'medium' | 'high'
 
-/** 管理员策略(优先级高于用户授权,PRD §6.2.1) */
-export type ToolAdminPolicy = 'default' | 'force-ask' | 'force-allow' | 'deny'
+/** 管理员策略(NULL=不强制;服务端校验仅支持 force-ask/force-allow/deny) */
+export type ToolAdminPolicy = 'force-ask' | 'force-allow' | 'deny'
 
-export type ToolHealthStatus = 'healthy' | 'unhealthy' | 'unknown'
+/** 工具来源(注册仅支持 host_app/third_party;builtin 为内置保留) */
+export type ToolSource = 'host_app' | 'third_party' | 'builtin'
+
+/** 活刷新分诊结论(V14) */
+export type SchemaTriageVerdict = 'unchanged' | 'compatible' | 'breaking'
 
 export interface IaToolRegistry {
   id: number
+  /** 所属应用(单应用部署固定 1,服务端行级拦截器注入) */
   appId: number
-  /** 服务器键(FQN 前缀,避用下划线,方案 §4.3) */
   serverKey: string
-  serverName: string
-  endpoint: string
-  transport: 'streamable_http' | 'sse'
-  /** 凭据仅回显掩码 */
-  credentialMasked: string
-  /** 原始工具名(宿主 MCP 侧) */
+  /** 工具名(MCP tools/list 的 name;应用内唯一,冲突 → 409) */
   toolName: string
-  /** 模型可见名 `mcp__<serverKey>__<tool>` */
+  /** 工具全限定名 mcp__<serverKey>__<toolName>(app_id+fqn 唯一) */
   fqn: string
-  description: string
-  inputSchema: Record<string, unknown>
-  /** schema 指纹(sha256,内核快照锁定与活刷新分诊依据) */
-  schemaFingerprint: string
-  annotations: ToolAnnotations
-  /** 注解生成默认 + 人工覆盖 */
+  description: string | null
+  /** 入参 JSON Schema(canonical JSON 字符串,非对象) */
+  parametersSchema: string | null
+  /** MCP 注解原始 JSON(readOnlyHint/destructiveHint/idempotentHint/openWorldHint) */
+  annotationsJson: string | null
+  /** 注解生成默认 + 人工覆盖;删除/资金/凭据类强制 high */
   riskLevel: ToolRiskLevel
-  /** true = 写操作(需确认流) */
-  writeOperation: boolean
-  adminPolicy: ToolAdminPolicy
+  adminPolicy: ToolAdminPolicy | null
   /** 可被 continue 重执行(默认取 idempotentHint) */
   resumeSafe: boolean
-  healthStatus: ToolHealthStatus
-  healthMessage: string | null
-  lastSyncedAt: IsoDateTime | null
-  /** 1=启用 0=停用(停用级联清除授权,PRD §6.2.1) */
-  status: number
-  createTime: IsoDateTime
-  updateTime: IsoDateTime
+  concurrencySafe: boolean
+  source: ToolSource
+  /** 三方 MCP 端点(host_app 经宿主桥暴露时为空) */
+  endpointUrl: string | null
+  /** 三方凭证(加密存储密文;明文不出服务端) */
+  credentialsEnc: string | null
+  /** schema SHA-256 指纹(canonical JSON;V14 分诊基准) */
+  schemaSha256: string | null
+  toolVersion: string | null
+  /** 存在安全相关差异待重新确认(TRUE 时旧 schema 继续生效) */
+  revalidateRequired: boolean
+  /** BREAKING 分诊暂存的新 schema(confirm 后生效,reject 后清除) */
+  pendingSchema: string | null
+  pendingAnnotationsJson: string | null
+  pendingSchemaSha256: string | null
+  pendingRefreshAt: IsoDateTime | null
+  /** 是否启用(停用级联失效授权;布尔,非 0/1) */
+  enabled: boolean
+  /** 最近一次工具体检/连通性测试结果 */
+  lastTestStatus: string | null
+  createTime: IsoDateTime | null
+  updateTime: IsoDateTime | null
+  deleted: boolean
 }
 
-/** 注册请求:管理站录入 MCP 端点后由服务端 list_tools 拉取清单 */
+/** 注册工具(单条注册,非端点清单拉取;FQN 重复 → 409) */
 export interface ToolRegisterReq {
   serverKey: string
-  serverName: string
-  endpoint: string
-  transport: IaToolRegistry['transport']
-  credential?: string
-}
-
-/** 注册响应:拉取到的工具清单(模拟一次 list_tools 快照) */
-export interface ToolRegisterResp {
-  registered: number
-  tools: IaToolRegistry[]
-}
-
-/** 活刷新分诊响应(方案 §4.3:纯增量自动接受,安全差异强制重确认) */
-export interface ToolRefreshResp {
-  fqn: string
-  schemaFingerprint: string
-  diffKind: 'none' | 'additive' | 'security-related'
-  /** additive 自动接受;security-related 需重新确认后生效 */
-  applied: boolean
-  message: string
-}
-
-export interface ToolPolicyUpdateReq {
+  toolName: string
+  description?: string
+  parametersSchema?: string
+  annotationsJson?: string
   riskLevel?: ToolRiskLevel
   adminPolicy?: ToolAdminPolicy
   resumeSafe?: boolean
+  concurrencySafe?: boolean
+  /** 必填:host_app/third_party */
+  source: ToolSource
+  endpointUrl?: string
+  toolVersion?: string
+  enabled?: boolean
 }
 
-export interface ToolPageReq extends PageQuery {
-  keyword?: string
+/** 更新治理元数据(风险上调级联失效授权;强制高危不可下调 → 400) */
+export interface ToolUpdateReq {
+  description?: string
   riskLevel?: ToolRiskLevel
-  status?: number
-  serverKey?: string
+  /** null/空串 = 清除强制策略(服务端落 NULL) */
+  adminPolicy?: ToolAdminPolicy | null
+  resumeSafe?: boolean
+  concurrencySafe?: boolean
+  toolVersion?: string
 }
 
-// ==================== 工具授权(ia_tool_grant,PRD §6.2.4) ====================
+/** 活刷新分诊请求(宿主重发 schema/注解) */
+export interface ToolRefreshSchemaReq {
+  parametersSchema?: string
+  annotationsJson?: string
+  toolVersion?: string
+}
 
-export type GrantScope = 'session' | 'permanent'
+/** 活刷新分诊响应(V14:unchanged 静默/compatible 自动生效/breaking 转待确认) */
+export interface ToolTriageResp {
+  toolId: number
+  fqn: string
+  verdict: SchemaTriageVerdict
+  reasons: string[]
+  revalidateRequired: boolean
+  effectiveSchemaSha256: string | null
+  pendingSchemaSha256: string | null
+}
 
-export type GrantSource = 'user-grant' | 'admin-grant'
+/** schema 指纹变更历史(ia_tool_schema_history,仅追加留痕) */
+export interface IaToolSchemaHistory {
+  id: number
+  appId: number
+  toolId: number
+  fqn: string
+  /** 变更前指纹(首次注册为 NULL) */
+  previousSha256: string | null
+  newSha256: string | null
+  triage: SchemaTriageVerdict
+  /** 处理结果:silent_refresh/applied/pending_review/rejected */
+  outcome: 'silent_refresh' | 'applied' | 'pending_review' | 'rejected'
+  actor: string | null
+  /** 差异明细(分诊理由列表 JSON) */
+  detail: string | null
+  createTime: IsoDateTime | null
+}
 
-/** 自动失效原因(自拟展示字段,行为依据方案 S10) */
-export type GrantInvalidReason = 'risk-upgraded' | 'schema-changed' | 'tool-disabled'
+/** 工具列表过滤(服务端仅此两项;其余过滤由管理站客户端完成) */
+export interface ToolListQuery {
+  serverKey?: string
+  enabled?: boolean
+}
+
+// ==================== 工具授权(ia_tool_grant,AdminGrantController) ====================
+
+/** 授权作用域(真实码值:conversation-本会话 permanent-永久) */
+export type GrantScope = 'conversation' | 'permanent'
+
+/** 授权来源:live-confirm(确认流)/admin(管理站代授) */
+export type GrantSource = 'live-confirm' | 'admin'
+
+/** 自动失效原因(risk_upgrade/schema_breaking/tool_disabled/tool_deleted) */
+export type GrantInvalidatedReason = 'risk_upgrade' | 'schema_breaking' | 'tool_disabled' | 'tool_deleted'
 
 export interface IaToolGrant {
   id: number
   appId: number
-  userId: string
+  /** 被授权用户 ID(number,宿主侧数字标识) */
+  userId: number
+  /** 工具全限定名(ia_tool_registry.fqn) */
   toolFqn: string
   scope: GrantScope
-  /** session 作用域锚定的会话(随会话结束失效) */
+  /** scope=conversation 时必填;permanent 时为 NULL */
   conversationId: string | null
-  /** 授予时风险等级(升级即失效) */
-  grantedRiskLevel: ToolRiskLevel
-  /** 授予时 schema 指纹(安全相关变更即失效) */
-  schemaFingerprint: string
+  /** 授予时风险等级快照(升级即失效) */
+  riskAtGrant: ToolRiskLevel
+  /** 授予时 schema 指纹快照(breaking 变更即失效) */
+  schemaSha256: string | null
   source: GrantSource
-  invalid: boolean
-  invalidReason: GrantInvalidReason | null
-  grantedAt: IsoDateTime
+  /** 自动失效(区别于 deleted 主动撤销) */
+  invalidated: boolean
+  invalidatedReason: GrantInvalidatedReason | null
+  /** 授予决策记录 */
+  decisionNote: string | null
+  tenantId: number | null
+  /** 授予时间(BaseEntity createTime,无独立 grantedAt 列) */
+  createTime: IsoDateTime | null
+  updateTime: IsoDateTime | null
+  deleted: boolean
 }
 
+/** 授予授权(appId+toolName+scope+决策记录;重复同作用域有效授权 → 409) */
 export interface ToolGrantCreateReq {
-  userId: string
-  toolFqn: string
+  userId: number
+  /** 工具名(服务端解析 FQN),非 toolFqn */
+  toolName: string
   scope: GrantScope
+  /** scope=conversation 必填;permanent 携带 → 400 */
   conversationId?: string
+  decisionNote?: string
 }
 
-export interface ToolGrantPageReq extends PageQuery {
-  toolFqn?: string
-  userId?: string
+/** 撤销授权请求体(可省略) */
+export interface ToolGrantRevokeReq {
+  decisionNote?: string
+}
+
+/** 授权列表过滤(activeOnly 默认 true:仅未撤销未失效) */
+export interface ToolGrantListQuery {
+  userId?: number
+  toolName?: string
   scope?: GrantScope
-  includeInvalid?: boolean
+  activeOnly?: boolean
 }
 
-// ==================== 审计(ia_audit_log,PRD §6.9/§6.8) ====================
+// ==================== 审计(ia_audit_log;查询端点服务端未实现,域保持 mock) ====================
 
-/** 决策来源:「高危 100% 确认」的日志证明锚点(PRD §6.9) */
+/** 决策来源(V22 真实码值;「高危 100% 确认」的日志证明锚点) */
 export type DecisionSource = 'mode-default' | 'user-grant' | 'forced-policy' | 'live-confirm' | 'full-access'
 
-export type AuditResultStatus = 'success' | 'failed' | 'denied' | 'timeout'
+/**
+ * 裁决结果(ia_audit_log.decision 真实码值):
+ * 工具调用 allowed/denied;授权生命周期 granted/revoked/invalidated;
+ * 级联事件 risk_upgraded/tool_disabled/schema_compatible/schema_breaking。
+ */
+export type AuditDecision =
+  | 'allowed'
+  | 'denied'
+  | 'granted'
+  | 'revoked'
+  | 'invalidated'
+  | 'risk_upgraded'
+  | 'tool_disabled'
+  | 'schema_compatible'
+  | 'schema_breaking'
 
+/** 审计行(列形对齐 ia_audit_log/ToolAuditLog) */
 export interface IaAuditLog {
   id: number
   appId: number
-  appKey: string
-  userId: string
-  tenantId: string | null
-  conversationId: string
-  runId: string
-  toolFqn: string
-  /** 工具参数(敏感字段已脱敏:password/token/secret/key 存掩码或哈希) */
-  paramsMasked: string
-  resultStatus: AuditResultStatus
-  errorMessage: string | null
-  riskLevel: ToolRiskLevel
+  /** 租户 ID(无租户上下文落 DDL 默认 0) */
+  tenantId: number
+  userId: number | null
+  /** 会话 UUID(可空:授权生命周期行) */
+  conversationId: string | null
+  runId: string | null
+  toolFqn: string | null
+  decision: AuditDecision
   decisionSource: DecisionSource
-  /** 拒绝/确认人(resultStatus=denied 时为拒绝者) */
-  confirmedBy: string | null
-  latencyMs: number
-  occurredAt: IsoDateTime
+  riskLevel: ToolRiskLevel | null
+  /** 工具入参(敏感字段脱敏后 JSON) */
+  paramsMaskedJson: string | null
+  /** 执行结果摘要 */
+  resultSummary: string | null
+  /** 失败错误信息 */
+  errorText: string | null
+  /** 工具执行耗时(毫秒) */
+  durationMs: number | null
+  createTime: IsoDateTime | null
 }
 
-export interface AuditLogPageReq extends PageQuery {
-  appKey?: string
-  userId?: string
+/** 审计过滤(mock 形:服务端查询端点未实现;字段名对齐真实列) */
+export interface AuditLogQuery extends PageQuery {
+  appId?: number
+  userId?: number
   decisionSource?: DecisionSource
+  decision?: AuditDecision
   toolFqn?: string
-  resultStatus?: AuditResultStatus
   /** ISO-8601 起止(含) */
   from?: IsoDateTime
   to?: IsoDateTime
 }
 
 // ==================== 模型配置(ia_model_api_config,方案 §4.4) ====================
+// ⚠ 依赖并行任务:服务端落 GET/POST /ia/api/v1/admin/model-configs、PUT/DELETE /{id}、
+// POST /{id}/test(密钥掩码)。路径/动作已按该契约,字段形联调时核对。
 
 /** 文本协议五类(与参考实现对齐,PRD §6.3);图像/视频列已剥离 */
 export type ModelPlatform = 'openai_compatible' | 'anthropic' | 'gemini' | 'dashscope' | 'ollama'
@@ -312,6 +394,7 @@ export interface ModelConnectivityResult {
 }
 
 // ==================== 熔断与资源上限(方案 §4.7) ====================
+// ⚠ 服务端未实现(P2 后续):整域保持 mock(路径/字段为脚手架自拟形)。
 
 /** 单运行/宿主 MCP 资源上限(§4.7 全套默认值) */
 export interface ResourceLimits {
@@ -331,7 +414,7 @@ export interface ResourceLimits {
   confirmTimeoutHours: number
 }
 
-/** 熔断事件(紧急停用/单运行终止/上限触发,展示用,自拟) */
+/** 熔断事件(紧急停用/单运行终止/上限触发,展示用,mock 形) */
 export interface CircuitBreakerEvent {
   id: number
   type: 'limit-triggered' | 'emergency-stop' | 'resume' | 'run-terminated'
@@ -365,6 +448,8 @@ export interface TerminateRunReq {
 }
 
 // ==================== Webhook(终态通知,方案 §7.1/Q5) ====================
+// ⚠ 服务端未实现(P2 后续):配置本体已在 ia_app(webhookUrl/webhookSecret,见
+// apps 域),deliveries 投递记录保持 mock(签名验证/5 次退避可观测面)。
 
 export interface WebhookConfig {
   appId: number
@@ -386,7 +471,7 @@ export interface WebhookConfigSaveReq {
   events?: WebhookEvent[]
 }
 
-/** 投递记录(签名验证与 5 次指数退避重试的可观测面,自拟) */
+/** 投递记录(签名验证与 5 次指数退避重试的可观测面,mock 形) */
 export interface WebhookDelivery {
   id: number
   event: WebhookEvent

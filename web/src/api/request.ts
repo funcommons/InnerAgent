@@ -3,7 +3,8 @@
  * 改动类型: [adapt] —— 拆除的业务依赖:
  *   - i18n(文案改管理站内置中文常量)
  *   - Bearer/refreshToken 双令牌刷新单飞(管理站凭据域独立,见《02-技术方案》§6.3:
- *     embed token 对管理站 API 无效;本任务为 UI 壳,用 X-IA-Admin-Key 占位)
+ *     embed token 对管理站 API 无效;P2 对齐服务端 AdminTokenFilter:X-IA-Admin-Key
+ *     请求头逐请求校验,缺失/错误/未配置一律 403 缺省封闭)
  *   - 融光 router/store 直接 import(改为注入式 unauthorizedHandler,避免循环依赖)
  * 保留:CommonResult(code===0)信封解包、ApiError 归一、字段级校验错误解析、
  * X-Trace-Id 链路追踪、写操作 Idempotency-Key、silent 静默标记。
@@ -60,8 +61,8 @@ request.interceptors.request.use(
       config.headers.set('Content-Type', 'application/json')
     }
 
-    // 管理站凭据:X-IA-Admin-Key(本任务 UI 壳约定;P2 正式任务如换 session cookie,
-    // 只需改此一处注入点)
+    // 管理站凭据:X-IA-Admin-Key(P2 已对齐服务端 AdminTokenFilter;
+    // P2 后续如换 client_credentials 换 token,只需改此一处注入点)
     if (adminKeyGetter) {
       const key = adminKeyGetter()
       if (key) config.headers.set('X-IA-Admin-Key', key)
@@ -112,8 +113,8 @@ request.interceptors.response.use(
       return data.data
     }
 
-    // 业务错误 → ApiError
-    const errorMsg = data.message || '请求失败'
+    // 业务错误 → ApiError(服务端信封字段为 msg,message 为过渡兼容)
+    const errorMsg = data.msg || data.message || '请求失败'
     const traceId = captureTraceId(headers, data)
     const details: ApiFieldError[] = Array.isArray(data.error)
       ? data.error
@@ -137,37 +138,46 @@ request.interceptors.response.use(
   (error) => {
     const silent = isSilent(error.config)
 
-    // 401:管理凭据失效 → 清登录态 + 跳登录(统一出口,不弹窗)
-    if (error.response?.status === HTTP_STATUS.UNAUTHORIZED && unauthorizedHandler) {
+    // 401/403:管理凭据失效 → 清登录态 + 跳登录(统一出口,不弹窗)。
+    // P2 对齐:服务端 AdminTokenFilter 对凭据缺失/错误/未配置一律 403(缺省封闭)
+    const respStatus = error.response?.status
+    if (
+      (respStatus === HTTP_STATUS.UNAUTHORIZED || respStatus === HTTP_STATUS.FORBIDDEN)
+      && unauthorizedHandler
+    ) {
       unauthorizedHandler()
     }
 
     if (error.response) {
       const { status, data, headers } = error.response
       const traceId = captureTraceId(headers, data)
+      // 服务端信封字段为 msg(CommonResult{code,msg,data});message 过渡兼容
+      const serverMsg: string | undefined = data?.msg || data?.message
       let message = '网络错误,请稍后重试'
       switch (status) {
         case HTTP_STATUS.BAD_REQUEST:
-          message = data?.message || '请求参数错误'
+          message = serverMsg || '请求参数错误'
           break
         case HTTP_STATUS.UNAUTHORIZED:
-          // 透出后端原始错误(如「管理 key 无效」),无 message 才回落
-          message = data?.msg || data?.message || '未认证或凭据已失效'
+          // 透出后端原始错误(如「管理 key 无效」),无 msg 才回落
+          message = serverMsg || '未认证或凭据已失效'
           break
         case HTTP_STATUS.FORBIDDEN:
-          message = '无权执行该操作'
+          // 管理面:AdminTokenFilter 403(缺省封闭/凭据无效)透出原文
+          message = serverMsg || '无权执行该操作'
           break
         case HTTP_STATUS.NOT_FOUND:
-          message = data?.message || '资源不存在'
+          message = serverMsg || '资源不存在'
           break
         case HTTP_STATUS.CONFLICT:
-          message = data?.message || '资源状态冲突'
+          // 如 appKey/工具 FQN 唯一冲突(409)
+          message = serverMsg || '资源状态冲突'
           break
         case HTTP_STATUS.INTERNAL_SERVER_ERROR:
-          message = data?.message || '服务内部错误'
+          message = serverMsg || '服务内部错误'
           break
         default:
-          message = data?.message || `请求失败 (${status})`
+          message = serverMsg || `请求失败 (${status})`
       }
       const apiError = new ApiError(status, message, { status, silent, traceId })
       return Promise.reject(apiError)

@@ -1,12 +1,17 @@
 /**
  * [new] InnerAgent 管理 API 通用信封与分页类型。
- * 信封沿用融光 CommonResult 形状(code===0 成功),见《02-技术方案》§7.1 兼容策略;
- * 分页请求/响应对齐 $SRC PageResult 形状(list + total + pageNo/pageSize)。
+ * 信封对齐服务端 com/inneragent/platform/common/CommonResult:{code,msg,data},
+ * code===0 成功;错误时 HTTP 状态=业务 code,响应体仍为该信封(P2 对齐)。
+ * 分页请求/响应对齐 $SRC PageResult 形状(list + total + pageNo/pageSize)——
+ * 仅服务端未实现分页的域(mock)使用。
  */
 
-/** 业务信封(code===0 成功;data 为载荷) */
+/** 业务信封(code===0 成功;data 为载荷;服务端字段名为 msg) */
 export interface CommonResult<T> {
   code: number
+  /** 服务端信封字段(主要形) */
+  msg?: string
+  /** 历史兼容字段(过渡期与 msg 双读) */
   message?: string
   data: T
   /** 字段级校验错误(部分校验失败场景) */
@@ -14,7 +19,7 @@ export interface CommonResult<T> {
   trace_id?: string
 }
 
-/** 分页响应 */
+/** 分页响应(仅 mock 域使用:audit-logs/model-configs/webhook deliveries 等) */
 export interface PageResult<T> {
   list: T[]
   total: number
@@ -22,11 +27,11 @@ export interface PageResult<T> {
   pageSize: number
 }
 
-/** 分页请求基类(所有列表页共用) */
+/** 分页请求基类(仅 mock 域使用;真实 apps/tools/grants 列表无分页) */
 export interface PageQuery {
   pageNo?: number
   pageSize?: number
 }
 
-/** 审计通用时间戳格式(ISO-8601,含时区) */
+/** 审计通用时间戳格式(ISO-8601;服务端 LocalDateTime 序列化可无时区后缀) */
 export type IsoDateTime = string

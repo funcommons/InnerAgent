@@ -1,11 +1,13 @@
 /**
  * [new] request 层测试:信封解包 / ApiError 归一 / X-IA-Admin-Key 注入 /
- * 401 出口 / trace 与幂等头。
+ * 401/403 出口 / trace 与幂等头。
+ * P2 对齐:服务端信封字段为 msg(CommonResult{code,msg,data});管理面凭据
+ * 失效以 403 拒绝(AdminTokenFilter 缺省封闭)。
  */
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { http as mswHttp, HttpResponse } from 'msw'
 import { http, setAdminKeyGetter, setUnauthorizedHandler } from './request'
-import { ApiError, ApiErrorCode } from './errorCodes'
+import { ApiError } from './errorCodes'
 import { server } from '@/mocks/server'
 
 describe('request 层', () => {
@@ -17,7 +19,7 @@ describe('request 层', () => {
   it('信封 code===0 时解包 data', async () => {
     server.use(
       mswHttp.get('http://local.test/echo', () =>
-        HttpResponse.json({ code: 0, data: { hello: 'world' } })),
+        HttpResponse.json({ code: 0, msg: 'success', data: { hello: 'world' } })),
     )
     await expect(http.get<{ hello: string }>('http://local.test/echo')).resolves.toEqual({ hello: 'world' })
   })
@@ -29,12 +31,12 @@ describe('request 层', () => {
     await expect(http.get<{ foo: number }>('http://local.test/raw')).resolves.toEqual({ foo: 1 })
   })
 
-  it('业务错误归一为 ApiError(code/message/details)', async () => {
+  it('业务错误归一为 ApiError(读取信封 msg 字段;details 解析保留)', async () => {
     server.use(
       mswHttp.get('http://local.test/biz-err', () =>
         HttpResponse.json({
           code: 10401,
-          message: '名称已存在',
+          msg: '名称已存在',
           error: [{ field: 'name', code: 'DUPLICATED', message: '名称已存在', rejectedValue: 'a' }],
         })),
     )
@@ -47,15 +49,15 @@ describe('request 层', () => {
     expect(apiErr.details?.[0]?.field).toBe('name')
   })
 
-  it('HTTP 错误归一为带 status 的 ApiError,且透出后端 message', async () => {
+  it('HTTP 错误归一为带 status 的 ApiError,透出服务端 msg(错误码=HTTP 状态镜像)', async () => {
     server.use(
       mswHttp.get('http://local.test/http-err', () =>
-        HttpResponse.json({ code: 10400, message: '应用不存在' }, { status: 404 })),
+        HttpResponse.json({ code: 404, msg: '应用不存在: 7', data: null }, { status: 404 })),
     )
     const err = await http.get('http://local.test/http-err').catch((e: unknown) => e)
     const apiErr = err as ApiError
     expect(apiErr.status).toBe(404)
-    expect(apiErr.message).toBe('应用不存在')
+    expect(apiErr.message).toBe('应用不存在: 7')
     expect(apiErr.isHttpError()).toBe(true)
   })
 
@@ -64,7 +66,7 @@ describe('request 层', () => {
     server.use(
       mswHttp.get('http://local.test/headers', ({ request }) => {
         captured = request
-        return HttpResponse.json({ code: 0, data: null })
+        return HttpResponse.json({ code: 0, msg: 'success', data: null })
       }),
     )
     await http.get('http://local.test/headers')
@@ -79,7 +81,7 @@ describe('request 层', () => {
     server.use(
       mswHttp.post('http://local.test/submit', async ({ request }) => {
         captured = request
-        return HttpResponse.json({ code: 0, data: null })
+        return HttpResponse.json({ code: 0, msg: 'success', data: null })
       }),
     )
     await http.post('http://local.test/submit', { a: 1 })
@@ -93,9 +95,27 @@ describe('request 层', () => {
     setUnauthorizedHandler(handler)
     server.use(
       mswHttp.get('http://local.test/need-auth', () =>
-        HttpResponse.json({ code: ApiErrorCode.ADMIN_KEY_INVALID, message: '缺少 X-IA-Admin-Key' }, { status: 401 })),
+        HttpResponse.json({ code: 401, msg: '未认证' }, { status: 401 })),
     )
     await expect(http.get('http://local.test/need-auth')).rejects.toBeInstanceOf(ApiError)
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('HTTP 403(AdminTokenFilter 凭据拒绝)透出 msg 并触发 unauthorizedHandler', async () => {
+    const handler = vi.fn()
+    setUnauthorizedHandler(handler)
+    server.use(
+      mswHttp.get('http://local.test/admin-only', () =>
+        HttpResponse.json(
+          { code: 403, msg: '管理面凭据无效:请携带 X-IA-Admin-Key 请求头', data: null },
+          { status: 403 },
+        )),
+    )
+    const err = await http.get('http://local.test/admin-only').catch((e: unknown) => e)
+    const apiErr = err as ApiError
+    expect(apiErr.status).toBe(403)
+    expect(apiErr.message).toContain('X-IA-Admin-Key')
+    expect(apiErr.isAuthError()).toBe(true)
     expect(handler).toHaveBeenCalledTimes(1)
   })
 

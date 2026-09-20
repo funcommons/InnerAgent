@@ -3,7 +3,9 @@
  * 改动类型: [adapt] —— 保留 CommonResult(code===0) 信封语义、ApiError、HTTP_STATUS 与
  * 认证/资源/限流错误码段;删除融光业务错误码(内容/群组/作品/积分等)与
  * i18n 依赖;新增管理站所需的 10301(管理 key 无效)/10302(锁定)码段。
- * 后端 ErrorCode 枚举落地时以《02-技术方案》§6.3 管理面凭据域为准对齐。
+ * P2 对齐:服务端管理面错误码即 HTTP 状态镜像(BusinessException.code → HTTP
+ * 状态,信封体仍携带 code,见 GlobalExceptionHandler);400/403/404/409 语义
+ * 直接对齐,10301/10302 为过渡保留(服务端尚未细分)。
  */
 
 /** 后端业务错误码(信封 code 字段;0 = 成功) */
@@ -112,9 +114,15 @@ export class ApiError extends Error {
     return this.status !== undefined
   }
 
-  /** 是否为管理站未认证(应跳登录页)。管理面凭据域独立:embed/M2M 令牌一律无效 */
+  /**
+   * 是否为管理站未认证(应跳登录页)。管理面凭据域独立:embed/M2M 令牌一律无效。
+   * P2 对齐:服务端 AdminTokenFilter 对 X-IA-Admin-Key 缺失/错误/未配置(缺省封闭)
+   * 一律以 403 拒绝,管理站 403 视为凭据失效统一回登录页(管理站仅访问
+   * /ia/api/v1/admin/**,不存在"已登录但无权限"的第二种 403 来源)。
+   */
   isAuthError(): boolean {
     if (this.status === HTTP_STATUS.UNAUTHORIZED) return true
+    if (this.status === HTTP_STATUS.FORBIDDEN) return true
     if (this.status !== undefined) return false
     return this.code === ApiErrorCode.UNAUTHORIZED
       || this.code === ApiErrorCode.TOKEN_EXPIRED

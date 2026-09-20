@@ -32,11 +32,12 @@ describe('视图挂载冒烟', () => {
     wrapper.unmount()
   })
 
-  it('AppsView:表格渲染种子应用并含公钥/保留期列', async () => {
+  it('AppsView:表格渲染种子应用并含公钥登记态/保留期列', async () => {
     const wrapper = await mountView(AppsView, '/apps')
     expect(wrapper.text()).toContain('demo-app')
     expect(wrapper.text()).toContain('演示宿主应用')
-    expect(wrapper.text()).toContain('sha256:1a2b3c4d5e6f7081')
+    expect(wrapper.text()).toContain('已登记')
+    expect(wrapper.text()).toContain('未登记')
     expect(wrapper.text()).toContain('180')
     wrapper.unmount()
   })

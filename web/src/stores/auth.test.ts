@@ -20,9 +20,9 @@ describe('auth store', () => {
     expect(sessionStorage.getItem('ia:admin-key')).toBe(MOCK_ADMIN_KEY)
   })
 
-  it('login 传空 key 被 mock 后端拒绝且不落登录态', async () => {
+  it('login 传空 key 被 mock 后端拒绝且不落登录态(错误码对齐 HTTP 400)', async () => {
     const auth = useAuthStore()
-    await expect(auth.login('')).rejects.toMatchObject({ code: 10101 })
+    await expect(auth.login('')).rejects.toMatchObject({ code: 400 })
     expect(auth.isAuthenticated).toBe(false)
   })
 

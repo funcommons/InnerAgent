@@ -144,7 +144,8 @@ class AgentKernelSpecFactoryTests {
     }
 
     @Test
-    void explicitEmptyMcpReferencesDisableMcpTools() {
+    void emptyMcpReferencesFallBackToDefaultVisibility() {
+        // DEF-07:[] 与 null 同为「未指定」(SDK 空引用下发 [] 不再屏蔽注册工具)
         AgentKernelToolManifest search = new AgentKernelToolManifest(
                 "search_assets",
                 AgentKernelToolManifest.schemaSha256("{}"),
@@ -158,8 +159,8 @@ class AgentKernelSpecFactoryTests {
                 model,
                 "root prompt");
 
-        assertThat(spec.toolWhitelist()).isEmpty();
-        assertThat(spec.toolManifest()).isEmpty();
+        assertThat(spec.toolWhitelist()).containsExactly("search_assets");
+        assertThat(spec.toolManifest()).containsExactly(search);
     }
 
     @Test
@@ -423,14 +424,34 @@ class AgentKernelSpecFactoryTests {
 
     @Test
     void disabledCatalogToolDoesNotEnterTheKernelWhitelist() {
-        AgentKernelSpecFactory catalogFactory = factoryWithCatalog(catalogWith(hostRegistryTool()));
+        com.inneragent.platform.toolhub.ToolRegistryEntry disabled = hostRegistryTool();
+        disabled.setEnabled(false);
+        AgentKernelSpecFactory catalogFactory = factoryWithCatalog(catalogWith(disabled));
 
+        // 未指定 enabledMcpTools(null)→ 默认可见性走注册目录;停用工具仍不可见
         AgentKernelSpec spec = catalogFactory.createRoot(
-                request().setEnabledMcpTools(List.of()),
-                model,
-                "root prompt");
+                request(), model, "root prompt", 42L);
 
         assertThat(spec.toolWhitelist()).isEmpty();
+    }
+
+    @Test
+    void enabledMcpToolsThreeFormsNullEmptyAndExplicit() {
+        // DEF-07 三分法:null / [] / [FQN] —— 仅非空数组是显式白名单
+        AgentKernelSpecFactory catalogFactory = factoryWithCatalog(catalogWith(hostRegistryTool()));
+
+        // null(字段未下发)→ 未指定 → 默认可见性(注册目录按策略)
+        assertThat(catalogFactory.createRoot(request(), model, "root prompt", 42L)
+                .toolWhitelist()).containsExactly("mcp__crm__list_users");
+        // [](SDK 空引用下发)→ 同未指定 → 默认可见性(DEF-07 修复点)
+        assertThat(catalogFactory.createRoot(
+                        request().setEnabledMcpTools(List.of()), model, "root prompt", 42L)
+                .toolWhitelist()).containsExactly("mcp__crm__list_users");
+        // 非空数组 → 显式白名单
+        assertThat(catalogFactory.createRoot(
+                        request().setEnabledMcpTools(List.of("mcp__crm__list_users")),
+                        model, "root prompt", 42L)
+                .toolWhitelist()).containsExactly("mcp__crm__list_users");
     }
 
     private AgentKernelSpecFactory factoryWithCatalog(

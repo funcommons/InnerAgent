@@ -143,28 +143,9 @@ const server = http.createServer((req, res) => {
     if (pathname.endsWith('/events') && req.headers['last-event-id']) {
       log(`[reconn] SSE 重连游标 Last-Event-ID=${req.headers['last-event-id']}`)
     }
-    // DEF-07 补偿: SDK 发送 `"enabledMcpTools":[]`(空数组=显式清空 MCP 工具),
-    // 服务端据其过滤 → ia_tool_registry 注册工具在 UI 会话中不可达(curl 旅程不传
-    // 该字段则可达)。测试侧把空数组从 /runs 请求体中剔除, 使功能线可测;
-    // 缺陷本体(默认空数组语义)按 DEF-07 记录修复。
-    const isRunStart = req.method === 'POST' && /\/runs$/.test(pathname)
-    if (isRunStart) {
-      const chunks = []
-      req.on('data', (c) => chunks.push(c))
-      req.on('end', () => {
-        let body = Buffer.concat(chunks).toString('utf8')
-        if (body.includes('enabledMcpTools')) {
-          const before = body
-          body = body.replace(/"enabledMcpTools":\[\s*\],?/, '')
-          log(`[rewrite] /runs 请求体剔除 enabledMcpTools 空数组 (${before.length}B → ${body.length}B)`)
-        }
-        const headers = { ...req.headers, host: 'localhost:18090' }
-        headers['content-length'] = String(Buffer.byteLength(body))
-        forwardRequest(pathname, url, req, res, started, headers, body)
-      })
-      req.on('error', () => {})
-      return
-    }
+    // DEF-07 补偿已移除: 服务端已把 enabledMcpTools 空数组视作「未指定」
+    // (默认可见性, 注册目录按策略), SDK 空引用下发 [] 不再屏蔽注册工具。
+    // 本中转恢复纯透传, /runs 请求体原样转发 —— 即 R2 的无补偿回归口径。
     forwardRequest(pathname, url, req, res, started, { ...req.headers, host: 'localhost:18090' }, null)
     return
   }

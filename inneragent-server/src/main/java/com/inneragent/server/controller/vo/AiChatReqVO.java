@@ -55,7 +55,11 @@ public class AiChatReqVO {
     /** 用户在输入区显式激活的 Skill 名称。 */
     private List<String> enabledSkills;
 
-    /** 用户在输入区主动引用的 MCP 工具；仅筛选 MCP，不影响平台工具。 */
+    /**
+     * 用户在输入区主动引用的 MCP 工具；仅筛选 MCP，不影响平台工具。
+     * 三分法（DEF-07）：null 与空数组同为「未指定」→ 默认可见性（注册目录按策略）；
+     * 非空数组才是显式白名单。
+     */
     private List<String> enabledMcpTools;
 
     /** 用户随本轮消息提交的图片、视频、音频或文件输入。 */

@@ -150,6 +150,9 @@ public class McpToolCatalog implements ToolCatalogInvalidator {
                         .orderByAsc(ToolRegistryEntry::getFqn));
         return rows.stream()
                 .filter(entry -> entry.getAppId() != null && entry.getAppId() == appId)
+                // 内存兜底双层(与 app_id 同款):enabled 与 SQL 条件同口径,
+                // 拦截器/SQL 被绕过时停用工具也不进目录(DEF-07 回归口径依赖)
+                .filter(entry -> Boolean.TRUE.equals(entry.getEnabled()))
                 .map(entry -> McpToolCatalogEntry.of(
                         entry,
                         ToolAnnotations.parse(objectMapper, entry.getAnnotationsJson()),

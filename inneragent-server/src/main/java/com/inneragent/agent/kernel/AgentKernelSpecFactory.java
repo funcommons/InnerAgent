@@ -38,7 +38,8 @@ import java.util.Set;
  * ({@link McpToolCatalog},ia_tool_registry 聚合视图):目录条目以 FQN
  * (mcp__{serverKey}__{toolName})进入白名单与 manifest,schema 经
  * {@link AgentScopeToolSchema} 规范化后取哈希——与注册时校验、内核快照
- * restore 锁定同一口径。enabledMcpTools 门控与可用性校验统一覆盖目录视图。
+ * restore 锁定同一口径。enabledMcpTools 三分法(null/[]=未指定→默认可见性,
+ * 非空=显式白名单,DEF-07)门控与可用性校验统一覆盖目录视图。
  */
 @Component
 public final class AgentKernelSpecFactory {
@@ -284,7 +285,12 @@ public final class AgentKernelSpecFactory {
         Set<String> requested = requestedTools == null || requestedTools.isEmpty()
                 ? null
                 : Set.copyOf(requestedTools);
-        Set<String> requestedMcp = requestedMcpTools == null
+        // DEF-07 enabledMcpTools 三分法(与 enabledTools 同款口径):
+        //   null(字段未下发)/ [](SDK 空引用下发)→ 均为「未指定」,
+        //     走默认可见性(MCP 可用面按注册目录/静态注册表策略全量进入);
+        //   非空数组 → 显式白名单,门控 MCP 工具面。
+        // 仅非空数组收紧 MCP 工具面;[] 不得当作「显式空白名单」屏蔽注册工具。
+        Set<String> requestedMcp = requestedMcpTools == null || requestedMcpTools.isEmpty()
                 ? null
                 : Set.copyOf(requestedMcpTools);
         AiAgentDefinition definition = agentType == null ? null : agentService.getRequiredByType(agentType);
@@ -346,7 +352,8 @@ public final class AgentKernelSpecFactory {
                 availableMcpTools.add(catalogManifest);
             }
         }
-        // enabledMcpTools 门控:FQN 与目录工具名都可指名(统一解析为白名单名)
+        // enabledMcpTools 门控(DEF-07 三分法:requestedMcp 非 null 即显式白名单):
+        // FQN 与目录工具名都可指名(统一解析为白名单名)
         Set<String> requestedMcpResolved = requestedMcp == null
                 ? null
                 : resolveRequestedMcpTools(requestedMcp, availableMcpTools, catalogEntries);

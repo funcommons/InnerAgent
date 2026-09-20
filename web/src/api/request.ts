@@ -2,9 +2,10 @@
  * [adapt] 来源: $SRC/frontend/src/api/request.ts (mmagix-minicuts-backup/frontend)
  * 改动类型: [adapt] —— 拆除的业务依赖:
  *   - i18n(文案改管理站内置中文常量)
- *   - Bearer/refreshToken 双令牌刷新单飞(管理站凭据域独立,见《02-技术方案》§6.3:
- *     embed token 对管理站 API 无效;P2 对齐服务端 AdminTokenFilter:X-IA-Admin-Key
- *     请求头逐请求校验,缺失/错误/未配置一律 403 缺省封闭)
+ *   - refreshToken 双令牌刷新单飞(管理站凭据域独立,见《02-技术方案》§6.3:
+ *     embed token 对管理站 API 无效。[DEF-01] 起对齐服务端 18a/AdminTokenFilter
+ *     双轨:登录会话 Bearer token(admin 域请求注入 Authorization,无效 401)+
+ *     X-IA-Admin-Key 自动化/引导通道(无效/缺失 403 缺省封闭))
  *   - 融光 router/store 直接 import(改为注入式 unauthorizedHandler,避免循环依赖)
  * 保留:CommonResult(code===0)信封解包、ApiError 归一、字段级校验错误解析、
  * X-Trace-Id 链路追踪、写操作 Idempotency-Key、silent 静默标记。
@@ -38,6 +39,12 @@ export function setAdminKeyGetter(getter: (() => string) | null) {
   adminKeyGetter = getter
 }
 
+/** [DEF-01] 懒注入管理会话 token getter(login 成功后由 authStore 注册) */
+let authTokenGetter: (() => string) | null = null
+export function setAuthTokenGetter(getter: (() => string) | null) {
+  authTokenGetter = getter
+}
+
 /** 401/凭据失效时的统一出口(由 authStore 注册,跳登录页) */
 let unauthorizedHandler: (() => void) | null = null
 export function setUnauthorizedHandler(handler: (() => void) | null) {
@@ -61,9 +68,16 @@ request.interceptors.request.use(
       config.headers.set('Content-Type', 'application/json')
     }
 
-    // 管理站凭据:X-IA-Admin-Key(P2 已对齐服务端 AdminTokenFilter;
-    // P2 后续如换 client_credentials 换 token,只需改此一处注入点)
-    if (adminKeyGetter) {
+    // [DEF-01] 管理站凭据双轨(对齐服务端 AdminTokenFilter):
+    // - 主通道:登录会话 Bearer token,仅对 admin 域请求注入 Authorization;
+    // - 引导/自动化通道:X-IA-Admin-Key(Bearer 缺席时兜底注入)。
+    // Bearer 无效 → 服务端 401;Admin-Key 无效/缺失 → 403。
+    const isAdminApi = typeof config.url === 'string' && config.url.includes('/ia/api/v1/admin')
+    if (isAdminApi && authTokenGetter) {
+      const token = authTokenGetter()
+      if (token) config.headers.set('Authorization', `Bearer ${token}`)
+    }
+    if (isAdminApi && !config.headers.has('Authorization') && adminKeyGetter) {
       const key = adminKeyGetter()
       if (key) config.headers.set('X-IA-Admin-Key', key)
     }
@@ -172,6 +186,10 @@ request.interceptors.response.use(
         case HTTP_STATUS.CONFLICT:
           // 如 appKey/工具 FQN 唯一冲突(409)
           message = serverMsg || '资源状态冲突'
+          break
+        case HTTP_STATUS.LOCKED:
+          // [DEF-01] 423:管理员账号锁定(服务端文案含剩余秒数,原样透出)
+          message = serverMsg || '账号已锁定,请稍后重试'
           break
         case HTTP_STATUS.INTERNAL_SERVER_ERROR:
           message = serverMsg || '服务内部错误'

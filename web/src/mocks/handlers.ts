@@ -2,8 +2,8 @@
  * [new] msw 请求处理器全集(P2-pre 阶段唯一"后端")。
  * P2 对齐:apps/tools/grants 三域行为按服务端真实控制器逐条镜像
  * (AdminAppController/AdminToolController/AdminGrantController + 对应 Service);
- * 信封 {code,msg,data},错误 HTTP 状态=业务 code;认证对齐 AdminTokenFilter
- * (X-IA-Admin-Key 缺失/无效一律 403 缺省封闭)。
+ * 信封 {code,msg,data},错误 HTTP 状态=业务 code;认证对齐 AdminTokenFilter 双轨
+ * (DEF-01:Bearer 会话 token 无效 401;X-IA-Admin-Key 缺失/无效 403 缺省封闭)。
  * 仍为 mock 的域(服务端未实现,保持原语义):audit-logs(行形已对齐 ia_audit_log)、
  * model-configs(依赖并行任务)、circuit-breaker、webhooks。
  *
@@ -32,7 +32,7 @@ import type {
 } from '@/api/types'
 import { fakeSha256, genId, maskKey, resetMockData, store } from './data'
 
-/** mock 登录约定 key(任意非空亦可,此值供测试断言;服务端无登录端点,凭据逐请求校验) */
+/** mock 登录约定 key(引导模式任意非空亦可;此值供测试断言) */
 export const MOCK_ADMIN_KEY = 'ia-admin-mock-key'
 export { resetMockData } from './data'
 
@@ -45,8 +45,20 @@ function fail(code: number, msg: string, status = code): HttpResponse<DefaultBod
   return HttpResponse.json({ code, msg, data: null }, { status })
 }
 
-/** 管理凭据校验(对齐 AdminTokenFilter:一律 403,除 mock 登录外全部生效) */
-function requireAdminKey(request: Request): HttpResponse<DefaultBodyType> | null {
+/**
+ * 管理凭据校验(DEF-01:对齐 AdminTokenFilter 双轨语义):
+ * - Bearer 会话 token:mock 登录签发的 token 有效;无效 → 401「管理会话 token 无效」;
+ * - X-IA-Admin-Key:任意非空可过(mock 无 key 库);缺失/空 → 403 缺省封闭。
+ */
+const issuedMockTokens = new Set<string>()
+
+function requireAdminCredential(request: Request): HttpResponse<DefaultBodyType> | null {
+  const authorization = request.headers.get('Authorization')
+  if (authorization?.startsWith('Bearer ')) {
+    const token = authorization.slice('Bearer '.length)
+    if (token && issuedMockTokens.has(token)) return null
+    return fail(401, '管理会话 token 无效', 401)
+  }
   const key = request.headers.get('X-IA-Admin-Key')
   if (!key) {
     return fail(403, '管理面凭据无效:请携带 X-IA-Admin-Key 请求头', 403)
@@ -86,19 +98,33 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
-// ==================== 认证(mock 登录占位:服务端无登录端点) ====================
+// ==================== 认证(DEF-01:镜像 AdminAuthController + AdminTokenFilter 双轨) ====================
 
 const authHandlers = [
   http.post('/ia/api/v1/admin/auth/login', async ({ request }) => {
-    const body = (await request.json()) as { adminKey?: string }
-    if (!body?.adminKey) {
-      return fail(400, 'adminKey 不能为空')
+    const body = (await request.json()) as { username?: string; password?: string }
+    if (!body?.username || !body?.password) {
+      return fail(400, '不能为空')
     }
-    return ok({ ok: true, hint: 'mock 环境:任意非空 key 均可登录' })
+    // mock 无账号库:非空账号密码即签发(mock 环境任意非空凭据均可登录;
+    // 401/423 分支由 request 层单测以显式 override handler 覆盖)
+    const token = `mock-admin-token-${issuedMockTokens.size + 1}`
+    issuedMockTokens.add(token)
+    return ok({
+      token,
+      tokenType: 'Bearer',
+      expiresInSeconds: 14400,
+      username: body.username,
+    })
   }),
   http.post('/ia/api/v1/admin/auth/logout', ({ request }) => {
-    const denied = requireAdminKey(request)
-    return denied ?? ok({ ok: true })
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const authorization = request.headers.get('Authorization')
+    if (authorization?.startsWith('Bearer ')) {
+      issuedMockTokens.delete(authorization.slice('Bearer '.length))
+    }
+    return ok(true)
   }),
 ]
 
@@ -106,18 +132,18 @@ const authHandlers = [
 
 const appHandlers = [
   http.get('/ia/api/v1/admin/apps', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     return ok(store.apps) // 真实形:数组,无分页
   }),
   http.get('/ia/api/v1/admin/apps/:id', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const app = store.apps.find(a => a.id === Number(params.id))
     return app ? ok(app) : fail(404, `应用不存在: ${params.id}`)
   }),
   http.post('/ia/api/v1/admin/apps', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as Partial<IaApp>
     if (!body.appKey || !body.name || !body.signPublicKey) {
@@ -147,7 +173,7 @@ const appHandlers = [
     return ok(app)
   }),
   http.put('/ia/api/v1/admin/apps/:id', async ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const app = store.apps.find(a => a.id === Number(params.id))
     if (!app) return fail(404, `应用不存在: ${params.id}`)
@@ -166,7 +192,7 @@ const appHandlers = [
     return ok(app)
   }),
   http.delete('/ia/api/v1/admin/apps/:id', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const idx = store.apps.findIndex(a => a.id === Number(params.id))
     if (idx < 0) return fail(404, `应用不存在: ${params.id}`)
@@ -217,7 +243,7 @@ function invalidateGrantsByFqn(toolFqn: string, reason: IaToolGrant['invalidated
 
 const toolHandlers = [
   http.get('/ia/api/v1/admin/tools', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const url = new URL(request.url)
     const serverKey = url.searchParams.get('serverKey')
@@ -228,20 +254,20 @@ const toolHandlers = [
     return ok(list) // 真实形:数组,无分页
   }),
   http.get('/ia/api/v1/admin/tools/:id', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const t = store.tools.find(x => x.id === Number(params.id))
     return t ? ok(t) : fail(404, `工具不存在: ${params.id}`)
   }),
   http.get('/ia/api/v1/admin/tools/:id/schema-history', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const t = store.tools.find(x => x.id === Number(params.id))
     if (!t) return fail(404, `工具不存在: ${params.id}`)
     return ok(store.schemaHistory.filter(h => h.toolId === t.id))
   }),
   http.post('/ia/api/v1/admin/tools', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as ToolRegisterReq
     if (!body.serverKey || !/^[A-Za-z0-9-]{1,64}$/.test(body.serverKey)) {
@@ -300,7 +326,7 @@ const toolHandlers = [
     return ok(entry)
   }),
   http.put('/ia/api/v1/admin/tools/:id', async ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const t = store.tools.find(x => x.id === Number(params.id))
     if (!t) return fail(404, `工具不存在: ${params.id}`)
@@ -328,7 +354,7 @@ const toolHandlers = [
     return ok(t)
   }),
   http.post('/ia/api/v1/admin/tools/:id/schema', async ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const t = store.tools.find(x => x.id === Number(params.id))
     if (!t) return fail(404, `工具不存在: ${params.id}`)
@@ -375,7 +401,7 @@ const toolHandlers = [
     })
   }),
   http.post('/ia/api/v1/admin/tools/:id/schema/confirm', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const t = store.tools.find(x => x.id === Number(params.id))
     if (!t) return fail(404, `工具不存在: ${params.id}`)
@@ -395,7 +421,7 @@ const toolHandlers = [
     return ok(t)
   }),
   http.post('/ia/api/v1/admin/tools/:id/schema/reject', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const t = store.tools.find(x => x.id === Number(params.id))
     if (!t) return fail(404, `工具不存在: ${params.id}`)
@@ -413,7 +439,7 @@ const toolHandlers = [
     return ok(t)
   }),
   http.post('/ia/api/v1/admin/tools/:id/disable', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const t = store.tools.find(x => x.id === Number(params.id))
     if (!t) return fail(404, `工具不存在: ${params.id}`)
@@ -424,7 +450,7 @@ const toolHandlers = [
     return ok(t)
   }),
   http.post('/ia/api/v1/admin/tools/:id/enable', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const t = store.tools.find(x => x.id === Number(params.id))
     if (!t) return fail(404, `工具不存在: ${params.id}`)
@@ -433,7 +459,7 @@ const toolHandlers = [
     return ok(t)
   }),
   http.delete('/ia/api/v1/admin/tools/:id', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const idx = store.tools.findIndex(x => x.id === Number(params.id))
     if (idx < 0) return fail(404, `工具不存在: ${params.id}`)
@@ -447,7 +473,7 @@ const toolHandlers = [
 
 const grantHandlers = [
   http.get('/ia/api/v1/admin/grants', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const url = new URL(request.url)
     const userId = url.searchParams.get('userId')
@@ -466,7 +492,7 @@ const grantHandlers = [
     return ok(list) // 真实形:数组,无分页
   }),
   http.post('/ia/api/v1/admin/grants', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as {
       userId?: number; toolName?: string; scope?: IaToolGrant['scope']; conversationId?: string; decisionNote?: string
@@ -512,7 +538,7 @@ const grantHandlers = [
     return ok(grant)
   }),
   http.delete('/ia/api/v1/admin/grants/:id', async ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const idx = store.grants.findIndex(g => g.id === Number(params.id))
     if (idx < 0) return fail(404, `授权不存在: ${params.id}`)
@@ -525,7 +551,7 @@ const grantHandlers = [
 
 const auditHandlers = [
   http.get('/ia/api/v1/admin/audit-logs', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const url = new URL(request.url)
     const appId = url.searchParams.get('appId')
@@ -551,7 +577,7 @@ const auditHandlers = [
 
 const modelHandlers = [
   http.get('/ia/api/v1/admin/model-configs', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const url = new URL(request.url)
     const name = url.searchParams.get('name')
@@ -564,7 +590,7 @@ const modelHandlers = [
     return ok(paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10)))
   }),
   http.post('/ia/api/v1/admin/model-configs', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as { name?: string; platform?: string; apiKey?: string; apiUrl?: string; autoAppendV1Path?: boolean; remark?: string }
     if (!body.name || !body.platform) return fail(400, 'name/platform 不能为空')
@@ -580,7 +606,7 @@ const modelHandlers = [
     return ok(created)
   }),
   http.put('/ia/api/v1/admin/model-configs/:id', async ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const m = store.modelConfigs.find(x => x.id === Number(params.id))
     if (!m) return fail(404, `模型配置不存在: ${params.id}`)
@@ -596,7 +622,7 @@ const modelHandlers = [
     return ok(m)
   }),
   http.delete('/ia/api/v1/admin/model-configs/:id', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const idx = store.modelConfigs.findIndex(x => x.id === Number(params.id))
     if (idx < 0) return fail(404, `模型配置不存在: ${params.id}`)
@@ -604,7 +630,7 @@ const modelHandlers = [
     return ok(true)
   }),
   http.post('/ia/api/v1/admin/model-configs/:id/test', ({ request, params }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const m = store.modelConfigs.find(x => x.id === Number(params.id))
     if (!m) return fail(404, `模型配置不存在: ${params.id}`)
@@ -622,7 +648,7 @@ function pushEvent(type: CircuitBreakerEvent['type'], runId: string | null, reas
 
 const circuitHandlers = [
   http.get('/ia/api/v1/admin/circuit-breaker', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     return ok({
       emergencyStopped: store.circuitState.emergencyStopped,
@@ -633,14 +659,14 @@ const circuitHandlers = [
     })
   }),
   http.put('/ia/api/v1/admin/circuit-breaker/limits', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as { limits?: Partial<typeof store.limits> }
     Object.assign(store.limits, body.limits ?? {})
     return ok(store.limits)
   }),
   http.post('/ia/api/v1/admin/circuit-breaker/emergency-stop', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as { reason?: string }
     if (!body.reason) return fail(400, 'reason 不能为空')
@@ -650,7 +676,7 @@ const circuitHandlers = [
     return ok(pushEvent('emergency-stop', null, body.reason))
   }),
   http.post('/ia/api/v1/admin/circuit-breaker/resume', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     store.circuitState.emergencyStopped = false
     store.circuitState.stoppedAt = null
@@ -658,7 +684,7 @@ const circuitHandlers = [
     return ok(pushEvent('resume', null, '人工恢复'))
   }),
   http.post('/ia/api/v1/admin/circuit-breaker/terminate-run', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as { runId?: string; reason?: string }
     if (!body.runId || !body.reason) return fail(400, 'runId/reason 不能为空')
@@ -670,12 +696,12 @@ const circuitHandlers = [
 
 const webhookHandlers = [
   http.get('/ia/api/v1/admin/webhooks/config', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     return ok(store.webhookConfig)
   }),
   http.put('/ia/api/v1/admin/webhooks/config', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as { url?: string; secret?: string; enabled?: boolean; events?: WebhookEvent[] }
     if (typeof body.url === 'string') store.webhookConfig.url = body.url
@@ -685,12 +711,12 @@ const webhookHandlers = [
     return ok(store.webhookConfig)
   }),
   http.post('/ia/api/v1/admin/webhooks/config/test', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     return ok({ ok: true, signatureValid: true })
   }),
   http.get('/ia/api/v1/admin/webhooks/deliveries', ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const url = new URL(request.url)
     const event = url.searchParams.get('event')
@@ -701,7 +727,7 @@ const webhookHandlers = [
     return ok(paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10)))
   }),
   http.post('/ia/api/v1/admin/webhooks/deliveries/simulate-failure', async ({ request }) => {
-    const denied = requireAdminKey(request)
+    const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as { event?: WebhookEvent; runId?: string }
     const delivery: WebhookDelivery = {

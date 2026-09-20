@@ -6,13 +6,14 @@
  */
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { http as mswHttp, HttpResponse } from 'msw'
-import { http, setAdminKeyGetter, setUnauthorizedHandler } from './request'
+import { http, setAdminKeyGetter, setAuthTokenGetter, setUnauthorizedHandler } from './request'
 import { ApiError } from './errorCodes'
 import { server } from '@/mocks/server'
 
 describe('request 层', () => {
   beforeEach(() => {
     setAdminKeyGetter(() => 'test-key-123')
+    setAuthTokenGetter(null)
     setUnauthorizedHandler(null)
   })
 
@@ -61,19 +62,61 @@ describe('request 层', () => {
     expect(apiErr.isHttpError()).toBe(true)
   })
 
-  it('GET 请求携带 X-IA-Admin-Key 与 X-Trace-Id 头', async () => {
+  it('GET 请求携带 X-IA-Admin-Key 与 X-Trace-Id 头(引导通道,admin 域)', async () => {
     let captured: Request | null = null
     server.use(
-      mswHttp.get('http://local.test/headers', ({ request }) => {
+      mswHttp.get('/ia/api/v1/admin/headers', ({ request }) => {
         captured = request
         return HttpResponse.json({ code: 0, msg: 'success', data: null })
       }),
     )
-    await http.get('http://local.test/headers')
+    await http.get('/ia/api/v1/admin/headers')
     expect(captured).not.toBeNull()
     expect(captured!.headers.get('X-IA-Admin-Key')).toBe('test-key-123')
     const traceId = captured!.headers.get('X-Trace-Id')
     expect(traceId).toBeTruthy()
+  })
+
+  it('[DEF-01] admin 域请求注入 Authorization: Bearer,且不双发 X-IA-Admin-Key', async () => {
+    setAuthTokenGetter(() => 'session-token-1')
+    let captured: Request | null = null
+    server.use(
+      mswHttp.get('/ia/api/v1/admin/apps', ({ request }) => {
+        captured = request
+        return HttpResponse.json({ code: 0, msg: 'success', data: [] })
+      }),
+    )
+    await http.get('/ia/api/v1/admin/apps')
+    expect(captured!.headers.get('Authorization')).toBe('Bearer session-token-1')
+    expect(captured!.headers.get('X-IA-Admin-Key')).toBeNull()
+  })
+
+  it('[DEF-01] 无会话 token 时 admin 域回退 X-IA-Admin-Key(引导通道)', async () => {
+    setAuthTokenGetter(() => '')
+    let captured: Request | null = null
+    server.use(
+      mswHttp.get('/ia/api/v1/admin/apps', ({ request }) => {
+        captured = request
+        return HttpResponse.json({ code: 0, msg: 'success', data: [] })
+      }),
+    )
+    await http.get('/ia/api/v1/admin/apps')
+    expect(captured!.headers.get('Authorization')).toBeNull()
+    expect(captured!.headers.get('X-IA-Admin-Key')).toBe('test-key-123')
+  })
+
+  it('[DEF-01] 非 admin 域请求不注入管理凭据', async () => {
+    setAuthTokenGetter(() => 'session-token-1')
+    let captured: Request | null = null
+    server.use(
+      mswHttp.get('http://local.test/echo', ({ request }) => {
+        captured = request
+        return HttpResponse.json({ code: 0, msg: 'success', data: null })
+      }),
+    )
+    await http.get('http://local.test/echo')
+    expect(captured!.headers.get('Authorization')).toBeNull()
+    expect(captured!.headers.get('X-IA-Admin-Key')).toBeNull()
   })
 
   it('POST 请求 JSON 序列化并携带 Idempotency-Key', async () => {

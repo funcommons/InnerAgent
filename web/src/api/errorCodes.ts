@@ -56,6 +56,8 @@ export const HTTP_STATUS = {
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  /** [DEF-01] 423 Locked:管理员账号连续失败锁定(登录端点) */
+  LOCKED: 423,
   INTERNAL_SERVER_ERROR: 500,
   BAD_GATEWAY: 502,
   SERVICE_UNAVAILABLE: 503,

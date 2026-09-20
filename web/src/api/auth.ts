@@ -1,29 +1,36 @@
 /**
- * [new] 管理站认证 API(登录占位)。
- * 《02-技术方案》§6.3:管理站人类管理员认证首版为内置管理员账号(Argon2 口令散列 +
- * 失败锁定 + 登录审计);本任务为 P2 前置工程,仅做管理 key UI 壳。
- * P2 对齐发现:服务端无 /admin/auth 端点,凭据由 AdminTokenFilter 对每个
- * /ia/api/v1/admin/** 请求以 X-IA-Admin-Key 校验(缺失/错误一律 403 缺省封闭);
- * 本登录端点为 UI 壳约定(msw 放行),正式账号体系 P2 后续落地。
+ * [new] 管理站认证 API(DEF-01 修复:对齐服务端 P2-admin 18a 真实契约)。
+ * 《02-技术方案》§6.3:内置管理员账号(Argon2 口令散列 + 失败锁定 + 登录审计)。
+ * - POST /admin/auth/login {username,password} → 200 {token, tokenType,
+ *   expiresInSeconds, username};失败统一 401(文案防枚举)、锁定 423(含剩余秒数)。
+ * - POST /admin/auth/logout 吊销当前 Bearer 会话 token(jti 黑名单,幂等)。
+ * - 凭据双轨(AdminTokenFilter):Bearer 会话 token 无效 → 401;
+ *   X-IA-Admin-Key(自动化/引导通道)无效/缺失 → 403。
+ * (历史注记「服务端无 /admin/auth 端点」已过时——18a 已落地本端点。)
  */
 import { http } from './request'
 
-/** 登录请求(占位:管理 key) */
+/** 登录请求(服务端 AdminAuthController.LoginReqVO,均 @NotBlank) */
 export interface AdminLoginReq {
-  adminKey: string
+  username: string
+  password: string
 }
 
-/** 登录响应(占位;P2 正式任务为 session/Argon2 账号体系) */
+/** 登录响应(服务端 LoginRespVO;web 端 auth store 据此保存 Bearer) */
 export interface AdminLoginResp {
-  ok: boolean
-  /** 服务端提示(如默认 key 提醒),仅 mock 用 */
-  hint?: string
+  /** 管理会话 JWT(三段式);后续 admin 请求以 Authorization: Bearer 携带 */
+  token: string
+  /** 恒为 'Bearer' */
+  tokenType: string
+  /** 会话有效期(秒),用于本地过期判定 */
+  expiresInSeconds: number
+  username: string
 }
 
 export const adminAuthApi = {
-  /** 校验管理 key(仅 UI 壳;msw 中非空即过) */
+  /** 账号密码登录(失败 401 凭据错误 / 423 锁定;全部尝试落服务端登录审计) */
   login: (data: AdminLoginReq) => http.post<AdminLoginResp>('/ia/api/v1/admin/auth/login', data),
 
-  /** 登出(占位:服务端无状态,仅审计埋点) */
-  logout: () => http.post<{ ok: boolean }>('/ia/api/v1/admin/auth/logout'),
+  /** 登出(吊销当前会话 token;幂等,失败不阻断本地清理) */
+  logout: () => http.post<boolean>('/ia/api/v1/admin/auth/logout'),
 }

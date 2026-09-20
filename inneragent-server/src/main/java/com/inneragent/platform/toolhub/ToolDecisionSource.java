@@ -1,0 +1,51 @@
+package com.inneragent.platform.toolhub;
+
+import java.util.Locale;
+
+/**
+ * 审计裁决来源(V22;ia_audit_log.decision_source,值域见 V2 DDL 列注释)。
+ *
+ * <p>使「高危 100% 确认」可从日志证明:每条放行/拒绝可指出是哪条路径
+ * (模式默认/用户授权/强制策略/实弹确认/全开放)作出的决策。
+ */
+public enum ToolDecisionSource {
+
+    /** 模式默认路径(DEFAULT:只读放行/写确认)。 */
+    MODE_DEFAULT("mode-default"),
+
+    /** 用户「总是允许」授权放行(ia_tool_grant)。 */
+    USER_GRANT("user-grant"),
+
+    /** 管理员强制策略(force-ask/force-allow/deny)。 */
+    FORCED_POLICY("forced-policy"),
+
+    /** 确认流实弹批准(live confirm)。 */
+    LIVE_CONFIRM("live-confirm"),
+
+    /** FULL_ACCESS 全开放(平台管理员开启,审计一次性确认)。 */
+    FULL_ACCESS("full-access");
+
+    private final String code;
+
+    ToolDecisionSource(String code) {
+        this.code = code;
+    }
+
+    /** 落库码值(对齐 V2 DDL decision_source 列注释)。 */
+    public String code() {
+        return code;
+    }
+
+    public static ToolDecisionSource fromCode(String code) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        String normalized = code.trim().toLowerCase(Locale.ROOT);
+        for (ToolDecisionSource source : values()) {
+            if (source.code.equals(normalized)) {
+                return source;
+            }
+        }
+        throw new IllegalArgumentException("Unsupported decision source: " + code);
+    }
+}

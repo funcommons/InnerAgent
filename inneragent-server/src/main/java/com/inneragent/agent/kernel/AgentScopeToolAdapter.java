@@ -41,13 +41,21 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
      */
     private final ActTokenSupplier actTokenSupplier;
 
+    /**
+     * [adapt] P1-T2a：MCP 工具调用端口（T2b 接管点，经 ObjectProvider 可选注入，
+     * 参照 ActTokenSupplier 挂法）。T2a 阶段仅 UnavailableMcpToolInvoker 缺省
+     * （调用即抛）且本地内置工具不触达该端口——行为与现状完全一致；
+     * T2b 的 McpToolAdapter 接管后经此端口执行宿主 tools/call。
+     */
+    private final com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker;
+
     public AgentScopeToolAdapter(
             ToolExecutor toolExecutor,
             AgentScopeToolSchema.PreparedSchema schema,
             Scheduler toolScheduler,
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper) {
-        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper, null);
+        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper, null, null);
     }
 
     public AgentScopeToolAdapter(
@@ -57,12 +65,30 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper,
             ActTokenSupplier actTokenSupplier) {
+        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper,
+                actTokenSupplier, null);
+    }
+
+    public AgentScopeToolAdapter(
+            ToolExecutor toolExecutor,
+            AgentScopeToolSchema.PreparedSchema schema,
+            Scheduler toolScheduler,
+            RunLeaseGuard leaseGuard,
+            ObjectMapper objectMapper,
+            ActTokenSupplier actTokenSupplier,
+            com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker) {
         super(builder(toolExecutor, schema));
         this.toolExecutor = Objects.requireNonNull(toolExecutor, "toolExecutor must not be null");
         this.toolScheduler = Objects.requireNonNull(toolScheduler, "toolScheduler must not be null");
         this.leaseGuard = Objects.requireNonNull(leaseGuard, "leaseGuard must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.actTokenSupplier = actTokenSupplier;
+        this.mcpToolInvoker = mcpToolInvoker;
+    }
+
+    /** T2b 接管点访问器(MCP client 适配器接入后经此执行宿主调用;当前不可达)。 */
+    com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker() {
+        return mcpToolInvoker;
     }
 
     @Override

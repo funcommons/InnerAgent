@@ -13,9 +13,13 @@ import com.inneragent.agent.context.ProjectContext;
 import com.inneragent.agent.context.ToolExecutionContext;
 import com.inneragent.agent.context.ToolPermissionContext;
 import com.inneragent.agent.permission.ToolExecutionMode;
+import com.inneragent.agent.mcp.McpToolCatalog;
+import com.inneragent.agent.permission.ToolGrantPolicyView;
 import com.inneragent.agent.runtime.AgentRuntimeSchedulers;
 import com.inneragent.agent.run.model.ResumedAgentRun;
 import com.inneragent.agent.run.model.StartedAgentRun;
+import com.inneragent.platform.context.AppContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -28,13 +32,21 @@ public final class AgentExecutionRuntimeContextRequests {
 
     private final AgentRunRepository runRepository;
     private final AgentRuntimeSchedulers schedulers;
+    // [adapt] P1-T2a:确认档位映射输入 —— 用户永久授权(ia_tool_grant)
+    // 与 resolve_scope 降级标记(目录聚合判定);端口缺省时空授权/未降级
+    private final ObjectProvider<ToolGrantPolicyView> grantViews;
+    private final ObjectProvider<McpToolCatalog> toolCatalogs;
 
     public AgentExecutionRuntimeContextRequests(
             AgentRunRepository runRepository,
-            AgentRuntimeSchedulers schedulers) {
+            AgentRuntimeSchedulers schedulers,
+            ObjectProvider<ToolGrantPolicyView> grantViews,
+            ObjectProvider<McpToolCatalog> toolCatalogs) {
         this.runRepository = Objects.requireNonNull(
                 runRepository, "runRepository must not be null");
         this.schedulers = Objects.requireNonNull(schedulers, "schedulers must not be null");
+        this.grantViews = Objects.requireNonNull(grantViews, "grantViews must not be null");
+        this.toolCatalogs = Objects.requireNonNull(toolCatalogs, "toolCatalogs must not be null");
     }
 
     public Mono<AgentScopeRuntimeContextRequest> forChild(
@@ -160,7 +172,24 @@ public final class AgentExecutionRuntimeContextRequests {
                         persisted.getRunId(), requestKind),
                 new ToolExecutionContext(userId, 1, userId, persisted.getTenantId()),
                 CancellationContext.noop(),
-                new ToolPermissionContext(toolExecutionMode));
+                permissionContext(userId, toolExecutionMode));
+    }
+
+    /**
+     * [adapt] P1-T2a:确认档位映射输入装配 —— 用户「总是允许」永久授权
+     * (ia_tool_grant,经 ToolGrantPolicyView 端口)+ resolve_scope 降级标记
+     * (宿主未实现反查时写操作一律确认,PRD §6.1.4)。端口缺省时行为与
+     * T1 完全一致(无授权、未降级)。
+     */
+    private ToolPermissionContext permissionContext(long userId, ToolExecutionMode mode) {
+        ToolGrantPolicyView grantView = grantViews.getIfAvailable();
+        McpToolCatalog toolCatalog = toolCatalogs.getIfAvailable();
+        java.util.Set<String> grantedTools = grantView == null
+                ? java.util.Set.of()
+                : grantView.permanentGrantedToolFqns(AppContext.currentOrDefault(), userId);
+        boolean scopeDegraded = toolCatalog != null
+                && !toolCatalog.resolveScopeImplemented(AppContext.currentOrDefault());
+        return new ToolPermissionContext(mode, grantedTools, scopeDegraded);
     }
 
     private ParentAgentRunContext parentForResume(AgentRun child) {

@@ -13,6 +13,7 @@ import io.agentscope.core.permission.PermissionMode;
 import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.ToolCallParam;
 import io.agentscope.core.tool.Toolkit;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -104,6 +105,99 @@ class AgentToolPermissionPolicyTests {
 
         assertThat(context.getAskRules()).isEmpty();
         assertThat(context.getAllowRules()).containsKey("delete_remote_asset");
+    }
+
+    @Test
+    @DisplayName("[P1-T2a] DEFAULT + 用户永久授权:写操作放行,规则来源 user-grant(V22)")
+    void defaultModeGrantAllowsWriteWithUserGrantSource() {
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerAgentTool(new StubTool("update_script", false));
+        toolkit.registerAgentTool(new StubTool("read_script", true));
+
+        PermissionContextState context = AgentToolPermissionPolicy.contextFor(
+                toolkit, ToolExecutionMode.DEFAULT,
+                java.util.Set.of("mcp__crm__update_script", "update_script"), false);
+
+        assertThat(context.getAllowRules()).containsKey("update_script");
+        assertThat(context.getAskRules()).doesNotContainKey("update_script");
+        assertThat(context.getAllowRules().get("update_script").get(0).source())
+                .isEqualTo(AgentToolPermissionPolicy.SOURCE_USER_GRANT);
+        assertThat(context.getAllowRules().get("read_script").get(0).source())
+                .isEqualTo(AgentToolPermissionPolicy.SOURCE_MODE_DEFAULT);
+    }
+
+    @Test
+    @DisplayName("[P1-T2a] DEFAULT 未授权写操作仍 ASK(来源 mode-default)")
+    void defaultModeUngrantedWriteStillAsks() {
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerAgentTool(new StubTool("update_script", false));
+
+        PermissionContextState context = AgentToolPermissionPolicy.contextFor(
+                toolkit, ToolExecutionMode.DEFAULT, java.util.Set.of(), false);
+
+        assertThat(context.getAskRules()).containsKey("update_script");
+        assertThat(context.getAskRules().get("update_script").get(0).source())
+                .isEqualTo(AgentToolPermissionPolicy.SOURCE_MODE_DEFAULT);
+    }
+
+    @Test
+    @DisplayName("[P1-T2a] ALWAYS_ASK:授权不可绕过(V19=DEFAULT 减授权通道)")
+    void alwaysAskIgnoresGrants() {
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerAgentTool(new StubTool("update_script", false));
+
+        PermissionContextState context = AgentToolPermissionPolicy.contextFor(
+                toolkit, ToolExecutionMode.ALWAYS_ASK,
+                java.util.Set.of("update_script"), false);
+
+        assertThat(context.getAskRules()).containsKey("update_script");
+        assertThat(context.getAllowRules()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[P1-T2a] scope 降级(PRD §6.1.4):写操作一律确认,授权不绕过")
+    void scopeDegradedForcesWriteConfirmationEvenIfGranted() {
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerAgentTool(new StubTool("update_script", false));
+        toolkit.registerAgentTool(new StubTool("read_script", true));
+
+        PermissionContextState context = AgentToolPermissionPolicy.contextFor(
+                toolkit, ToolExecutionMode.DEFAULT,
+                java.util.Set.of("update_script"), true);
+
+        assertThat(context.getAskRules()).containsKey("update_script");
+        assertThat(context.getAllowRules()).containsKey("read_script");
+    }
+
+    @Test
+    @DisplayName("[P1-T2a] BYPASS 模式(ALWAYS_ALLOW/FULL_ACCESS)与授权无关")
+    void bypassModesIgnoreGrantsAndDegradation() {
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerAgentTool(new StubTool("update_script", false));
+
+        PermissionContextState allow = AgentToolPermissionPolicy.contextFor(
+                toolkit, ToolExecutionMode.ALWAYS_ALLOW,
+                java.util.Set.of(), true);
+        assertThat(allow.getMode()).isEqualTo(PermissionMode.BYPASS);
+        assertThat(allow.getAskRules()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[P1-T2a] ToolPermissionContext 兼容旧单参构造;granted 命中判定")
+    void toolPermissionContextBackwardCompatible() {
+        com.inneragent.agent.context.ToolPermissionContext legacy =
+                new com.inneragent.agent.context.ToolPermissionContext(
+                        ToolExecutionMode.DEFAULT);
+        assertThat(legacy.grantedTools()).isEmpty();
+        assertThat(legacy.scopeDegraded()).isFalse();
+        assertThat(legacy.granted("update_script")).isFalse();
+
+        com.inneragent.agent.context.ToolPermissionContext granted =
+                new com.inneragent.agent.context.ToolPermissionContext(
+                        ToolExecutionMode.DEFAULT,
+                        java.util.Set.of("update_script"), true);
+        assertThat(granted.granted("update_script")).isTrue();
+        assertThat(granted.scopeDegraded()).isTrue();
     }
 
     private AgentScopeToolAdapter highRiskAdapter() {

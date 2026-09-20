@@ -42,12 +42,14 @@ public class AppTenantLineInnerInterceptor implements InnerInterceptor {
 
     /**
      * 无双列/平台级表：不做 app_id/tenant_id 注入（开发计划 P1-T1 硬性清单）。
+     *
+     * <p>[adapt] P1-T2a：ia_tool_registry / ia_tool_grant 为业务表且携带 app_id，
+     * 按约定移出忽略清单（仅系统表忽略），由 app_id Handler 注入与过滤；
+     * ia_tool_grant 的 tenant_id 仍按缺省策略（无租户上下文时不注入，落 DDL 默认 0）。
      */
     public static final Set<String> IGNORED_TABLES = Set.of(
             "ia_app",
             "ia_agent_definition",
-            "ia_tool_registry",
-            "ia_tool_grant",
             "ia_model_api_config",
             "ia_ai_model",
             "ia_agent_state",

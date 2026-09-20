@@ -39,6 +39,10 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
     private final ObjectMapper objectMapper;
     private final AgentScopeMcpRegistry mcpRegistry;
     private final ObjectProvider<ActTokenSupplier> actTokenSuppliers;
+    // [adapt] P1-T2a:MCP 工具调用端口(T2b 接管点)。缺省 UnavailableMcpToolInvoker
+    // (调用即抛,T2b 声明真实 Bean 后 @ConditionalOnMissingBean 让位),
+    // 经注册链路下发到各工具适配器;未接管时内核行为与现状完全一致。
+    private final ObjectProvider<com.inneragent.agent.mcp.McpToolInvoker> mcpToolInvokers;
 
     public PlatformAgentKernelToolRegistry(
             ToolExecutorRegistry executors,
@@ -50,7 +54,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper,
             AgentScopeMcpRegistry mcpRegistry,
-            ObjectProvider<ActTokenSupplier> actTokenSuppliers) {
+            ObjectProvider<ActTokenSupplier> actTokenSuppliers,
+            ObjectProvider<com.inneragent.agent.mcp.McpToolInvoker> mcpToolInvokers) {
         this.executors = Objects.requireNonNull(executors, "executors must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -63,6 +68,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
         this.mcpRegistry = Objects.requireNonNull(mcpRegistry, "mcpRegistry must not be null");
         this.actTokenSuppliers = Objects.requireNonNull(
                 actTokenSuppliers, "actTokenSuppliers must not be null");
+        this.mcpToolInvokers = Objects.requireNonNull(
+                mcpToolInvokers, "mcpToolInvokers must not be null");
     }
 
     @Override
@@ -107,7 +114,9 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                             expected, schema, executor.isReadOnly(), executor.isConcurrencySafe());
                     toolkit.registerAgentTool(new AgentScopeToolAdapter(
                             executor, schema, schedulers.toolBlocking(), leaseGuard, objectMapper,
-                            actTokenSuppliers.getIfAvailable()));
+                            actTokenSuppliers.getIfAvailable(),
+                            // [adapt] P1-T2a:MCP 调用端口随适配器下发(T2b 接管点)
+                            mcpToolInvokers.getIfAvailable()));
                 } else if (child != null) {
                     AgentScopeToolSchema.PreparedSchema schema =
                             AgentScopeToolSchema.prepareSubAgent(

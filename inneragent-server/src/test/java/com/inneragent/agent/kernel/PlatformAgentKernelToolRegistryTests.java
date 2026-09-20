@@ -76,6 +76,10 @@ class PlatformAgentKernelToolRegistryTests {
                 .containsExactly("mcp__demo-spring-host__create_host_record");
         assertThat(toolkit.getTool("mcp__demo-spring-host__create_host_record"))
                 .isInstanceOf(AgentScopeMcpToolAdapter.class);
+        // 模型可见 schema:目录工具必须以 FQN 出现在 toolkit 的工具 schema 列表
+        assertThat(toolkit.getToolSchemas())
+                .anySatisfy(schema -> assertThat(schema.getName())
+                        .isEqualTo("mcp__demo-spring-host__create_host_record"));
         // 与 AgentToolPermissionPolicy 衔接:治理位 readOnly=false → DEFAULT 模式写确认
         assertThat(toolkit.getTool("mcp__demo-spring-host__create_host_record").isReadOnly())
                 .isFalse();

@@ -519,6 +519,7 @@ export function reconnectRunStream(
       authenticatedFetch(
         `${getBaseURL()}/runs/${encodeURIComponent(runId)}/events`,
         {
+          method: 'GET',
           headers: { 'Last-Event-ID': eventId },
           signal: controller.signal,
         },

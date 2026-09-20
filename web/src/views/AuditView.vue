@@ -11,6 +11,7 @@ import { ElMessage } from 'element-plus'
 import { Download, Refresh, Search } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaListPage, { type IaListColumnDef } from '@/components/IaListPage.vue'
+import IaPageContainer from '@/components/IaPageContainer.vue'
 import { useAuditStore, DECISION_SOURCES, AUDIT_DECISIONS } from '@/stores/audit'
 import type { IaAuditLog } from '@/api/types'
 
@@ -122,7 +123,7 @@ async function exportCsv() {
 </script>
 
 <template>
-  <div class="view">
+  <IaPageContainer subtitle="工具调用与授权生命周期的安全审计检索(decision_source 证明锚点)">
     <IaListPage v-model:visible-columns="visibleColumns" :columns="COLUMNS" :loading="store.loading">
       <template #filters>
         <div class="filters">
@@ -236,7 +237,7 @@ async function exportCsv() {
         </el-descriptions-item>
       </el-descriptions>
     </el-drawer>
-  </div>
+  </IaPageContainer>
 </template>
 
 <style scoped>

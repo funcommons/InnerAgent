@@ -77,6 +77,12 @@ describe('视图挂载冒烟', () => {
     // [优化建议 #3] zh-cn locale 全量接入:分页总数中文「共 N 条」,不再出现英文 Total
     expect(wrapper.text()).toContain('共 12 条')
     expect(wrapper.text()).not.toContain('Total')
+    // [优化建议 #19] 面包屑(域名→页名)与页头
+    expect(wrapper.text()).toContain('审计中心')
+    expect(wrapper.text()).toContain('审计检索')
+    // [优化建议 #18] 工具条导出/列设置
+    expect(wrapper.text()).toContain('导出 CSV')
+    expect(wrapper.text()).toContain('列设置')
     wrapper.unmount()
   })
 

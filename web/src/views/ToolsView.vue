@@ -16,6 +16,7 @@ import {
 } from '@/stores/tools'
 import { apiErrorMessage } from '@/stores/apps'
 import IaEmpty from '@/components/IaEmpty.vue'
+import IaPageContainer from '@/components/IaPageContainer.vue'
 import type { GrantScope, IaToolGrant, IaToolRegistry, IaToolSchemaHistory, ToolRiskLevel } from '@/api/types'
 
 const store = useToolsStore()
@@ -281,7 +282,12 @@ function shortSha(sha: string): string {
 </script>
 
 <template>
-  <div class="view">
+  <IaPageContainer subtitle="MCP 工具注册表、活刷新分诊与用户授权">
+    <template #action>
+      <!-- 页级操作右置(#19):随页签切换「注册工具/代授」 -->
+      <el-button v-if="tab === 'registry'" type="primary" :icon="Plus" @click="openRegister">注册工具</el-button>
+      <el-button v-else type="primary" :icon="Plus" @click="openGrant">代授</el-button>
+    </template>
     <el-tabs v-model="tab">
       <el-tab-pane label="工具注册表" name="registry">
         <el-card shadow="never" class="toolbar-card">
@@ -295,8 +301,6 @@ function shortSha(sha: string): string {
               <el-option label="停用" :value="false" />
             </el-select>
             <el-button :icon="Refresh" @click="store.loadTools()">查询</el-button>
-            <div class="toolbar__spacer" />
-            <el-button type="primary" :icon="Plus" @click="openRegister">注册工具</el-button>
           </div>
         </el-card>
 
@@ -378,8 +382,6 @@ function shortSha(sha: string): string {
             </el-select>
             <el-checkbox v-model="store.grantFilters.includeInvalid" @change="store.loadGrants()">含失效记录</el-checkbox>
             <el-button :icon="Refresh" @click="store.loadGrants()">查询</el-button>
-            <div class="toolbar__spacer" />
-            <el-button type="primary" :icon="Plus" @click="openGrant">代授</el-button>
           </div>
         </el-card>
 
@@ -576,7 +578,7 @@ function shortSha(sha: string): string {
         <el-button type="primary" :loading="grantSaving" @click="submitGrant">授予</el-button>
       </template>
     </el-dialog>
-  </div>
+  </IaPageContainer>
 </template>
 
 <style scoped>

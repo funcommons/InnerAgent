@@ -9,6 +9,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, VideoPause, VideoPlay, WarningFilled } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
+import IaPageContainer from '@/components/IaPageContainer.vue'
 import { useCircuitStore, LIMIT_FIELDS, DEFAULT_LIMITS } from '@/stores/circuit'
 import { apiErrorMessage } from '@/stores/apps'
 
@@ -96,7 +97,8 @@ async function terminateRun() {
 </script>
 
 <template>
-  <div class="view" v-loading="store.loading">
+  <IaPageContainer subtitle="应用级总开关、单运行终止与资源上限(≤5s 生效)">
+    <div v-loading="store.loading">
     <!-- 服务端能力未开通占位(优化建议 #2/#9):不给可交互但必败的表单 -->
     <el-card v-if="store.unavailable" shadow="never" class="unavailable-card">
       <IaEmpty description="服务端能力未开通" hint="熔断与资源上限的管理端点尚未在当前服务端启用(能力跟踪:99-优化建议.md #2)">
@@ -188,7 +190,8 @@ async function terminateRun() {
       </el-timeline>
     </el-card>
     </template>
-  </div>
+    </div>
+  </IaPageContainer>
 </template>
 
 <style scoped>

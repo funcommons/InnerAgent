@@ -11,6 +11,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Key, EditPen, CopyDocument } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
+import IaPageContainer from '@/components/IaPageContainer.vue'
 import { useAppsStore, apiErrorMessage, isValidPemPublicKey } from '@/stores/apps'
 import type { IaApp } from '@/api/types'
 
@@ -142,7 +143,12 @@ async function saveKey() {
 </script>
 
 <template>
-  <div class="view">
+  <IaPageContainer subtitle="宿主应用注册、embed 验签公钥轮换与 Webhook 配置">
+    <template #action>
+      <!-- 页级操作右置(#19),与行内操作分级 -->
+      <el-button type="primary" :icon="Plus" @click="openCreate">注册应用</el-button>
+    </template>
+
     <el-card shadow="never" class="toolbar-card">
       <div class="toolbar">
         <el-input
@@ -158,8 +164,6 @@ async function saveKey() {
           <el-option label="停用" :value="0" />
         </el-select>
         <el-button :icon="Refresh" @click="search">查询</el-button>
-        <div class="toolbar__spacer" />
-        <el-button type="primary" :icon="Plus" @click="openCreate">注册应用</el-button>
       </div>
     </el-card>
 
@@ -308,7 +312,7 @@ async function saveKey() {
         </el-button>
       </template>
     </el-dialog>
-  </div>
+  </IaPageContainer>
 </template>
 
 <style scoped>

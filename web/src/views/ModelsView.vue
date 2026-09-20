@@ -12,6 +12,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Connection, Delete, EditPen } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
+import IaPageContainer from '@/components/IaPageContainer.vue'
 import { useModelsStore } from '@/stores/models'
 import { apiErrorMessage } from '@/stores/apps'
 import {
@@ -119,7 +120,11 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
 </script>
 
 <template>
-  <div class="view">
+  <IaPageContainer subtitle="五协议模型接入、密钥掩码与连通性测试">
+    <template #action>
+      <!-- 页级操作右置(#19) -->
+      <el-button type="primary" :icon="Plus" @click="openCreate">新建 API 配置</el-button>
+    </template>
     <el-card shadow="never" class="toolbar-card">
       <div class="toolbar">
         <el-input v-model="store.filters.name" class="toolbar__name" placeholder="配置名称" clearable @keyup.enter="search" />
@@ -131,8 +136,6 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
           <el-option label="停用" :value="0" />
         </el-select>
         <el-button :icon="Refresh" @click="search">查询</el-button>
-        <div class="toolbar__spacer" />
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建 API 配置</el-button>
       </div>
     </el-card>
 
@@ -268,7 +271,7 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
         <el-button type="primary" :disabled="saveInvalid" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </IaPageContainer>
 </template>
 
 <style scoped>

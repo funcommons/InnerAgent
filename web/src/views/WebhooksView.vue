@@ -9,6 +9,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, RefreshRight } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
+import IaPageContainer from '@/components/IaPageContainer.vue'
 import { useWebhooksStore, WEBHOOK_EVENTS, DELIVERY_STATUS } from '@/stores/webhooks'
 import { apiErrorMessage } from '@/stores/apps'
 import type { WebhookDelivery } from '@/api/types'
@@ -85,7 +86,7 @@ async function redeliver(row: WebhookDelivery) {
 </script>
 
 <template>
-  <div class="view">
+  <IaPageContainer subtitle="运行终态通知:HMAC 签名、5 次指数退避与手动重投">
     <el-row :gutter="12">
       <el-col :span="12">
         <el-card shadow="never">
@@ -208,7 +209,7 @@ async function redeliver(row: WebhookDelivery) {
         </el-card>
       </el-col>
     </el-row>
-  </div>
+  </IaPageContainer>
 </template>
 
 <style scoped>

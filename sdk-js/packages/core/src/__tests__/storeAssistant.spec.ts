@@ -720,3 +720,129 @@ describe('store/assistant (DEF-07: 空引用不下发 enabledMcpTools)', () => {
     expect(body.enabledMcpTools).toEqual(['update_product_brief', 'list_login_records'])
   })
 })
+
+// [new] DEF-06 回归(R1 E2E 2026-09-21-01 §3 / L8-06 取证): 断流窗口覆盖 run 终态时,
+// 状态轮询先判「已完成」→ ensure 见非运行态放弃重连 → UI 保留截断 live 投影。
+// 修复口径: 轮询判终态且本地投影未消费过根终态事件(seq 落后)时, 先经 /events
+// 从本地游标补偿回填, 回填交付根终态后再终态化; 回填重试按冷却节流 + 次数上限。
+describe('store/assistant (DEF-06: 断流覆盖终态的补偿回填)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal('requestAnimationFrame', (cb: (time: number) => void) => setTimeout(() => cb(0), 16))
+    localStorage.clear()
+    setActivePinia(createPinia())
+    freshSdk()
+    vi.clearAllMocks()
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    mocks.httpGet.mockResolvedValue({ list: [], total: 0 })
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    resetSdkConfig()
+    resetTokenRefreshSingleFlight()
+    resetRunningListCache()
+    clearRunContext()
+  })
+
+  /** 推进到「断流截断」场景: 流式交付 seq1 后流终止(非终态结束 → onError) */
+  async function setupTruncatedStream(): Promise<{ store: ReturnType<typeof useAssistantStore>; conversationId: string; stream: ReturnType<typeof manualStream> }> {
+    const stream = manualStream()
+    fetchMock.mockResolvedValueOnce(stream.response)
+    const store = useAssistantStore()
+    store.initializeForUser(1)
+    await tick(0)
+    store.setOpen(true)
+    await store.sendMessage('DEF-06 探测', null, null)
+    await tick(0)
+    const conversationId = store.selectedConversationId!
+    stream.push(sseBlock(1, { outputType: 'CONTENT', content: '断流前缀' }))
+    await tick(32)
+    // 模拟物理断链: 流在无根终态事件下终止 → onError → scheduleEnsureRetry(5s)
+    stream.close()
+    await tick(32)
+    expect(store.conversationStates[conversationId]?.status).toBe('running')
+    // 状态轮询面: /runs/running 为空 → run 已完成 → 合成 COMPLETED
+    mocks.httpGet.mockResolvedValue([])
+    return { store, conversationId, stream }
+  }
+
+  it('轮询判完成 + 本地 seq 落后 → 立即经 /events 从游标回填 → 终态内容完整', async () => {
+    const { store, conversationId } = await setupTruncatedStream()
+
+    // 回填连接的响应: 从游标之后重放 seq2 CONTENT + seq3 DONE
+    const replay = manualStream()
+    fetchMock.mockResolvedValueOnce(replay.response)
+
+    await tick(1100) // 状态轮询发现「已完成」
+    expect(store.conversationStates[conversationId]?.status)
+      .toBe('running') // 不得据轮询结果提前终态化(截断投影不得落终态)
+
+    // 补偿回填: GET /runs/{runId}/events + Last-Event-ID = run-1:1(本地游标)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [url, init] = callOf(fetchMock, 1) as [string, RequestInit]
+    expect(url).toBe('/ia/api/v1/runs/run-1/events')
+    expect(new Headers(init.headers).get('last-event-id')).toBe('run-1:1')
+
+    replay.push(sseBlock(2, { outputType: 'CONTENT', content: '，回填续传' }))
+    await tick(32)
+    expect(store.conversationStates[conversationId]?.status).toBe('running')
+    replay.push(sseBlock(3, { outputType: 'DONE' }))
+    await tick(32)
+
+    const runtime = store.conversationStates[conversationId]
+    expect(runtime?.status).toBe('completed')
+    expect(runtime?.pipeline.lastSequence).toBe(3)
+    expect(runtime?.pipeline.timeline).toEqual([
+      { type: 'content', text: '断流前缀，回填续传' },
+    ])
+  })
+
+  it('回填连接仍失败 → 冷却节流重试直至成功(断流窗口内不终态化、不截断)', async () => {
+    const { store, conversationId } = await setupTruncatedStream()
+
+    // 重置计数(仅关注回填阶段): 第 1 次回填仍撞断流窗口(连接被销毁), 之后恢复
+    fetchMock.mockReset()
+    const replay = manualStream()
+    fetchMock.mockRejectedValueOnce(new TypeError('terminated'))
+    fetchMock.mockResolvedValue(replay.response)
+
+    await tick(1100) // 轮询 → 补偿回填第 1 次(失败)
+    await tick(64)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(store.conversationStates[conversationId]?.status).toBe('running')
+
+    // 冷却(≈4.5s)后经 ensure/轮询重试第 2 次 → 成功回填
+    await tick(5200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    replay.push(sseBlock(2, { outputType: 'CONTENT', content: '，重试后回填' }))
+    await tick(32)
+    replay.push(sseBlock(3, { outputType: 'DONE' }))
+    await tick(32)
+
+    const runtime = store.conversationStates[conversationId]
+    expect(runtime?.status).toBe('completed')
+    expect(runtime?.pipeline.timeline).toEqual([
+      { type: 'content', text: '断流前缀，重试后回填' },
+    ])
+  })
+
+  it('回填重试达上限 → 回落旧语义终态化(messagesLoaded=false, 历史回放兜底)', async () => {
+    const { store, conversationId } = await setupTruncatedStream()
+    fetchMock.mockRejectedValue(new TypeError('terminated')) // 回填永久失败
+
+    // 冷却 4.5s/次 × 5 次 ≈ 22.5s 后耗尽, 轮询按旧语义终态化
+    await tick(1100 * 25)
+
+    const runtime = store.conversationStates[conversationId]
+    expect(runtime?.status).toBe('completed')
+    expect(runtime?.messagesLoaded).toBe(false)
+    // 截断投影保留(耗尽兜底=旧行为); 页面刷新/重开经历史回放恢复全文
+    expect(runtime?.pipeline.timeline).toEqual([{ type: 'content', text: '断流前缀' }])
+  })
+})

@@ -422,6 +422,59 @@ export const useAssistantStore = defineStore('assistant', () => {
     void loadMessagesIfNeeded(conversationId)
   }
 
+  // ---- [DEF-06] 断流窗口覆盖 run 终态的补偿回填 ----
+  // 现象(R1 L8-06 取证): 断流期间 run 完成 → 状态轮询先判「已完成」并终态化 →
+  // ensureContentConnection 见非运行态放弃重连 → UI 保留截断 live 投影(库层为全文)。
+  // 修复: 轮询判终态时若本地投影未消费过根终态事件(seq 落后), 先经 /events 从本地
+  // 游标补偿回填, 回填交付根终态事件后再由事件流终态化; 回填按冷却节流(与 5s
+  // ensure 重试同量级), 连续失败达上限回落旧语义(messagesLoaded=false → 历史回放兜底)。
+  const REPLAY_MAX_ATTEMPTS = 5
+  const REPLAY_RETRY_COOLDOWN_MS = 4500
+  const replayAttempts = new Map<string, number>()
+  const replayLastAttemptAt = new Map<string, number>()
+
+  /** 投影已消费过根终态事件(DONE/ERROR/CANCELLED 已入 reducer) */
+  const pipelineReachedTerminal = (pipeline: AgentPipelineState): boolean =>
+    pipeline.status === 'done' || pipeline.status === 'error' || pipeline.status === 'cancelled'
+
+  /**
+   * 终态轮询命中时, 本地 live 投影是否「落后」且需要补偿:
+   * 会话前台可见 + 存在 live 投影 + 投影未见过根终态事件 + 已知 runId。
+   * (后台会话由 messagesLoaded=false + 重开时历史回放自愈, 不走补偿。)
+   */
+  const needsCompensatingReplay = (conversationId: string): boolean => {
+    const runtime = conversationStates.value[conversationId]
+    if (!runtime || !hasLiveTranscript(runtime)) return false
+    if (pipelineReachedTerminal(runtime.pipeline)) return false
+    if (!(runtime.pipeline.runId || runtime.knownRunId)) return false
+    return open.value && selectedConversationId.value === conversationId
+  }
+
+  /**
+   * 启动补偿回填(reconnect 从本地游标续 GET /runs/{runId}/events, 幂等)。
+   * 返回 true = 已接管(调用方不得据轮询结果终态化); false = 重试已耗尽, 回落旧语义。
+   */
+  const beginCompensatingReplay = (conversationId: string): boolean => {
+    const runtime = conversationStates.value[conversationId]
+    const runId = runtime?.pipeline.runId || runtime?.knownRunId
+    if (!runtime || !runId) return false
+    if (connection.value?.conversationId === conversationId) return true // 回填连接在途
+    const now = Date.now()
+    const lastAt = replayLastAttemptAt.get(conversationId)
+    if (lastAt !== undefined && now - lastAt < REPLAY_RETRY_COOLDOWN_MS) return true // 重试循环在途, 冷却节流
+    if ((replayAttempts.get(conversationId) ?? 0) >= REPLAY_MAX_ATTEMPTS) return false // 耗尽 → 旧语义兜底
+    replayAttempts.set(conversationId, (replayAttempts.get(conversationId) ?? 0) + 1)
+    replayLastAttemptAt.set(conversationId, now)
+    const afterSequence = runtime.pipeline.runId === runId ? runtime.pipeline.lastSequence : 0
+    connect(conversationId, 'reconnect', undefined, runId, afterSequence)
+    return true
+  }
+
+  const resetCompensatingReplay = (conversationId: string): void => {
+    replayAttempts.delete(conversationId)
+    replayLastAttemptAt.delete(conversationId)
+  }
+
   const scheduleEnsureRetry = (delay = 5000): void => {
     if (ensureRetryTimer) return
     const generation = ensureGeneration
@@ -486,6 +539,11 @@ export const useAssistantStore = defineStore('assistant', () => {
         && runtime.statusConfirmed
         && statusIsRunning(runtime.status)
         && runtime.knownRunId !== expectedRunId)) {
+        // [DEF-06] 轮询判终态 + 本地 live 投影未见过根终态事件(断流窗口覆盖 run 终态)
+        // → 先补偿回填 /events, 回填交付根终态后再由事件流终态化;
+        //   不得据轮询结果把截断投影直接终态化。
+        if (terminal && needsCompensatingReplay(conversationId)
+          && beginCompensatingReplay(conversationId)) return
         const runChanged = !!runtime.knownRunId
           && !!response.runId
           && runtime.knownRunId !== response.runId
@@ -515,6 +573,8 @@ export const useAssistantStore = defineStore('assistant', () => {
     if (!applied) return
 
     if (terminal) {
+      // [DEF-06] 兜底终态(补偿不可用/耗尽): 计数器复位, 截断投影交历史回放兜底
+      resetCompensatingReplay(conversationId)
       loadTerminalMessagesWithoutReplacingLiveTranscript(conversationId)
     }
   }
@@ -686,6 +746,8 @@ export const useAssistantStore = defineStore('assistant', () => {
             unread: terminal
               && (!open.value || selectedConversationId.value !== conversationId),
           }))
+          // [DEF-06] 投影消费到根终态事件 → 补偿回填计数复位(含回填流自身的终态)
+          if (terminal) resetCompensatingReplay(conversationId)
           const indexedConversation = conversations.value.find(
             (item) => item.conversationId === conversationId,
           )
@@ -789,6 +851,13 @@ export const useAssistantStore = defineStore('assistant', () => {
           || !isCurrentMetadataRequest(conversationId, metadataGeneration)) return
         const nextStatus = statusFromPipeline(response.status)
         const runtime = conversationStates.value[conversationId]
+        // [DEF-06] 确认即终态 + live 投影未收敛 → 先补偿回填(口径同 applyPolledStatus)
+        if (runtime && !statusIsRunning(nextStatus)
+          && needsCompensatingReplay(conversationId)
+          && beginCompensatingReplay(conversationId)) {
+          scheduleStatusPolling()
+          return
+        }
         if (runtime
           && connectionGeneration.value === requestConnectionGeneration
           && isCurrentMetadataRequest(conversationId, metadataGeneration)) {
@@ -854,6 +923,14 @@ export const useAssistantStore = defineStore('assistant', () => {
       return
     }
 
+    // [DEF-06] 轮询已判终态但 live 投影未收敛 → 补偿回填(冷却节流 + 次数上限)
+    if (needsCompensatingReplay(conversationId)) {
+      if (beginCompensatingReplay(conversationId)) return
+      // 回填重试耗尽 → 停止重连循环, 交由状态轮询按旧语义终态化(历史回放兜底)
+      scheduleStatusPolling()
+      return
+    }
+
     const afterSequence = alignCursorWithRun(conversationId, runtime.knownRunId)
     connect(conversationId, 'reconnect', undefined, runtime.knownRunId, afterSequence)
   }
@@ -866,6 +943,8 @@ export const useAssistantStore = defineStore('assistant', () => {
     pollFailureCount = 0
     eventKeysByRun.clear()
     metadataGenerations.clear()
+    replayAttempts.clear()
+    replayLastAttemptAt.clear()
   }
 
   // ============ 工具确认 (旧 respondToToolConfirmations) ============
@@ -1342,6 +1421,7 @@ export const useAssistantStore = defineStore('assistant', () => {
       referencesJson: serializedReferences,
       toolExecutionMode: runtime.toolExecutionMode,
     }
+    resetCompensatingReplay(conversationId) // [DEF-06] 新 run 起点复位补偿计数
     connect(conversationId, 'start', request)
     scheduleStatusPolling()
   }

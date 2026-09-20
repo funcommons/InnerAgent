@@ -1,0 +1,12 @@
+# e2e-host-journey.sh 专用端口覆盖(不改动 docker/dev-compose.yml):
+# 默认宿主端口 15432/16379 常被其他项目容器占用(e2e 机器实况),
+# 本覆盖把 InnerAgent 开发库挪到 35432/36379;主服务经
+# IA_DB_PORT/IA_REDIS_PORT 环境变量对齐(application.yml 原生支持)。
+# 用法:docker compose -f docker/dev-compose.yml -f scripts/dev-compose.e2e-ports.yml up -d
+services:
+  inneragent-postgres:
+    ports: !override
+      - "35432:5432"
+  inneragent-redis:
+    ports: !override
+      - "36379:6379"

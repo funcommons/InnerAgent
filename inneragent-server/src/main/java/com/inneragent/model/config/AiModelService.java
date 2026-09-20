@@ -9,7 +9,6 @@ import com.inneragent.server.controller.vo.AiModelConnectivityRespVO;
 import com.inneragent.model.entity.AiModel;
 import com.inneragent.model.mapper.AiModelMapper;
 import com.inneragent.platform.service.ai.model.AiModelMetadataResolver;
-import com.inneragent.platform.service.ai.comfyui.ComfyUiWorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -38,7 +37,6 @@ public class AiModelService {
     private final ModelPresetService modelPresetService;
     private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ChatModelFactory chatModelFactory;
-    private final ComfyUiWorkflowService comfyUiWorkflowService;
 
     @Transactional
     public Long createAiModel(AiModel aiModel) {
@@ -47,7 +45,7 @@ public class AiModelService {
         normalizeMetadata(aiModel);
         validateRequestProtocol(aiModel);
         validateCapabilityPreset(aiModel);
-        validateComfyUiBinding(aiModel);
+        // [adapt] ComfyUI 工作流域未移植,绑定校验(comfyUiWorkflowService.validateModelBinding)随域裁剪
         try {
             aiModelMapper.insert(aiModel);
         } catch (DuplicateKeyException e) {
@@ -98,7 +96,6 @@ public class AiModelService {
         normalizeMetadata(model);
         validateRequestProtocol(model);
         validateCapabilityPreset(model);
-        validateComfyUiBinding(model);
         try {
             aiModelMapper.updateById(model);
         } catch (DuplicateKeyException e) {
@@ -286,21 +283,6 @@ public class AiModelService {
             throw new BusinessException(400, capability
                     + "模型未配置有效请求协议：请在模型中设置覆盖协议，或在 API 配置中设置对应的默认协议");
         }
-    }
-
-    private void validateComfyUiBinding(AiModel model) {
-        if (model == null || model.getApiConfigId() == null) {
-            return;
-        }
-        var apiConfig = apiConfigService.getById(model.getApiConfigId());
-        if (apiConfig == null) {
-            return;
-        }
-        if (!ComfyUiWorkflowService.PLATFORM.equalsIgnoreCase(apiConfig.getPlatform())) {
-            model.setComfyuiWorkflowId(null);
-            return;
-        }
-        comfyUiWorkflowService.validateModelBinding(model, apiConfig);
     }
 
     private void clearOtherDefaults(Integer modelType, Long excludeId) {

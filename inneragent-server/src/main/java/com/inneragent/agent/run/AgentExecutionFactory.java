@@ -21,8 +21,6 @@ import com.inneragent.agent.kernel.AgentScopeHarnessInvoker;
 import com.inneragent.agent.runtime.AgentRuntimeSchedulers;
 import com.inneragent.platform.service.ai.model.AiModelMetadataResolver;
 import com.inneragent.platform.service.ai.model.AiModelRequestOptions;
-import com.inneragent.platform.service.ai.plan.ToolModificationPlan;
-import com.inneragent.platform.service.ai.plan.ToolModificationPlanService;
 import com.inneragent.agent.run.kernel.AgentKernelSnapshot;
 import com.inneragent.agent.run.kernel.AgentKernelSnapshotPayload;
 import com.inneragent.agent.run.kernel.CanonicalAgentKernelSnapshotBuilder;
@@ -60,7 +58,6 @@ public final class AgentExecutionFactory {
     private final ObjectMapper objectMapper;
     private final AgentKernelSpecFactory specFactory;
     private final Duration confirmationTimeout;
-    private final ToolModificationPlanService modificationPlanService;
 
     public AgentExecutionFactory(
             AgentScopeHarnessInvoker harnessInvoker,
@@ -72,7 +69,6 @@ public final class AgentExecutionFactory {
             AiModelMetadataResolver modelMetadataResolver,
             ObjectMapper objectMapper,
             AgentKernelSpecFactory specFactory,
-            ToolModificationPlanService modificationPlanService,
             AgentScopeV2Properties properties) {
         this.harnessInvoker = Objects.requireNonNull(harnessInvoker, "harnessInvoker must not be null");
         this.runtimeContextFactory = Objects.requireNonNull(
@@ -83,8 +79,6 @@ public final class AgentExecutionFactory {
         this.schedulers = Objects.requireNonNull(schedulers, "schedulers must not be null");
         this.modelMetadataResolver = Objects.requireNonNull(
                 modelMetadataResolver, "modelMetadataResolver must not be null");
-        this.modificationPlanService = Objects.requireNonNull(
-                modificationPlanService, "modificationPlanService must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.specFactory = Objects.requireNonNull(specFactory, "specFactory must not be null");
         this.confirmationTimeout = Objects.requireNonNull(
@@ -194,8 +188,8 @@ public final class AgentExecutionFactory {
                     .put("toolCallId", toolCall.getId())
                     .put("toolName", toolCall.getName())
                     .put("argumentsPreview", argumentsPreview);
-            modificationPlanService.plan(toolCall.getName(), sanitizedInput, userId)
-                    .ifPresent(plan -> preview.set("plan", planNode(plan)));
+            // [adapt] ToolModificationPlanService 依赖 Project/Storyboard 业务域,未移植;
+            // 确认预览中的 "plan" 节点(工具改动计划摘要)随域裁剪,其余确认语义不变
             previews.add(preview);
         }
         return new PendingConfirmation(
@@ -204,20 +198,6 @@ public final class AgentExecutionFactory {
                 writeJson(previews),
                 writeJson(suspendedToolCalls(event.getToolCalls())),
                 Instant.now().plus(confirmationTimeout));
-    }
-
-    private JsonNode planNode(ToolModificationPlan plan) {
-        ObjectNode node = JsonNodeFactory.instance.objectNode()
-                .put("summary", plan.summary());
-        ArrayNode changes = node.putArray("changes");
-        plan.changes().forEach(change -> {
-            ObjectNode entry = JsonNodeFactory.instance.objectNode()
-                    .put("field", change.field())
-                    .put("before", change.before())
-                    .put("after", change.after());
-            changes.add(entry);
-        });
-        return node;
     }
 
     private ArrayNode suspendedToolCalls(List<ToolUseBlock> toolCalls) {

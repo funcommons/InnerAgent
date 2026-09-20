@@ -72,7 +72,7 @@ public class AiProviderService {
                 apiConfig != null ? apiConfig.getProxyUsername() : null,
                 apiConfig != null ? apiConfig.getProxyPassword() : null,
                 apiConfig != null ? apiConfig.getApiKey() : null,
-                apiConfig != null ? apiConfig.getAppId() : null,
+                apiConfig != null ? apiConfig.getPlatformAppId() : null,
                 apiConfig != null ? apiConfig.getAppSecret() : null,
                 apiConfig != null ? apiConfig.getModelId() : null,
                 apiConfig != null ? apiConfig.getStatus() : null);

@@ -1,6 +1,7 @@
 package com.inneragent.model.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.inneragent.platform.common.BaseEntity;
@@ -71,8 +72,9 @@ public class ApiConfig extends BaseEntity {
     /** API 密钥 */
     private String apiKey;
 
-    /** 应用ID（部分平台需要） */
-    private String appId;
+    /** 平台应用ID（部分平台需要,如 Vertex;对应 ia_model_api_config.platform_app_id） */
+    @TableField("platform_app_id")
+    private String platformAppId;
 
     /** 应用密钥（部分平台需要） */
     private String appSecret;

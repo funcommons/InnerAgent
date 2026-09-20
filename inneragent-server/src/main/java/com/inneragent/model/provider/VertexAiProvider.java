@@ -127,7 +127,7 @@ public class VertexAiProvider extends AbstractAiProvider {
         if (StrUtil.isNotBlank(projectId)) {
             return projectId;
         }
-        return context.getApiConfig() != null ? context.getApiConfig().getAppId() : null;
+        return context.getApiConfig() != null ? context.getApiConfig().getPlatformAppId() : null;
     }
 
     private String getLocation(AiProviderContext context) {

@@ -62,7 +62,7 @@ public class ApiConfigService {
         if (proxyUsername != null) config.setProxyUsername(proxyUsername);
         if (proxyPassword != null) config.setProxyPassword(proxyPassword);
         if (apiKey != null) config.setApiKey(apiKey);
-        if (appId != null) config.setAppId(appId);
+        if (appId != null) config.setPlatformAppId(appId);
         if (appSecret != null) config.setAppSecret(appSecret);
         if (modelId != null) config.setModelId(modelId);
         if (status != null) config.setStatus(status);

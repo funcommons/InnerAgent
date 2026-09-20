@@ -6,12 +6,10 @@ import com.inneragent.server.controller.vo.ApiConfigPageReqVO;
 import com.inneragent.server.controller.vo.ApiConfigRespVO;
 import com.inneragent.server.controller.vo.ApiConfigSaveReqVO;
 import com.inneragent.server.controller.vo.RemoteModelVO;
-import com.inneragent.server.controller.vo.comfyui.ComfyUiConnectionRespVO;
 import com.inneragent.platform.convert.ai.ApiConfigConvert;
 import com.inneragent.model.entity.ApiConfig;
 import com.inneragent.model.config.ApiConfigService;
 import com.inneragent.model.provider.AiProviderService;
-import com.inneragent.platform.service.ai.comfyui.ComfyUiWorkflowValidationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,7 +30,6 @@ public class ApiConfigController {
 
     private final ApiConfigService apiConfigService;
     private final AiProviderService aiProviderService;
-    private final ComfyUiWorkflowValidationService comfyUiWorkflowValidationService;
 
     @PostMapping("/create")
     @Operation(summary = "创建API配置")
@@ -50,7 +47,7 @@ public class ApiConfigController {
                 .proxyPort(reqVO.getProxyPort())
                 .proxyUsername(reqVO.getProxyUsername())
                 .proxyPassword(reqVO.getProxyPassword())
-                .apiKey(reqVO.getApiKey()).appId(reqVO.getAppId()).appSecret(reqVO.getAppSecret())
+                .apiKey(reqVO.getApiKey()).platformAppId(reqVO.getAppId()).appSecret(reqVO.getAppSecret())
                 .modelId(reqVO.getModelId()).status(reqVO.getStatus() != null ? reqVO.getStatus() : 1)
                 .remark(reqVO.getRemark())
                 .build();
@@ -109,11 +106,6 @@ public class ApiConfigController {
         return success(aiProviderService.listRemoteModels(id));
     }
 
-    @PostMapping("/test-comfyui-connectivity")
-    @Operation(summary = "检测 ComfyUI Native API 连接")
-    @PreAuthorize("hasRole('ADMIN')")
-    public CommonResult<ComfyUiConnectionRespVO> testComfyUiConnectivity(
-            @RequestParam("id") Long id) {
-        return success(comfyUiWorkflowValidationService.testConnection(id));
-    }
+    // [adapt] /test-comfyui-connectivity 端点随 ComfyUI 工作流域裁剪(依赖未移植的
+    // ComfyUiWorkflowValidationService),P1 如需该能力经 MCP 从宿主应用接入
 }

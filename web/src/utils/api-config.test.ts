@@ -28,13 +28,14 @@ describe('api-config [adapt] 纯逻辑层', () => {
     expect(getPlatformFields('unknown_x').map(f => f.key)).toEqual(['apiUrl', 'apiKey'])
   })
 
-  it('emptyApiConfigForm 默认 openai_compatible + 自动补 /v1 + 密钥哨兵(textProtocol 槽已剥离)', () => {
+  it('emptyApiConfigForm 默认 openai_compatible + 自动补 /v1 + 密钥哨兵;textProtocol 默认跟随平台', () => {
     const form = emptyApiConfigForm()
     expect(form.platform).toBe('openai_compatible')
     expect(form.autoAppendV1Path).toBe(true)
     expect(form.proxyType).toBe('none')
     expect(form.apiKey).toBe(KEY_UNCHANGED)
-    expect('textProtocol' in form).toBe(false)
+    // #16:textProtocol 默认空 = 跟随平台,不显式下发
+    expect(form.textProtocol).toBe('')
   })
 
   it('apiConfigToForm:回填归一与兜底', () => {
@@ -47,6 +48,13 @@ describe('api-config [adapt] 纯逻辑层', () => {
     expect(form.proxyType).toBe('none')
     expect(form.apiKey).toBe(KEY_UNCHANGED)
     expect(form.autoAppendV1Path).toBe(false)
+    // #16:存量行 textProtocol 回填(缺省兜底空=跟随平台)
+    const withProto = apiConfigToForm({
+      id: 10, name: 'x', platform: 'anthropic', textProtocol: 'openai_compatible', apiUrl: null,
+      autoAppendV1Path: false, proxyType: null, proxyHost: null, proxyPort: null,
+      proxyUsername: null, status: 1, remark: null,
+    })
+    expect(withProto.textProtocol).toBe('openai_compatible')
   })
 
   it('buildApiConfigSavePayload:代理未启用清空代理字段;无用户名时密码清空($SRC 行为)', () => {
@@ -71,6 +79,13 @@ describe('api-config [adapt] 纯逻辑层', () => {
     expect(payload.apiKey).toBeUndefined()
     const withKey = buildApiConfigSavePayload({ ...emptyApiConfigForm(), apiKey: 'sk-new' })
     expect(withKey.apiKey).toBe('sk-new')
+  })
+
+  it('#16 textProtocol:显式选择才下发;缺省=跟随平台(不下发)', () => {
+    const follow = buildApiConfigSavePayload({ ...emptyApiConfigForm(), name: 'x' })
+    expect(follow.textProtocol).toBeUndefined()
+    const explicit = buildApiConfigSavePayload({ ...emptyApiConfigForm(), name: 'x', textProtocol: 'mock' })
+    expect(explicit.textProtocol).toBe('mock')
   })
 
   it('isProxyFormInvalid:端口范围与密码依赖用户名(保留 $SRC 规则)', () => {

@@ -634,11 +634,13 @@ const modelHandlers = [
   http.post('/ia/api/v1/admin/model-configs', async ({ request }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied
-    const body = (await request.json()) as { name?: string; platform?: string; apiKey?: string; apiUrl?: string; autoAppendV1Path?: boolean; remark?: string }
+    const body = (await request.json()) as { name?: string; platform?: string; textProtocol?: string; apiKey?: string; apiUrl?: string; autoAppendV1Path?: boolean; remark?: string }
     if (!body.name || !body.platform) return fail(400, 'name/platform 不能为空')
     const now = nowIso()
     const created: IaModelApiConfig = {
       id: genId(), name: body.name, platform: body.platform as IaModelApiConfig['platform'],
+      // 镜像 normalizeProtocol:空值落 NULL,显式值归一小写下划线
+      textProtocol: body.textProtocol ? body.textProtocol.trim().toLowerCase().replace(/[ -]/g, '_') : null,
       apiUrl: body.apiUrl ?? null, autoAppendV1Path: body.autoAppendV1Path ?? false,
       proxyType: 'none', proxyHost: null, proxyPort: null, proxyUsername: null,
       apiKeyMasked: maskKey(body.apiKey ?? ''),
@@ -655,6 +657,7 @@ const modelHandlers = [
     const body = (await request.json()) as Partial<IaModelApiConfig> & { apiKey?: string }
     if (typeof body.name === 'string') m.name = body.name
     if (typeof body.platform === 'string') m.platform = body.platform as IaModelApiConfig['platform']
+    if (typeof body.textProtocol === 'string') m.textProtocol = body.textProtocol || null
     if (typeof body.apiUrl === 'string') m.apiUrl = body.apiUrl
     if (typeof body.autoAppendV1Path === 'boolean') m.autoAppendV1Path = body.autoAppendV1Path
     if (typeof body.status === 'number') m.status = body.status

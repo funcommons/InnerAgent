@@ -244,14 +244,14 @@ describe('admin API 客户端', () => {
   })
 
   describe('模型配置(依赖并行任务,联调时核对)', () => {
-    it('create:POST;update:PUT /model-configs/{id};apiKey 只写', async () => {
+    it('create:POST;update:PUT /model-configs/{id};apiKey 只写;textProtocol 显式才下发', async () => {
       const created = { id: 5, apiKeyMasked: 'sk-1••••abcd' }
       const { state, respond } = capture(created)
       server.use(mswHttp.post('/ia/api/v1/admin/model-configs', respond))
       const resp = await modelConfigAdminApi.create({
-        name: 'deepseek', platform: 'openai_compatible', apiKey: 'sk-secret',
+        name: 'deepseek', platform: 'openai_compatible', textProtocol: 'mock', apiKey: 'sk-secret',
       })
-      expect(state.body).toEqual({ name: 'deepseek', platform: 'openai_compatible', apiKey: 'sk-secret' })
+      expect(state.body).toEqual({ name: 'deepseek', platform: 'openai_compatible', textProtocol: 'mock', apiKey: 'sk-secret' })
       expect(resp.apiKeyMasked).toBe('sk-1••••abcd')
 
       const { state: s2, respond: r2 } = capture(created)
@@ -259,6 +259,8 @@ describe('admin API 客户端', () => {
       await modelConfigAdminApi.update(5, { id: 5, name: 'deepseek-2', platform: 'openai_compatible' })
       expect(s2.req!.method).toBe('PUT')
       expect(new URL(s2.req!.url).pathname).toBe('/ia/api/v1/admin/model-configs/5')
+      // 缺省 textProtocol 不下发(跟随平台)
+      expect(s2.body).toEqual({ id: 5, name: 'deepseek-2', platform: 'openai_compatible' })
     })
 
     it('test:POST /model-configs/{id}/test;delete:DELETE /model-configs/{id}', async () => {

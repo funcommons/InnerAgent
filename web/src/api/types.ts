@@ -377,6 +377,8 @@ export interface IaModelApiConfig {
   id: number
   name: string
   platform: ModelPlatform
+  /** 文本模型请求协议(留空=跟随平台;显式值如 openai_compatible/mock,服务端归一小写下划线) */
+  textProtocol: string | null
   apiUrl: string | null
   autoAppendV1Path: boolean
   proxyType: string | null
@@ -395,6 +397,8 @@ export interface ModelApiConfigSaveReq {
   id?: number
   name: string
   platform: ModelPlatform
+  /** 只在显式选择时下发;缺省=跟随平台(服务端 normalizeProtocol 空值 → NULL) */
+  textProtocol?: string
   apiUrl?: string
   autoAppendV1Path?: boolean
   proxyType?: string

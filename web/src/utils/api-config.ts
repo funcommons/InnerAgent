@@ -63,6 +63,14 @@ export function getPlatformFields(platform: string | null | undefined): Platform
   }
 }
 
+// ========== 文本协议(优化建议 #16) ==========
+
+/** 文本协议显式选项(留空=跟随平台;mock 对应 ia_model_api_config.text_protocol='mock' 本地演示链路) */
+export const TEXT_PROTOCOL_OPTIONS: Array<{ value: string; label: string; desc: string }> = [
+  { value: 'openai_compatible', label: 'OpenAI 兼容', desc: '显式按 OpenAI Chat Completions 协议请求' },
+  { value: 'mock', label: 'Mock(本地演示)', desc: '本地 Mock 提供方,演示/冒烟专用' },
+]
+
 // ========== 平台 / 提供商预设 ==========
 
 /** 旧 deepseek 平台值已并入 openai_compatible(对齐 $SRC normalizePlatform) */
@@ -105,6 +113,8 @@ export interface ApiConfigFormState {
   id?: number
   name: string
   platform: string
+  /** '' = 跟随平台(默认);显式值见 TEXT_PROTOCOL_OPTIONS */
+  textProtocol: string
   apiUrl: string
   autoAppendV1Path: boolean
   proxyType: string
@@ -118,11 +128,12 @@ export interface ApiConfigFormState {
   remark: string
 }
 
-/** 新建默认值(对齐 $SRC emptyApiConfigForm;textProtocol 槽已剥离——五协议下协议即平台) */
+/** 新建默认值(对齐 $SRC emptyApiConfigForm;textProtocol 默认跟随平台,#16) */
 export function emptyApiConfigForm(): ApiConfigFormState {
   return {
     name: '',
     platform: 'openai_compatible',
+    textProtocol: '',
     apiUrl: '',
     autoAppendV1Path: true,
     proxyType: 'none',
@@ -141,6 +152,7 @@ export interface ApiConfigLike {
   id: number
   name: string
   platform: string | null
+  textProtocol?: string | null
   apiUrl: string | null
   autoAppendV1Path: boolean
   proxyType: string | null
@@ -156,6 +168,7 @@ export function apiConfigToForm(config: ApiConfigLike): ApiConfigFormState {
     id: config.id,
     name: config.name,
     platform: normalizePlatform(config.platform),
+    textProtocol: config.textProtocol || '',
     apiUrl: config.apiUrl || '',
     autoAppendV1Path: config.autoAppendV1Path ?? true,
     proxyType: config.proxyType || 'none',
@@ -176,6 +189,8 @@ export function buildApiConfigSavePayload(form: ApiConfigFormState): ModelApiCon
     id: form.id,
     name: form.name,
     platform: (normalizePlatform(form.platform) || 'openai_compatible') as ModelPlatform,
+    // 显式选择才下发;缺省=跟随平台(服务端 normalizeProtocol 空值落 NULL)
+    textProtocol: form.textProtocol || undefined,
     apiUrl: form.apiUrl,
     autoAppendV1Path: form.autoAppendV1Path,
     proxyType: proxyEnabled ? form.proxyType : 'none',

@@ -14,7 +14,7 @@ import { Plus, Refresh, Connection, Delete, EditPen } from '@element-plus/icons-
 import { useModelsStore } from '@/stores/models'
 import { apiErrorMessage } from '@/stores/apps'
 import {
-  PLATFORM_OPTIONS, API_PROVIDER_PRESETS, getPlatformFields,
+  PLATFORM_OPTIONS, API_PROVIDER_PRESETS, TEXT_PROTOCOL_OPTIONS, getPlatformFields,
   emptyApiConfigForm, apiConfigToForm, buildApiConfigSavePayload,
   isProxyFormInvalid, platformLabel, type ApiConfigFormState,
 } from '@/utils/api-config'
@@ -58,6 +58,14 @@ function applyPreset(id: string) {
   form.platform = preset.platform
   form.apiUrl = preset.url
   form.autoAppendV1Path = preset.platform === 'openai_compatible'
+  // 平台联动(#16):切平台后文本协议回落「跟随平台」默认
+  form.textProtocol = ''
+}
+
+/** 平台切换(#16):清空地址;文本协议回落「跟随平台」 */
+function onPlatformChange() {
+  form.apiUrl = ''
+  form.textProtocol = ''
 }
 
 async function save() {
@@ -131,7 +139,12 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
       <el-table v-loading="store.loading" :data="store.list" row-key="id">
         <el-table-column prop="name" label="名称" min-width="150" show-overflow-tooltip />
         <el-table-column label="协议平台" min-width="150">
-          <template #default="{ row }">{{ platformLabel(row.platform) }}</template>
+          <template #default="{ row }">
+            {{ platformLabel(row.platform) }}
+            <div v-if="row.textProtocol && row.textProtocol !== row.platform" class="dim protocol-sub">
+              文本协议:{{ row.textProtocol }}
+            </div>
+          </template>
         </el-table-column>
         <el-table-column prop="apiUrl" label="API 地址" min-width="220" show-overflow-tooltip />
         <el-table-column label="密钥" min-width="130">
@@ -173,9 +186,19 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
           <el-input v-model="form.name" maxlength="64" />
         </el-form-item>
         <el-form-item label="协议平台">
-          <el-select v-model="form.platform" @change="form.apiUrl = ''">
+          <el-select v-model="form.platform" @change="onPlatformChange">
             <el-option v-for="p in PLATFORM_OPTIONS" :key="p.value" :label="p.label" :value="p.value" />
             <div class="platform-desc">{{ PLATFORM_OPTIONS.find(p => p.value === form.platform)?.description }}</div>
+          </el-select>
+        </el-form-item>
+        <!-- 文本协议(优化建议 #16):显式选择才下发,默认跟随平台 -->
+        <el-form-item label="文本协议">
+          <el-select v-model="form.textProtocol" clearable placeholder="跟随平台(默认)">
+            <el-option v-for="t in TEXT_PROTOCOL_OPTIONS" :key="t.value" :label="t.label" :value="t.value" />
+            <div class="platform-desc">
+              {{ TEXT_PROTOCOL_OPTIONS.find(t => t.value === form.textProtocol)?.desc
+                ?? '默认与协议平台一致;仅非 OpenAI 协议网关或本地 Mock 演示时需显式指定' }}
+            </div>
           </el-select>
         </el-form-item>
         <el-form-item label="常用提供商">
@@ -255,6 +278,7 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
 .dim { color: #c0c4cc; }
 .presets { display: flex; gap: 8px; flex-wrap: wrap; }
 .preset { cursor: pointer; }
+.protocol-sub { font-size: 11px; }
 .platform-desc { color: #909399; font-size: 12px; padding: 0 12px; }
 .form-hint { color: #909399; font-size: 12px; margin-top: 4px; width: 100%; }
 .proxy-select { width: 180px; }

@@ -11,6 +11,7 @@ import com.inneragent.platform.toolhub.ToolRegistryService;
 import com.inneragent.platform.toolhub.ToolGrantService;
 import com.inneragent.platform.toolhub.mapper.ToolRegistryMapper;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -56,6 +57,8 @@ public class McpToolCatalog implements ToolCatalogInvalidator {
         this(registryMapper, grantService, objectMapper, null);
     }
 
+    /** Spring 装配入口(多构造器时必须显式标注,否则回退无参构造器——该类没有)。 */
+    @Autowired
     public McpToolCatalog(ToolRegistryMapper registryMapper,
                           ToolGrantService grantService,
                           ObjectMapper objectMapper,

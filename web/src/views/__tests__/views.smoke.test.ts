@@ -7,6 +7,7 @@ import { mountView } from './helpers'
 import LoginView from '@/views/LoginView.vue'
 import AdminLayout from '@/views/AdminLayout.vue'
 import AppsView from '@/views/AppsView.vue'
+import ToolsView from '@/views/ToolsView.vue'
 
 describe('视图挂载冒烟', () => {
   it('LoginView:渲染登录表单并可输入', async () => {
@@ -33,6 +34,16 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('演示宿主应用')
     expect(wrapper.text()).toContain('sha256:1a2b3c4d5e6f7081')
     expect(wrapper.text()).toContain('180')
+    wrapper.unmount()
+  })
+
+  it('ToolsView:注册表 Tab 渲染 FQN/指纹/注解;授权 Tab 可切换', async () => {
+    const wrapper = await mountView(ToolsView, '/tools')
+    expect(wrapper.text()).toContain('mcp__demo_host__get_user')
+    expect(wrapper.text()).toContain('mcp__demo_host__reset_password')
+    expect(wrapper.text()).toContain('sha256:0002fp')
+    // 注解图例(R/D/I/W)渲染
+    expect(wrapper.findAll('.hint').length).toBeGreaterThan(0)
     wrapper.unmount()
   })
 })

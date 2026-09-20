@@ -147,10 +147,18 @@ function timeoutFetch(url: string, init: RequestInit, timeoutMs: number): Promis
  * 单次请求 (含 401 懒换重试 + 信封解包)。
  * 返回信封 data 字段; 非 0 业务码 / HTTP 错误 → ApiError。
  * 相对路径自动拼 baseURL (仅 http(s):// 视为绝对地址)。
+ *
+ * [DEF-05] baseURL 拼接统一收敛于此: 调用点只交相对路径; 若路径已携带
+ * baseURL 前缀则幂等跳过 (防调用点回归双重拼接 → /ia/api/v1/ia/api/v1/* 404)。
  */
 export async function request<T = unknown>(url: string, config: RequestConfig = {}): Promise<T> {
   const isAbsolute = /^https?:\/\//.test(url)
-  const fullUrl = isAbsolute ? url : `${getBaseURL()}${url.startsWith('/') ? '' : '/'}${url}`
+  let fullUrl = url
+  if (!isAbsolute) {
+    const base = getBaseURL()
+    const alreadyPrefixed = base !== '' && (url === base || url.startsWith(`${base}/`))
+    fullUrl = alreadyPrefixed ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`
+  }
   return doRequest<T>(fullUrl, config)
 }
 

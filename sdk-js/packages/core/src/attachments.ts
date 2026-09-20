@@ -5,7 +5,6 @@
  * 测试以 mock fetch 验证请求形状 (见 __tests__/attachments.spec.ts)。
  */
 
-import { getBaseURL } from './config'
 import { http } from './client'
 
 export type AttachmentTransport = 'url' | 'base64'
@@ -24,5 +23,6 @@ export async function uploadAttachment(
   formData.append('modelId', String(modelId))
   formData.append('transport', transport)
 
-  return http.post(`${getBaseURL()}/attachments`, formData, { timeoutMs: 0 })
+  // [DEF-05] 相对路径: baseURL 由 client.request() 统一拼接
+  return http.post('/attachments', formData, { timeoutMs: 0 })
 }

@@ -126,7 +126,7 @@ describe('store/assistant (会话加载 / 选择 / 历史回放)', () => {
     await tick(0)
 
     expect(mocks.httpGet).toHaveBeenCalledExactlyOnceWith(
-      '/ia/api/v1/conversations?pageNo=1&pageSize=20&category=assistant',
+      '/conversations?pageNo=1&pageSize=20&category=assistant',
     )
     // 非 assistant 类别的会话被过滤
     expect(store.conversations).toHaveLength(1)
@@ -151,7 +151,7 @@ describe('store/assistant (会话加载 / 选择 / 历史回放)', () => {
     await store.selectConversation('conv-1')
     await tick(0)
 
-    expect(mocks.httpGet).toHaveBeenLastCalledWith('/ia/api/v1/conversations/conv-1/messages')
+    expect(mocks.httpGet).toHaveBeenLastCalledWith('/conversations/conv-1/messages')
     const runtime = store.conversationStates['conv-1']
     expect(runtime?.messagesLoaded).toBe(true)
     expect(runtime?.messages).toHaveLength(2)
@@ -168,7 +168,7 @@ describe('store/assistant (会话加载 / 选择 / 历史回放)', () => {
     store.loadMoreConversations()
     await tick(0)
 
-    expect(mocks.httpGet).toHaveBeenLastCalledWith('/ia/api/v1/conversations?pageNo=2&pageSize=20&category=assistant')
+    expect(mocks.httpGet).toHaveBeenLastCalledWith('/conversations?pageNo=2&pageSize=20&category=assistant')
     expect(store.conversations.map((c) => c.conversationId)).toEqual(['conv-1', 'conv-2'])
     expect(store.hasMoreConversations).toBe(false)
     expect(store.conversationPage).toBe(2)
@@ -197,7 +197,7 @@ describe('store/assistant (会话加载 / 选择 / 历史回放)', () => {
     mocks.httpDelete.mockResolvedValue(undefined)
     await store.deleteConversation(optimisticId!, -1)
     expect(mocks.httpDelete).toHaveBeenCalledWith(
-      '/ia/api/v1/conversations/by-conversation-id/' + optimisticId,
+      '/conversations/by-conversation-id/' + optimisticId,
     )
     expect(store.conversations.find((c) => c.conversationId === optimisticId)).toBeUndefined()
     expect(store.selectedConversationId).toBeNull()
@@ -343,7 +343,7 @@ describe('store/assistant (发送消息 + SSE 事件驱动)', () => {
     await tick(0)
     const conversationId = store.selectedConversationId!
     expect(store.conversationStates[conversationId]?.status).toBe('CANCEL_REQUESTED')
-    expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-1/cancel')
+    expect(mocks.httpPost).toHaveBeenCalledWith('/runs/run-1/cancel')
 
     stream.push(sseBlock(2, { outputType: 'CANCELLED' }))
     await tick(32)
@@ -433,7 +433,7 @@ describe('store/assistant (工具确认: 单个/批量/过期 + reconnect 续流
     await store.respondToToolConfirmation('tc-2', false)
     await tick(0)
     expect(mocks.httpPost).toHaveBeenCalledTimes(1)
-    expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-1/confirm', {
+    expect(mocks.httpPost).toHaveBeenCalledWith('/runs/run-1/confirm', {
       replyId: 'reply-1',
       decisions: [
         { toolCallId: 'tc-1', approved: true },
@@ -502,7 +502,7 @@ describe('store/assistant (工具确认: 单个/批量/过期 + reconnect 续流
 
     mocks.httpPost.mockResolvedValue(undefined)
     await store.expireToolConfirmation()
-    expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-1/confirm/expire', {
+    expect(mocks.httpPost).toHaveBeenCalledWith('/runs/run-1/confirm/expire', {
       replyId: 'reply-1',
     })
   })
@@ -561,7 +561,7 @@ describe('store/assistant (工具确认: 单个/批量/过期 + reconnect 续流
     mocks.httpPost.mockResolvedValue(undefined)
     await store.respondToAllToolConfirmations(true)
     await tick(0)
-    expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-1/confirm', {
+    expect(mocks.httpPost).toHaveBeenCalledWith('/runs/run-1/confirm', {
       replyId: 'reply-1',
       decisions: [
         { toolCallId: 'tc-1', approved: true },
@@ -606,7 +606,7 @@ describe('store/assistant (后台状态轮询 / 持久化)', () => {
     store.setOpen(false)
     await tick(1100)
 
-    expect(mocks.httpGet).toHaveBeenLastCalledWith('/ia/api/v1/runs/running')
+    expect(mocks.httpGet).toHaveBeenLastCalledWith('/runs/running')
     expect(store.conversationStates['conv-1']?.status).toBe('running')
     expect(store.conversationStates['conv-1']?.statusConfirmed).toBe(true)
     expect(store.conversationStates['conv-1']?.knownRunId).toBe('run-9')

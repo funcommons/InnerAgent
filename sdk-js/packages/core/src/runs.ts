@@ -559,7 +559,8 @@ export function reconnectRunStream(
  */
 export async function cancelRun(target: RunTarget): Promise<void> {
   if (target.runId) {
-    await http.post(`${getBaseURL()}/runs/${encodeURIComponent(target.runId)}/cancel`)
+    // [DEF-05] 相对路径: baseURL 由 client.request() 统一拼接(查询端)
+    await http.post(`/runs/${encodeURIComponent(target.runId)}/cancel`)
     return
   }
   const conversationId = target.conversationId
@@ -567,7 +568,7 @@ export async function cancelRun(target: RunTarget): Promise<void> {
     throw new Error('cancelRun requires runId or conversationId')
   }
   const query = new URLSearchParams({ conversationId })
-  await http.post(`${getBaseURL()}/runs/cancel?${query.toString()}`)
+  await http.post(`/runs/cancel?${query.toString()}`)
 }
 
 /** 工具调用人工确认: POST /runs/{runId}/confirm */
@@ -577,7 +578,7 @@ export async function confirmRunTools(request: {
   decisions: ToolConfirmationDecision[]
 }): Promise<void> {
   const { runId, ...body } = request
-  await http.post(`${getBaseURL()}/runs/${encodeURIComponent(runId)}/confirm`, body)
+  await http.post(`/runs/${encodeURIComponent(runId)}/confirm`, body)
 }
 
 /** 确认过期: POST /runs/{runId}/confirm/expire */
@@ -586,7 +587,7 @@ export async function expireRunConfirmation(request: {
   replyId: string
 }): Promise<void> {
   const { runId, ...body } = request
-  await http.post(`${getBaseURL()}/runs/${encodeURIComponent(runId)}/confirm/expire`, body)
+  await http.post(`/runs/${encodeURIComponent(runId)}/confirm/expire`, body)
 }
 
 // ---- status: runId 直查; conversationId 经 /runs/running 匹配 (见文件头) ----
@@ -603,7 +604,7 @@ function fetchRunningList(): Promise<RunningRun[]> {
   if (runningListCache && Date.now() - runningListCache.at < RUNNING_LIST_CACHE_TTL_MS) {
     return runningListCache.promise
   }
-  const promise = http.get<RunningRun[]>(`${getBaseURL()}/runs/running`)
+  const promise = http.get<RunningRun[]>('/runs/running')
   runningListCache = { at: Date.now(), promise }
   promise.catch(() => { runningListCache = null })
   return promise
@@ -612,7 +613,7 @@ function fetchRunningList(): Promise<RunningRun[]> {
 export async function getRunStatus(target: RunTarget): Promise<RunStatusResponse> {
   if (target.runId) {
     return http.get<RunStatusResponse>(
-      `${getBaseURL()}/runs/${encodeURIComponent(target.runId)}`,
+      `/runs/${encodeURIComponent(target.runId)}`,
     )
   }
   const running = await fetchRunningList()
@@ -631,5 +632,5 @@ export async function getRunStatus(target: RunTarget): Promise<RunStatusResponse
 
 /** 列出运行中的 runs: GET /runs/running */
 export async function listRunningRuns(): Promise<RunningRun[]> {
-  return http.get<RunningRun[]>(`${getBaseURL()}/runs/running`)
+  return http.get<RunningRun[]>('/runs/running')
 }

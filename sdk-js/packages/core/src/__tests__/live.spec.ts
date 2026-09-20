@@ -29,7 +29,6 @@ import {
   aiModelApi,
   cancelRun,
   confirmRunTools,
-  getBaseURL,
   getRunStatus,
   http,
   init,
@@ -236,8 +235,9 @@ describe_live('SDK core 活体测试(P1 出口 · demo-host 全流程 = PRD M0)'
   }, 30_000)
 
   it('GET /runs/running?conversationId=:终态会话不再出现于运行列表', async () => {
+    // [DEF-05] 相对路径(request() 统一拼 baseURL); http.get 幂等防护下旧写法亦不双拼
     const filtered = await http.get<RunningRun[]>(
-      `${getBaseURL()}/runs/running?conversationId=${encodeURIComponent(conversationId)}`)
+      `runs/running?conversationId=${encodeURIComponent(conversationId)}`)
     expect(Array.isArray(filtered)).toBe(true)
     expect(filtered.find((item) => item.conversationId === conversationId)).toBeUndefined()
 

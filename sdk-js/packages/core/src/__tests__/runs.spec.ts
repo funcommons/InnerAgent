@@ -372,27 +372,27 @@ describe('runs 查询端点 (http 实例, 契约路径)', () => {
   it('cancelRun: runId → POST /runs/{runId}/cancel (契约); 仅 conversationId → /runs/cancel?conversationId= (兼容兜底)', async () => {
     mocks.httpPost.mockResolvedValue(undefined)
     await cancelRun({ runId: 'run-9' })
-    expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-9/cancel')
+    expect(mocks.httpPost).toHaveBeenCalledWith('/runs/run-9/cancel')
 
     await cancelRun({ conversationId: 'conv-9' })
-    expect(mocks.httpPost).toHaveBeenLastCalledWith('/ia/api/v1/runs/cancel?conversationId=conv-9')
+    expect(mocks.httpPost).toHaveBeenLastCalledWith('/runs/cancel?conversationId=conv-9')
   })
 
   it('confirmRunTools / expireRunConfirmation: POST /runs/{runId}/confirm[,/expire], body 不含 runId', async () => {
     mocks.httpPost.mockResolvedValue(undefined)
     const decisions = [{ toolCallId: 'tc-1', approved: true }]
     await confirmRunTools({ runId: 'run-9', replyId: 'reply-1', decisions })
-    expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-9/confirm', { replyId: 'reply-1', decisions })
+    expect(mocks.httpPost).toHaveBeenCalledWith('/runs/run-9/confirm', { replyId: 'reply-1', decisions })
 
     await expireRunConfirmation({ runId: 'run-9', replyId: 'reply-1' })
-    expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-9/confirm/expire', { replyId: 'reply-1' })
+    expect(mocks.httpPost).toHaveBeenCalledWith('/runs/run-9/confirm/expire', { replyId: 'reply-1' })
   })
 
   it('getRunStatus: runId → GET /runs/{runId}', async () => {
     const status = { runId: 'run-9', status: 'RUNNING', lastSequence: 3 }
     mocks.httpGet.mockResolvedValue(status)
     await expect(getRunStatus({ runId: 'run-9' })).resolves.toBe(status)
-    expect(mocks.httpGet).toHaveBeenCalledWith('/ia/api/v1/runs/run-9')
+    expect(mocks.httpGet).toHaveBeenCalledWith('/runs/run-9')
   })
 
   it('getRunStatus: conversationId → GET /runs/running 匹配; 微缓存内复用同一响应', async () => {
@@ -417,6 +417,6 @@ describe('runs 查询端点 (http 实例, 契约路径)', () => {
     const runs = [{ runId: 'run-9', conversationId: 'conv-9', projectId: 1, title: 't', category: 'c', status: 'RUNNING', lastSequence: 0, startedAt: '2026-01-01T00:00:00Z' }]
     mocks.httpGet.mockResolvedValue(runs)
     await expect(listRunningRuns()).resolves.toBe(runs)
-    expect(mocks.httpGet).toHaveBeenCalledWith('/ia/api/v1/runs/running')
+    expect(mocks.httpGet).toHaveBeenCalledWith('/runs/running')
   })
 })

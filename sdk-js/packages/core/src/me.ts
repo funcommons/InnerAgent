@@ -10,7 +10,6 @@
  * 管理站 (inneragent-web) 范围, 不进 SDK; AgentWorkspace/迁移端点属服务端自管, 同理裁剪。
  */
 
-import { getBaseURL } from './config'
 import { http } from './client'
 import type { AssistantReferenceOptions } from './conversations'
 
@@ -43,11 +42,13 @@ export type { AssistantReferenceOptions }
 export const aiModelApi = {
   /** 按类型获取可用模型列表 (composer 仅消费 type=1 对话模型) */
   listByType: (type: number) =>
-    http.get<AiModel[]>(`${getBaseURL()}/me/models?type=${type}`),
+    // [DEF-05] 相对路径: baseURL 由 client.request() 统一拼接, 调用点不再自带前缀
+    http.get<AiModel[]>(`/me/models?type=${type}`),
 }
 
 export const meApi = {
   /** 助手可引用 Skill/MCP 工具 (原 /api/ai/assistant/reference-options) */
   referenceOptions: () =>
-    http.get<AssistantReferenceOptions>(`${getBaseURL()}/me/reference-options`),
+    // [DEF-05] 同上
+    http.get<AssistantReferenceOptions>('/me/reference-options'),
 }

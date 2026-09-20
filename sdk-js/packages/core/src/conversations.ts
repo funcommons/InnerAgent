@@ -11,7 +11,6 @@
  * 流式端点由 runs.ts 承载 —— 助手聊天与 Run 共用同一套 SSE 契约。
  */
 
-import { getBaseURL } from './config'
 import { http } from './client'
 import type { AiMultimodalInput, ToolExecutionMode } from './runs'
 
@@ -101,7 +100,8 @@ export interface AssistantMessageReferences {
 
 /** 获取助手可主动引用的 Skill 与 MCP 工具 (契约偏差: 落 /me 域, 见 me.ts) */
 export async function getAssistantReferenceOptions(): Promise<AssistantReferenceOptions> {
-  return http.get<AssistantReferenceOptions>(`${getBaseURL()}/me/reference-options`)
+  // [DEF-05] 相对路径: baseURL 由 client.request() 统一拼接
+  return http.get<AssistantReferenceOptions>('/me/reference-options')
 }
 
 /** 获取对话列表（分页; category=assistant 时仅助手对话） */
@@ -118,25 +118,25 @@ export async function listConversations(params: {
     searchParams.set('category', params.category)
   }
   return http.get<AssistantPageResult<AgentConversation>>(
-    `${getBaseURL()}/conversations?${searchParams}`,
+    `/conversations?${searchParams}`,
   )
 }
 
 /** 获取对话消息列表 */
 export async function listMessages(conversationId: string): Promise<AgentMessage[]> {
   return http.get<AgentMessage[]>(
-    `${getBaseURL()}/conversations/${encodeURIComponent(conversationId)}/messages`,
+    `/conversations/${encodeURIComponent(conversationId)}/messages`,
   )
 }
 
 /** 删除对话 (按数据库 id) */
 export async function deleteConversation(id: number): Promise<void> {
-  await http.delete(`${getBaseURL()}/conversations/${id}`)
+  await http.delete(`/conversations/${id}`)
 }
 
 /** 按稳定会话标识幂等删除，兼容尚未同步数据库 ID 的乐观会话。 */
 export async function deleteConversationByConversationId(conversationId: string): Promise<void> {
   await http.delete(
-    `${getBaseURL()}/conversations/by-conversation-id/${encodeURIComponent(conversationId)}`,
+    `/conversations/by-conversation-id/${encodeURIComponent(conversationId)}`,
   )
 }

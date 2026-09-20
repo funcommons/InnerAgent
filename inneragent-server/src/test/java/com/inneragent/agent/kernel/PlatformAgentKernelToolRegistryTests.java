@@ -67,7 +67,8 @@ class PlatformAgentKernelToolRegistryTests {
                 mock(com.inneragent.agent.mcp.AgentScopeMcpRegistry.class),
                 mock(org.springframework.beans.factory.ObjectProvider.class),
                 providerOf(invoker),
-                catalog);
+                catalog,
+                mock(org.springframework.beans.factory.ObjectProvider.class));
 
         Toolkit toolkit = new Toolkit(ToolkitConfig.builder().parallel(true).build());
         registry.register(spec, toolkit);

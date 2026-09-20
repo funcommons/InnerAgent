@@ -4,6 +4,7 @@ import cn.hutool.json.JSONUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.inneragent.agent.observability.GenAiSemanticAttributes;
 import com.inneragent.agent.tool.ToolExecutor;
 import com.inneragent.agent.tool.ToolPermissionRisk;
 import com.inneragent.agent.context.AgentRunContext;
@@ -48,6 +49,8 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
      * T2b 的 McpToolAdapter 接管后经此端口执行宿主 tools/call。
      */
     private final com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker;
+    /** [adapt] 任务 #18b(W5):execute_tool span 工厂(null=noop 旁路)。 */
+    private final com.inneragent.agent.observability.GenAiSpanFactory spanFactory;
 
     public AgentScopeToolAdapter(
             ToolExecutor toolExecutor,
@@ -55,7 +58,7 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             Scheduler toolScheduler,
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper) {
-        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper, null, null);
+        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper, null, null, null);
     }
 
     public AgentScopeToolAdapter(
@@ -66,7 +69,7 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             ObjectMapper objectMapper,
             ActTokenSupplier actTokenSupplier) {
         this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper,
-                actTokenSupplier, null);
+                actTokenSupplier, null, null);
     }
 
     public AgentScopeToolAdapter(
@@ -77,6 +80,19 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             ObjectMapper objectMapper,
             ActTokenSupplier actTokenSupplier,
             com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker) {
+        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper,
+                actTokenSupplier, mcpToolInvoker, null);
+    }
+
+    public AgentScopeToolAdapter(
+            ToolExecutor toolExecutor,
+            AgentScopeToolSchema.PreparedSchema schema,
+            Scheduler toolScheduler,
+            RunLeaseGuard leaseGuard,
+            ObjectMapper objectMapper,
+            ActTokenSupplier actTokenSupplier,
+            com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker,
+            com.inneragent.agent.observability.GenAiSpanFactory spanFactory) {
         super(builder(toolExecutor, schema));
         this.toolExecutor = Objects.requireNonNull(toolExecutor, "toolExecutor must not be null");
         this.toolScheduler = Objects.requireNonNull(toolScheduler, "toolScheduler must not be null");
@@ -84,6 +100,9 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.actTokenSupplier = actTokenSupplier;
         this.mcpToolInvoker = mcpToolInvoker;
+        this.spanFactory = spanFactory == null
+                ? com.inneragent.agent.observability.GenAiSpanFactory.noop()
+                : spanFactory;
     }
 
     /** T2b 接管点访问器(MCP client 适配器接入后经此执行宿主调用;当前不可达)。 */
@@ -113,6 +132,9 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             Duration remaining = remaining(run);
             Map<String, Object> input = Objects.requireNonNull(
                     param.getInput(), "AgentScope tool input must not be null");
+            // [adapt] 任务 #18b(W5):execute_tool span(工具调用元数据;内容默认关)。
+            com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan toolSpan =
+                    startExecuteToolSpan(param, runtime, run, input);
             // 业务工具按发起 run 的租户执行：工具内部读写业务表依赖租户过滤与 tenant_id 注入
             Mono<String> invocation = Mono.fromCallable(() -> TenantContext.runInTenant(
                             toolContext.tenantId(),
@@ -127,11 +149,65 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             return cancellation.checkpoint()
                     .then(assertLease(run))
                     .then(invocation)
+                    .doOnError(toolSpan != null
+                            ? failure -> toolSpan.error(failure)
+                            : failure -> { })
                     .flatMap(result -> cancellation.checkpoint()
                             .then(assertLease(run))
                             .thenReturn(projectResult(param, result)))
+                    .doFinally(sig -> {
+                        if (toolSpan != null) {
+                            toolSpan.end();
+                        }
+                    })
                     .timeout(remaining);
         });
+    }
+
+    /**
+     * [adapt] 任务 #18b(W5):execute_tool span。属性:gen_ai.tool.name/
+     * tool.description/tool.call.id、inneragent.risk.level、inneragent.run.id、
+     * gen_ai.conversation.id;内容属性(prompt=入参 JSON)默认关。
+     */
+    private com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan startExecuteToolSpan(
+            ToolCallParam param,
+            RuntimeContext runtime,
+            AgentRunContext run,
+            Map<String, Object> input) {
+        if (spanFactory.isNoop()) {
+            return null;
+        }
+        try {
+            com.inneragent.agent.context.AgentConversationContext conversation =
+                    runtime.get(com.inneragent.agent.context.AgentConversationContext.class);
+            ToolPermissionRisk risk = toolExecutor.getPermissionRisk(input);
+            com.inneragent.agent.observability.GenAiSpanFactory.SpanBuilder builder =
+                    spanFactory.spanBuilder(GenAiSemanticAttributes.Operations.EXECUTE_TOOL
+                            + " " + getName())
+                            .attr(GenAiSemanticAttributes.OPERATION_NAME,
+                                    GenAiSemanticAttributes.Operations.EXECUTE_TOOL)
+                            .attr(GenAiSemanticAttributes.TOOL_NAME, getName())
+                            .attr(GenAiSemanticAttributes.TOOL_DESCRIPTION,
+                                    toolExecutor.getToolDescription())
+                            .attr(GenAiSemanticAttributes.RUN_ID, run.runId())
+                            .attr(GenAiSemanticAttributes.RISK_LEVEL,
+                                    risk == null ? null : risk.name())
+                            .contentAttr(GenAiSemanticAttributes.PROMPT,
+                                    JSONUtil.toJsonStr(input));
+            if (param.getToolUseBlock() != null
+                    && param.getToolUseBlock().getId() != null) {
+                builder.attr(GenAiSemanticAttributes.TOOL_CALL_ID,
+                        param.getToolUseBlock().getId());
+            }
+            if (conversation != null) {
+                builder.attr(GenAiSemanticAttributes.CONVERSATION_ID,
+                        conversation.conversationId());
+            }
+            return builder.startSpan();
+        } catch (Exception spanFailure) {
+            log.debug("GenAI execute_tool span start skipped: {}", spanFailure.toString());
+            return null;
+        }
     }
 
     @Override

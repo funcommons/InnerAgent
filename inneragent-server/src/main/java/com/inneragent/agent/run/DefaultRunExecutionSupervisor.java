@@ -25,6 +25,7 @@ import com.inneragent.agent.run.model.WaitingCheckpoint;
 import com.inneragent.agent.run.model.PendingConfirmation;
 import io.agentscope.core.message.Msg;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -45,6 +46,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
+@Slf4j
 public final class DefaultRunExecutionSupervisor implements RunExecutionSupervisor {
 
     private final AgentExecutionFactory executionFactory;
@@ -63,10 +65,27 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     private final AtomicBoolean accepting = new AtomicBoolean(true);
     private final AtomicReference<Mono<Void>> shutdownSignal = new AtomicReference<>();
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+    /**
+     * [adapt] 任务 #18b(W5):invoke_agent span 工厂(setter 软注入,缺省 noop;
+     * 不改构造器形态以保持既有单测兼容)。
+     */
+    private com.inneragent.agent.observability.GenAiSpanFactory genAiSpans =
+            com.inneragent.agent.observability.GenAiSpanFactory.noop();
 
     @Autowired
     void setMetrics(AgentRuntimeMetrics metrics) {
         this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
+
+    @Autowired(required = false)
+    void setGenAiSpans(
+            org.springframework.beans.factory.ObjectProvider<
+                    com.inneragent.agent.observability.GenAiSpanFactory> spanFactories) {
+        com.inneragent.agent.observability.GenAiSpanFactory factory =
+                spanFactories == null ? null : spanFactories.getIfAvailable();
+        if (factory != null) {
+            this.genAiSpans = factory;
+        }
     }
 
     public DefaultRunExecutionSupervisor(
@@ -169,7 +188,11 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                 stateSessionId, deadline, runtimeRequest);
         AtomicReference<String> pauseType = new AtomicReference<>();
         AtomicLong lastCommittedSequence = new AtomicLong(-1);
-        return executionFactory.start(
+        // [adapt] 任务 #18b(W5):invoke_agent span(run 本地执行起点→本地终态/
+        // 等待暂停/失败;noop 工厂旁路)。
+        com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan invokeSpan =
+                startInvokeAgentSpan(runId, runtimeRequest, kernelSnapshot);
+        Mono<Void> executionFlow = executionFactory.start(
                         runId,
                         ownerInstanceId,
                         ownerEpoch,
@@ -217,6 +240,68 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                                 classifyStartFailure(failure),
                                 failure.getMessage())
                         .then(Mono.error(failure)));
+        return executionFlow
+                .doOnError(failure -> {
+                    if (invokeSpan != null) {
+                        invokeSpan.error(failure);
+                    }
+                })
+                .doFinally(ignored -> {
+                    if (invokeSpan != null) {
+                        invokeSpan.end();
+                    }
+                });
+    }
+
+    /**
+     * [adapt] 任务 #18b(W5):invoke_agent span(run 启动→本地终态)。属性:
+     * gen_ai.agent.id(稳定定义 ID)/agent.name/agent.type(root|child)/
+     * gen_ai.conversation.id/inneragent.run.id;noop 工厂返回 null。
+     */
+    private com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan startInvokeAgentSpan(
+            String runId,
+            AgentScopeRuntimeContextRequest runtimeRequest,
+            AgentKernelSnapshot kernelSnapshot) {
+        if (genAiSpans.isNoop()) {
+            return null;
+        }
+        try {
+            String stableKey = runtimeRequest.conversation().agentDefinitionStableKey();
+            String agentName = runtimeRequest.run().agentName() != null
+                    ? runtimeRequest.run().agentName()
+                    : stableKey;
+            com.inneragent.agent.observability.GenAiSpanFactory.SpanBuilder builder =
+                    genAiSpans
+                            .spanBuilder(com.inneragent.agent.observability.GenAiSemanticAttributes
+                                    .Operations.INVOKE_AGENT)
+                            .attr(com.inneragent.agent.observability.GenAiSemanticAttributes
+                                            .OPERATION_NAME,
+                                    com.inneragent.agent.observability.GenAiSemanticAttributes
+                                            .Operations.INVOKE_AGENT)
+                            .attr(com.inneragent.agent.observability.GenAiSemanticAttributes
+                                            .AGENT_ID,
+                                    stableKey)
+                            .attr(com.inneragent.agent.observability.GenAiSemanticAttributes
+                                            .AGENT_NAME,
+                                    agentName)
+                            .attr(com.inneragent.agent.observability.GenAiSemanticAttributes
+                                            .AGENT_TYPE,
+                                    runtimeRequest.parentRun() != null ? "child" : "root")
+                            .attr(com.inneragent.agent.observability.GenAiSemanticAttributes
+                                            .CONVERSATION_ID,
+                                    runtimeRequest.conversation().conversationId())
+                            .attr(com.inneragent.agent.observability.GenAiSemanticAttributes
+                                            .RUN_ID,
+                                    runId)
+                            .attr(com.inneragent.agent.observability.GenAiSemanticAttributes
+                                            .STATE_SESSION_ID,
+                                    runtimeRequest.conversation().agentStateSessionId());
+            return builder.startSpan();
+        } catch (Exception spanFailure) {
+            log.warn("GenAI invoke_agent span start skipped: type={}",
+                    spanFailure.getClass().getSimpleName());
+            return null;
+        }
     }
 
     private Mono<CommittedAgentEvent> appendOwned(

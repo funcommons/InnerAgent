@@ -92,18 +92,18 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(9, result.migrationsExecuted, "应依次执行 V1-V9 九个迁移(V8 注释刷新;V9 为 ia_app 轮换双 key 列增补)");
+        assertEquals(10, result.migrationsExecuted, "应依次执行 V1-V11 十个迁移(V8 注释刷新;V9 ia_app 轮换双 key 列;V11 终态 Webhook 投递表)");
 
         List<String> actualTables = listIaTables();
-        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 22 张 ia_ 表");
+        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 23 张 ia_ 表");
 
-        // flyway_schema_history:九条记录且全部 success
+        // flyway_schema_history:十条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(9, resultSet.getInt(1), "flyway_schema_history 应有 9 条成功记录(V8 注释刷新 + V9 轮换双 key)");
+            assertEquals(10, resultSet.getInt(1), "flyway_schema_history 应有 10 条成功记录(V8 注释刷新 + V9 轮换双 key + V11 Webhook 投递)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)

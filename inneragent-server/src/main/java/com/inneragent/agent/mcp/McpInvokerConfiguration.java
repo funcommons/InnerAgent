@@ -34,7 +34,10 @@ public class McpInvokerConfiguration {
     public McpClientToolInvoker mcpClientToolInvoker(ToolRegistryMapper registryMapper,
                                                      ActTokenIssuer actTokenIssuer,
                                                      ObjectMapper objectMapper,
-                                                     McpInvokerProperties properties) {
-        return new McpClientToolInvoker(registryMapper, actTokenIssuer, objectMapper, properties);
+                                                     McpInvokerProperties properties,
+                                                     org.springframework.beans.factory.ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories) {
+        // [adapt] 任务 #18b(W5):MCP client span 工厂随 Bean 下发(缺省 noop)
+        return new McpClientToolInvoker(registryMapper, actTokenIssuer, objectMapper,
+                properties, spanFactories.getIfAvailable());
     }
 }

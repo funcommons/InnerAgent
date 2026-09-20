@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.inneragent</groupId>
+  <artifactId>inneragent-spring-boot-starter</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>inneragent-spring-boot-starter</name>
+  <description>InnerAgent 宿主接入件(P1-T2b):MCP Server 桥(/ia-mcp,stateless 形态)+ X-IA-Act 验签 Filter 与上下文重建 + InnerAgentBridgeClient 占位。独立 Maven 工程,不卷入任何 reactor。</description>
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <!-- 与主工程同栈(inneragent-server:spring-boot-starter-parent 3.5.14 / Java 21) -->
+    <spring-boot.version>3.5.14</spring-boot.version>
+    <!-- FINDINGS §①:官方 MCP Java SDK,spike 已验证的最新稳定版(2026-08-19 发布) -->
+    <mcp-sdk.version>2.0.1</mcp-sdk.version>
+    <!-- 主工程 spring-security-oauth2-jose 同源解析版本;starter 不强制宿主引入 Spring Security -->
+    <nimbus-jose-jwt.version>9.37.4</nimbus-jose-jwt.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- MCP SDK 便捷聚合 = mcp-core + mcp-json-jackson3:含服务端 servlet 传输
+         (HttpServletStatelessServerTransport)与工具 schema/annotations 模型。
+         Spring 传输(WebFlux/WebMVC)已移居 Spring AI 2.0,按技术方案 Q1 明确不引入。 -->
+    <dependency>
+      <groupId>io.modelcontextprotocol.sdk</groupId>
+      <artifactId>mcp</artifactId>
+      <version>${mcp-sdk.version}</version>
+    </dependency>
+
+    <!-- 自动装配 + servlet 宿主(FINDINGS:嵌入式 Tomcat 即 Jakarta Servlet 容器足够;
+         除 spring-boot-starter-web 外不强制宿主任何其他技术栈,S9 依赖最小化) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-autoconfigure</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- act token RS256 验签 + JWKS 解析(nimbus-jose-jwt 为纯 JWT 库,不拖入 Spring Security;
+         与主工程 ActTokenIssuer 的签名库同族) -->
+    <dependency>
+      <groupId>com.nimbusds</groupId>
+      <artifactId>nimbus-jose-jwt</artifactId>
+      <version>${nimbus-jose-jwt.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <!-- 工具方法参数名经反射读取(未显式标注 @IaToolParam 时),必须保留 -parameters -->
+          <parameters>true</parameters>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>

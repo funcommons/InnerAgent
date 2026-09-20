@@ -652,3 +652,71 @@ describe('store/assistant (后台状态轮询 / 持久化)', () => {
     expect(store.conversationStates).toEqual({})
   })
 })
+
+// [new] DEF-07 回归(R1 E2E 2026-09-21-01 §3): SDK 空引用时仍序列化
+// "enabledMcpTools":[] → 服务端按「显式空白名单」过滤 → 注册工具在 UI 会话不可达。
+// 修复口径: 空数组/未选择时字段不下发(undefined, JSON 剔除)。
+describe('store/assistant (DEF-07: 空引用不下发 enabledMcpTools)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal('requestAnimationFrame', (cb: (time: number) => void) => setTimeout(() => cb(0), 16))
+    localStorage.clear()
+    setActivePinia(createPinia())
+    freshSdk()
+    vi.clearAllMocks()
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    mocks.httpGet.mockResolvedValue({ list: [], total: 0 })
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    resetSdkConfig()
+    resetTokenRefreshSingleFlight()
+    resetRunningListCache()
+    clearRunContext()
+  })
+
+  async function sendAndCapture(
+    references?: Parameters<ReturnType<typeof useAssistantStore>['sendMessage']>[4],
+  ): Promise<Record<string, unknown>> {
+    const stream = manualStream()
+    fetchMock.mockResolvedValue(stream.response)
+    const store = useAssistantStore()
+    store.initializeForUser(1)
+    await tick(0)
+    store.setOpen(true)
+    await store.sendMessage('工具引用探测', null, null, undefined, references)
+    await tick(0)
+    const [url, req] = callOf(fetchMock, 0) as [string, RequestInit]
+    expect(url).toBe('/ia/api/v1/runs')
+    return JSON.parse(req.body as string)
+  }
+
+  it('空引用(composer 形态: references 对象 + 空 mcpTools)→ 请求体不含 enabledMcpTools 键', async () => {
+    const body = await sendAndCapture({ project: null, skills: [], mcpTools: [] })
+    expect('enabledMcpTools' in body, '空数组不得下发(服务端按显式空白名单过滤)').toBe(false)
+    expect(body.enabledSkills).toBeUndefined()
+  })
+
+  it('references 未传(undefined)→ 同样不含 enabledMcpTools 键', async () => {
+    const body = await sendAndCapture(undefined)
+    expect('enabledMcpTools' in body).toBe(false)
+  })
+
+  it('显式选择 MCP 工具 → 正常下发工具名数组(白名单语义不受影响)', async () => {
+    const body = await sendAndCapture({
+      project: null,
+      skills: [],
+      mcpTools: [
+        { serverName: 'demo-spring-host', toolName: 'update_product_brief', description: '', readOnly: false },
+        { serverName: 'demo-spring-host', toolName: 'list_login_records', description: '', readOnly: true },
+      ],
+    })
+    expect(body.enabledMcpTools).toEqual(['update_product_brief', 'list_login_records'])
+  })
+})

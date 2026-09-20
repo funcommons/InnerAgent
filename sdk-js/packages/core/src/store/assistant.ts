@@ -1328,8 +1328,16 @@ export const useAssistantStore = defineStore('assistant', () => {
         projectId,
         conversationProjectId,
       ),
-      enabledSkills: references?.skills.map((skill) => skill.name),
-      enabledMcpTools: references?.mcpTools.map((tool) => tool.toolName),
+      // [DEF-07] 空数组/未选择时不下发该字段(undefined → JSON 剔除): 服务端把
+      // "enabledMcpTools":[] 视作「显式空白名单」过滤 → ia_tool_registry 注册
+      // 工具在 UI 会话中全部不可达; 缺省(不传)才是「未指定 = 跟随授权目录」。
+      // enabledSkills 同口径(服务端对 null/[] 语义一致, 见 resolveActiveSkills)。
+      enabledSkills: references?.skills.length
+        ? references.skills.map((skill) => skill.name)
+        : undefined,
+      enabledMcpTools: references?.mcpTools.length
+        ? references.mcpTools.map((tool) => tool.toolName)
+        : undefined,
       multimodalInputs,
       referencesJson: serializedReferences,
       toolExecutionMode: runtime.toolExecutionMode,

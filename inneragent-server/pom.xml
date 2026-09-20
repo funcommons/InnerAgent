@@ -103,8 +103,18 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!-- 管理员口令 Argon2 散列(P2-admin 18a,02-技术方案 §6.3):
+			spring-security-crypto 的 Argon2PasswordEncoder 实际算法委托
+			BouncyCastle(org.bouncycastle.crypto.generators.Argon2BytesGenerator),
+			属 optional 依赖必须显式引入 -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>1.84</version>
+		</dependency>
 		<!-- embed/act 双级令牌(P1-T1,技术方案 §6.1):OAuth2 JOSE 模块带 nimbus-jose-jwt,
-			embed token 验签与 act token(RS256)签发/JWKS 发布共用 -->
+			embed token 验签与 act token(RS256)签发/JWKS 发布共用;
+			P2-admin 管理会话 token(HS256)复用同一 nimbus -->
 		<dependency>
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-oauth2-jose</artifactId>

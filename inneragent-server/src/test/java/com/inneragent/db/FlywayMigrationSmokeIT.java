@@ -29,7 +29,7 @@ import org.testcontainers.utility.DockerImageName;
  * 签名公钥轮换双 key 列增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
- * 上执行 classpath:db/migration 全链迁移,断言 22 张 ia_ 业务表全部建成、种子数据落库,
+ * 上执行 classpath:db/migration 全链迁移,断言 24 张 ia_ 业务表全部建成、种子数据落库,
  * 并重复执行 migrate 验证幂等。由 maven-failsafe-plugin 执行(类名 *IT 结尾)。</p>
  */
 @Testcontainers
@@ -43,9 +43,12 @@ class FlywayMigrationSmokeIT {
             .withUsername("inneragent")
             .withPassword("inneragent");
 
-    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件(字典序,22 张)。 */
+    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件 + V10 管理站认证(字典序,24 张)。 */
     private static final List<String> EXPECTED_IA_TABLES = List.of(
-            // V7:对话附件(字典序居 ia_agent_* 首位)
+            // V10:管理站账号认证(18a;ia_adm 字典序居 ia_agent_* 之前)
+            "ia_admin_account",
+            "ia_admin_login_log",
+            // V7:对话附件
             "ia_agent_attachment",
             // V1:Agent 核心
             "ia_agent_conversation",
@@ -90,18 +93,18 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(9, result.migrationsExecuted, "应依次执行 V1-V9 九个迁移(V8 注释刷新;V9 为 ia_app 轮换双 key 列增补)");
+        assertEquals(10, result.migrationsExecuted, "应依次执行 V1-V10 十个迁移(V8 注释刷新;V9 轮换双 key;V10 管理站账号认证)");
 
         List<String> actualTables = listIaTables();
-        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 22 张 ia_ 表");
+        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 24 张 ia_ 表");
 
-        // flyway_schema_history:九条记录且全部 success
+        // flyway_schema_history:十条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(9, resultSet.getInt(1), "flyway_schema_history 应有 9 条成功记录(V8 注释刷新 + V9 轮换双 key)");
+            assertEquals(10, resultSet.getInt(1), "flyway_schema_history 应有 10 条成功记录(V8 注释刷新 + V9 轮换双 key + V10 管理站认证)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -121,6 +124,24 @@ class FlywayMigrationSmokeIT {
                 "ia_app.sign_key_rotated_at 应存在(V9 宽限期起点)");
         assertEquals("timestamp without time zone", columnType("ia_app", "sign_key_rotated_at"),
                 "ia_app.sign_key_rotated_at 应为 TIMESTAMP(无时区,V9)");
+
+        // V10:管理站账号认证两表(P2-admin 18a;Argon2 参数封存于迁移注释)
+        assertEquals("character varying", columnType("ia_admin_account", "password_hash"),
+                "ia_admin_account.password_hash 应为 VARCHAR(Argon2 编码串,$argon2id$ 前缀)");
+        assertTrue(columnExists("ia_admin_account", "locked_until"),
+                "ia_admin_account.locked_until 应存在(失败锁定,V10)");
+        assertTrue(columnExists("ia_admin_account", "failed_attempts"),
+                "ia_admin_account.failed_attempts 应存在(失败计数,V10)");
+        assertTrue(columnExists("ia_admin_login_log", "success"),
+                "ia_admin_login_log.success 应存在(登录审计,V10)");
+        assertEquals("boolean", columnType("ia_admin_login_log", "success"),
+                "ia_admin_login_log.success 应为 BOOLEAN(V10)");
+        assertTrue(columnExists("ia_audit_log", "decision_source"),
+                "ia_audit_log.decision_source 应存在(V2;V10 增补其检索索引)");
+        assertTrue(indexExists("idx_ia_audit_log_app_source_time"),
+                "ia_audit_log (app_id, decision_source, create_time) 检索索引应存在(V10)");
+        assertTrue(indexExists("idx_ia_audit_log_app_tool"),
+                "ia_audit_log (app_id, tool_fqn) 检索索引应存在(V10)");
         try (Connection connection = openConnection();
              PreparedStatement appStatement = connection.prepareStatement(
                      "SELECT app_key, previous_sign_public_key, sign_key_rotated_at FROM ia_app WHERE id = 1");
@@ -191,6 +212,17 @@ class FlywayMigrationSmokeIT {
 
     private static boolean columnExists(String table, String column) throws SQLException {
         return columnType(table, column) != null;
+    }
+
+    private static boolean indexExists(String indexName) throws SQLException {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?")) {
+            statement.setString(1, indexName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
     }
 
     private static String columnType(String table, String column) throws SQLException {

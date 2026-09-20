@@ -2,6 +2,7 @@ package com.inneragent.server.security;
 
 import com.inneragent.platform.context.UserContext;
 import com.inneragent.platform.security.SecurityUserDetails;
+import com.inneragent.server.admin.AdminSessionTokenService;
 import com.inneragent.server.admin.AdminTokenFilter;
 import com.inneragent.server.auth.EmbedTokenAuthenticationFilter;
 import com.inneragent.server.auth.EmbedTokenVerifier;
@@ -87,11 +88,14 @@ public class DemoSecurityConfiguration {
     }
 
     /**
-     * 管理面 M2M 凭据过滤器(IA_ADMIN_KEY 未配置时构造,缺省全部 403 并 WARN)。
+     * 管理面凭据过滤器(P2-admin 双轨:X-IA-Admin-Key 引导 key + 管理会话
+     * token;IA_ADMIN_KEY 未配置时会话通道仍可用,构造 WARN 保留)。
      */
     @Bean
-    public AdminTokenFilter adminTokenFilter(@Value("${IA_ADMIN_KEY:}") String adminKey) {
-        return new AdminTokenFilter(adminKey);
+    public AdminTokenFilter adminTokenFilter(
+            @Value("${IA_ADMIN_KEY:}") String adminKey,
+            AdminSessionTokenService sessionTokenService) {
+        return new AdminTokenFilter(adminKey, sessionTokenService);
     }
 
     /**

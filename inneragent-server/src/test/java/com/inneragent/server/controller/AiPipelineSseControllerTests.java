@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.common.CommonResult;
+import com.inneragent.platform.common.GlobalExceptionHandler;
 import com.inneragent.server.controller.vo.AiChatReqVO;
 import com.inneragent.server.controller.vo.AiChatStreamRespVO;
 import com.inneragent.server.controller.vo.PipelineRunStatusRespVO;
@@ -54,25 +55,13 @@ class AiPipelineSseControllerTests {
     private static final long CURRENT_USER_ID = 42L;
 
     /**
-     * 测试内联异常 advice:等价融光 GlobalExceptionHandler 对 BusinessException 的映射
-     * (HTTP 状态取 code 可解析值,非 2xx/3xx 时回退 500)。main 侧 GlobalExceptionHandler
-     * 未随 T2 移植(P1 工单登记),此处仅保留本测试所需的分支。
+     * P1 遗留台账①②:原内联 TestExceptionAdvice 已删除,改用生产侧
+     * com.inneragent.platform.common.GlobalExceptionHandler(对齐融光测试
+     * .setControllerAdvice(new GlobalExceptionHandler()))。reconnect 收到
+     * 跨 run/冲突的 Last-Event-ID 时,PipelineCursorParser 抛
+     * BusinessException(400),经生产 advice 映射为 HTTP 400。
      */
-    @org.springframework.web.bind.annotation.RestControllerAdvice
-    static class TestExceptionAdvice {
 
-        @org.springframework.web.bind.annotation.ExceptionHandler(BusinessException.class)
-        org.springframework.http.ResponseEntity<CommonResult<?>> handleBusinessException(
-                BusinessException e) {
-            org.springframework.http.HttpStatus status =
-                    org.springframework.http.HttpStatus.resolve(e.getCode());
-            if (status == null || status.is2xxSuccessful() || status.is3xxRedirection()) {
-                status = org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
-            }
-            return org.springframework.http.ResponseEntity.status(status)
-                    .body(CommonResult.error(e.getCode(), e.getMessage()));
-        }
-    }
 
     private AgentScopePipelineRunService pipelineRuns;
     private AgentRunQueryService queries;
@@ -100,7 +89,7 @@ class AiPipelineSseControllerTests {
                 confirmations,
                 confirmationExpiry);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
-                .setControllerAdvice(new TestExceptionAdvice())
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         SecurityUserDetails user = new SecurityUserDetails(
                 CURRENT_USER_ID, "owner", "secret", 1, null, List.of());

@@ -8,6 +8,7 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, RefreshRight } from '@element-plus/icons-vue'
+import IaEmpty from '@/components/IaEmpty.vue'
 import { useWebhooksStore, WEBHOOK_EVENTS, DELIVERY_STATUS } from '@/stores/webhooks'
 import { apiErrorMessage } from '@/stores/apps'
 import type { WebhookDelivery } from '@/api/types'
@@ -90,13 +91,15 @@ async function redeliver(row: WebhookDelivery) {
         <el-card shadow="never">
           <template #header><span>终态通知配置</span></template>
           <!-- 配置端点待服务端落地 → 占位(优化建议 #2/#9) -->
-          <el-empty v-if="store.configUnavailable" description="服务端能力未开通">
-            <div class="dim unavailable-hint">
-              Webhook 配置管理端点尚未在当前服务端启用(能力跟踪:99-优化建议.md #2);
-              现阶段配置可经应用管理域(webhookUrl/webhookSecret)维护。
-            </div>
-            <el-button :icon="Refresh" @click="store.loadConfig()">重新检测</el-button>
-          </el-empty>
+          <IaEmpty
+            v-if="store.configUnavailable"
+            description="服务端能力未开通"
+            hint="Webhook 配置管理端点尚未在当前服务端启用(能力跟踪:99-优化建议.md #2);现阶段配置可经应用管理域维护"
+          >
+            <template #action>
+              <el-button :icon="Refresh" @click="store.loadConfig()">重新检测</el-button>
+            </template>
+          </IaEmpty>
           <el-form v-else label-width="110px">
             <el-form-item label="回调地址">
               <el-input v-model="store.configForm.url" placeholder="https://host.example.com/ia/callback" />
@@ -147,6 +150,10 @@ async function redeliver(row: WebhookDelivery) {
             <el-button :icon="Refresh" @click="store.loadDeliveries()">刷新</el-button>
           </div>
           <el-table v-loading="store.loading" :data="store.deliveries" row-key="id" class="mt12">
+            <!-- 空态(#9) -->
+            <template #empty>
+              <IaEmpty description="还没有投递记录" hint="运行到达终态后这里会出现通知投递明细" />
+            </template>
             <el-table-column label="时间" min-width="150">
               <template #default="{ row }">
                 <span v-if="row.deliveredAt" class="mono">{{ row.deliveredAt }}</span>
@@ -215,5 +222,4 @@ async function redeliver(row: WebhookDelivery) {
 .mt12 { margin-top: 12px; }
 .pager { margin-top: 12px; justify-content: flex-end; }
 .retry { color: #e6a23c; font-size: 12px; }
-.unavailable-hint { margin-bottom: 12px; }
 </style>

@@ -10,6 +10,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Key, EditPen, CopyDocument } from '@element-plus/icons-vue'
+import IaEmpty from '@/components/IaEmpty.vue'
 import { useAppsStore, apiErrorMessage, isValidPemPublicKey } from '@/stores/apps'
 import type { IaApp } from '@/api/types'
 
@@ -164,6 +165,10 @@ async function saveKey() {
 
     <el-card shadow="never">
       <el-table v-loading="store.loading" :data="store.list" row-key="id">
+        <!-- 空态(#9) -->
+        <template #empty>
+          <IaEmpty description="还没有应用" hint="注册应用以登记 embed 验签公钥并接入宿主" />
+        </template>
         <el-table-column prop="appKey" label="appKey" min-width="140" show-overflow-tooltip />
         <el-table-column prop="name" label="名称" min-width="140" show-overflow-tooltip />
         <el-table-column label="状态" width="80">

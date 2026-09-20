@@ -11,6 +11,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Connection, Delete, EditPen } from '@element-plus/icons-vue'
+import IaEmpty from '@/components/IaEmpty.vue'
 import { useModelsStore } from '@/stores/models'
 import { apiErrorMessage } from '@/stores/apps'
 import {
@@ -137,6 +138,10 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
 
     <el-card shadow="never">
       <el-table v-loading="store.loading" :data="store.list" row-key="id">
+        <!-- 空态(#9) -->
+        <template #empty>
+          <IaEmpty description="还没有模型接入配置" hint="新建配置后可在此完成连通性测试" />
+        </template>
         <el-table-column prop="name" label="名称" min-width="150" show-overflow-tooltip />
         <el-table-column label="协议平台" min-width="150">
           <template #default="{ row }">

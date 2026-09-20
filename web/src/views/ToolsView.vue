@@ -15,6 +15,7 @@ import {
   useToolsStore, RISK_LEVELS, ADMIN_POLICIES, GRANT_INVALID_REASONS, parseAnnotations,
 } from '@/stores/tools'
 import { apiErrorMessage } from '@/stores/apps'
+import IaEmpty from '@/components/IaEmpty.vue'
 import type { GrantScope, IaToolGrant, IaToolRegistry, IaToolSchemaHistory, ToolRiskLevel } from '@/api/types'
 
 const store = useToolsStore()
@@ -301,6 +302,14 @@ function shortSha(sha: string): string {
 
         <el-card shadow="never">
           <el-table v-loading="store.toolsLoading" :data="store.tools" row-key="id">
+            <!-- 空态(#9):0 行给明确下一步,不再像「页面坏了」 -->
+            <template #empty>
+              <IaEmpty description="还没有注册任何工具" hint="注册后生成 FQN 与 schema 指纹,供 Agent 分诊调用">
+                <template #action>
+                  <el-button type="primary" :icon="Plus" @click="openRegister">注册第一个工具</el-button>
+                </template>
+              </IaEmpty>
+            </template>
             <el-table-column prop="fqn" label="FQN" min-width="230" show-overflow-tooltip>
               <template #default="{ row }">
                 <span class="mono">{{ row.fqn }}</span>
@@ -376,6 +385,14 @@ function shortSha(sha: string): string {
 
         <el-card shadow="never">
           <el-table v-loading="store.grantsLoading" :data="store.grants" row-key="id">
+            <!-- 空态(#9):授权 0 行 → 明确下一步 -->
+            <template #empty>
+              <IaEmpty description="还没有工具授权记录" hint="可为宿主用户代授工具(本会话/总是允许)">
+                <template #action>
+                  <el-button type="primary" :icon="Plus" @click="openGrant">代授工具授权</el-button>
+                </template>
+              </IaEmpty>
+            </template>
             <el-table-column prop="userId" label="用户" width="100" />
             <el-table-column prop="toolFqn" label="工具 FQN" min-width="230" show-overflow-tooltip>
               <template #default="{ row }"><span class="mono">{{ row.toolFqn }}</span></template>

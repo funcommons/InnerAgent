@@ -10,6 +10,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
+import IaEmpty from '@/components/IaEmpty.vue'
 import { useAuditStore, DECISION_SOURCES, AUDIT_DECISIONS } from '@/stores/audit'
 import type { IaAuditLog } from '@/api/types'
 
@@ -106,6 +107,10 @@ function prettyParams(json: string | null): string {
 
     <el-card shadow="never">
       <el-table v-loading="store.loading" :data="store.list" row-key="id" @row-click="openDetail">
+        <!-- 空态(#9) -->
+        <template #empty>
+          <IaEmpty description="没有符合条件的审计记录" hint="调整筛选条件或扩大时间范围后重试" />
+        </template>
         <el-table-column prop="createTime" label="时间" min-width="160" show-overflow-tooltip />
         <el-table-column prop="toolFqn" label="工具" min-width="220" show-overflow-tooltip>
           <template #default="{ row }"><span class="mono">{{ row.toolFqn }}</span></template>

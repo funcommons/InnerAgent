@@ -8,6 +8,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, VideoPause, VideoPlay, WarningFilled } from '@element-plus/icons-vue'
+import IaEmpty from '@/components/IaEmpty.vue'
 import { useCircuitStore, LIMIT_FIELDS, DEFAULT_LIMITS } from '@/stores/circuit'
 import { apiErrorMessage } from '@/stores/apps'
 
@@ -98,13 +99,11 @@ async function terminateRun() {
   <div class="view" v-loading="store.loading">
     <!-- 服务端能力未开通占位(优化建议 #2/#9):不给可交互但必败的表单 -->
     <el-card v-if="store.unavailable" shadow="never" class="unavailable-card">
-      <el-empty description="服务端能力未开通">
-        <div class="unavailable-hint">
-          熔断与资源上限的管理端点尚未在当前服务端启用(能力跟踪:
-          test-report/2026-09-21-02/99-优化建议.md #2)。
-        </div>
-        <el-button :icon="Refresh" @click="store.load()">重新检测</el-button>
-      </el-empty>
+      <IaEmpty description="服务端能力未开通" hint="熔断与资源上限的管理端点尚未在当前服务端启用(能力跟踪:99-优化建议.md #2)">
+        <template #action>
+          <el-button :icon="Refresh" @click="store.load()">重新检测</el-button>
+        </template>
+      </IaEmpty>
     </el-card>
 
     <template v-else>
@@ -194,8 +193,7 @@ async function terminateRun() {
 
 <style scoped>
 .view { display: flex; flex-direction: column; gap: 12px; }
-.unavailable-card :deep(.el-empty) { padding: 40px 0; }
-.unavailable-hint { color: #909399; font-size: 12px; margin-bottom: 16px; }
+.unavailable-card :deep(.ia-empty) { padding: 40px 16px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .form-hint { color: #909399; font-size: 12px; width: 100%; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }

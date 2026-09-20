@@ -7,6 +7,7 @@ import com.inneragent.platform.toolhub.mapper.ToolGrantMapper;
 import com.inneragent.platform.toolhub.mapper.ToolRegistryMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,7 +84,13 @@ public class ToolGrantService {
         grantRow.setSource(SOURCE_ADMIN);
         grantRow.setInvalidated(false);
         grantRow.setDecisionNote(decisionNote);
-        grantMapper.insert(grantRow);
+        try {
+            grantMapper.insert(grantRow);
+        } catch (DuplicateKeyException conflict) {
+            // DEF-04:并发窗口下撞活跃行部分唯一索引(uk_ia_tool_grant_active)
+            // → 409 业务语义,不再裸 DataIntegrityViolationException → 500
+            throw new BusinessException(409, "该用户对此工具已存在同作用域的有效授权");
+        }
 
         auditService.append(new ToolAuditService.ToolAuditEntry(
                 appId, null, userId, blankToNull(conversationId), null,

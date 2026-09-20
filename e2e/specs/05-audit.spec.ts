@@ -170,7 +170,7 @@ test('敏感参数脱敏:库内明文,出参与 UI 详情一律 ***', async ({ r
   await shot(adminPage, 'L5-04-脱敏-UI详情抽屉')
 })
 
-test('DEF-04 取证:撤销后同键重授 → 500(应 409/200)', async ({ request }) => {
+test('DEF-04 回归:撤销后同键重授 → 200;活跃重复授予 → 409', async ({ request }) => {
   // 前置:注册工具,授予并撤销
   psql(`DELETE FROM ia_tool_registry WHERE tool_name='${AUDIT_TOOL}'`)
   psql(`DELETE FROM ia_tool_grant WHERE user_id = 8702`)
@@ -185,15 +185,20 @@ test('DEF-04 取证:撤销后同键重授 → 500(应 409/200)', async ({ reques
   const grantId = (await g1.json()).data.id as number
   const rev = await request.delete(`/ia/api/v1/admin/grants/${grantId}`, { data: { decisionNote: 'r1' } })
   expect(rev.status()).toBe(200)
-  // 观察值(缺陷):重授 500,应 200(或与重复授予一致返回 409)
+  // 修复口径(V13 部分唯一索引):撤销(逻辑删)行不占唯一键,同键重授 200
   const again = await request.post('/ia/api/v1/admin/grants', {
     data: { userId: 8702, toolName: AUDIT_TOOL, scope: 'permanent', decisionNote: 'd2' },
   })
-  expect(again.status()).toBe(500)
-  saveJson('L5-07-DEF04-撤销后重授500.json', {
+  expect(again.status()).toBe(200)
+  saveJson('L5-07-DEF04-撤销后重授200.json', {
     revoke: rev.status(),
-    reGrant: { status: again.status(), body: await again.json() },
+    reGrant: await again.json(),
   })
+  // 活跃行重复授予 → 409 业务语义(不再裸 500)
+  const dup = await request.post('/ia/api/v1/admin/grants', {
+    data: { userId: 8702, toolName: AUDIT_TOOL, scope: 'permanent', decisionNote: 'd3' },
+  })
+  expect(dup.status()).toBe(409)
   psql(`DELETE FROM ia_tool_grant WHERE user_id = 8702`)
   psql(`DELETE FROM ia_tool_registry WHERE id=${(await reg.json()).data.id}`)
 })

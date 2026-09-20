@@ -1,6 +1,8 @@
 package com.inneragent.db;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
@@ -26,10 +28,11 @@ import org.testcontainers.utility.DockerImageName;
  * Flyway 迁移链冒烟测试(P0-T4 建立;P1 台账④随 V5__storage_config.sql、
  * P1-T2a 随 V6 工具中枢增补、P1-T3b 随 V7__agent_attachment.sql 对话附件增补、
  * P2-srv U1 随 V8 decision_source 注释刷新、P2-key 随 V9__app_sign_key_rotation_grace.sql
- * 签名公钥轮换双 key 列增补、P2-obs 随 V11__webhook_delivery.sql 终态 Webhook 投递增补)。
+ * 签名公钥轮换双 key 列增补、P2-obs 随 V11__webhook_delivery.sql 终态 Webhook 投递增补、
+ * R1 修复随 V13__tool_grant_active_unique_index.sql 授权活跃行部分唯一索引增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
- * 上执行 classpath:db/migration 全链迁移,断言 24 张 ia_ 业务表全部建成、种子数据落库,
+ * 上执行 classpath:db/migration 全链迁移,断言 25 张 ia_ 业务表全部建成、种子数据落库,
  * 并重复执行 migrate 验证幂等。由 maven-failsafe-plugin 执行(类名 *IT 结尾)。</p>
  */
 @Testcontainers
@@ -95,18 +98,18 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(12, result.migrationsExecuted, "应依次执行 V1-V12 十二个迁移(V9 轮换双 key;V10 管理站账号认证;V11 终态 Webhook 投递;V12 审计列宽)");
+        assertEquals(13, result.migrationsExecuted, "应依次执行 V1-V13 十三个迁移(V9 轮换双 key;V10 管理站账号认证;V11 终态 Webhook 投递;V12 审计列宽;V13 授权活跃行部分唯一索引)");
 
         List<String> actualTables = listIaTables();
-        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 25 张 ia_ 表");
+        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 25 张 ia_ 表(V13 仅改索引,不改表集合)");
 
-        // flyway_schema_history:十条记录且全部 success
+        // flyway_schema_history:十三条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(12, resultSet.getInt(1), "flyway_schema_history 应有 12 条成功记录(V9 轮换双 key + V10 管理站认证 + V11 Webhook 投递 + V12 审计列宽)");
+            assertEquals(13, resultSet.getInt(1), "flyway_schema_history 应有 13 条成功记录(V9 轮换双 key + V10 管理站认证 + V11 Webhook 投递 + V12 审计列宽 + V13 授权部分唯一索引)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -118,6 +121,20 @@ class FlywayMigrationSmokeIT {
                 "ia_tool_grant.invalidated 应存在(自动失效,V18)");
         assertEquals("character varying", columnType("ia_tool_grant", "conversation_id"),
                 "ia_tool_grant.conversation_id 应为 VARCHAR(会话 UUID 语义)");
+
+        // V13:授权唯一约束改为「仅活跃行」部分唯一索引(DEF-04 撤销后重授 500 修复)
+        assertFalse(constraintExists("ia_tool_grant", "uk_ia_tool_grant"),
+                "uk_ia_tool_grant 表级约束(含逻辑删行)应已删除(V13)");
+        assertTrue(indexExists("uk_ia_tool_grant_active"),
+                "uk_ia_tool_grant_active 部分唯一索引应存在(V13)");
+        String indexDef = indexDef("uk_ia_tool_grant_active");
+        assertTrue(indexDef.startsWith("CREATE UNIQUE INDEX"),
+                "uk_ia_tool_grant_active 应为唯一索引:" + indexDef);
+        assertTrue(indexDef.contains("NULLS NOT DISTINCT"),
+                "uk_ia_tool_grant_active 应保持 NULLS NOT DISTINCT(永久授权 NULL 会话也参与唯一):" + indexDef);
+        assertTrue(indexDef.toLowerCase().contains("where")
+                        && indexDef.toLowerCase().contains("deleted"),
+                "uk_ia_tool_grant_active 应带 deleted = FALSE 部分谓词(撤销/失效行不占键):" + indexDef);
 
         // V12:审计裁决列宽 32——schema_revalidated(18)曾超 VARCHAR(16) 致
         // BREAKING 确认端点在审计 fail-closed 下 500,放宽杜绝「枚举超列宽」
@@ -201,6 +218,59 @@ class FlywayMigrationSmokeIT {
         assertEquals(EXPECTED_IA_TABLES, listIaTables(), "幂等校验后 ia_ 表集合不变");
     }
 
+    /**
+     * V13 行为校验(DEF-04):撤销(逻辑删)行不占唯一键——同键重授可插入;
+     * 活跃行之间仍互斥(重复授权被约束拒绝)。
+     */
+    @Test
+    @Order(3)
+    void revokedGrantRowDoesNotBlockReGrantWhileActiveRowsStayUnique() throws SQLException {
+        long userId = 999001;
+        String fqn = "mcp__it__v13_probe";
+        try {
+            try (Connection connection = openConnection();
+                 PreparedStatement insert = connection.prepareStatement(
+                         "INSERT INTO ia_tool_grant (user_id, tool_fqn, scope, conversation_id, deleted) "
+                                 + "VALUES (?, ?, 'permanent', NULL, FALSE)")) {
+                insert.setLong(1, userId);
+                insert.setString(2, fqn);
+                assertEquals(1, insert.executeUpdate(), "首笔活跃授权应插入成功");
+            }
+            // 活跃行互斥:同键第二笔活跃授权必须被部分唯一索引拒绝
+            try (Connection connection = openConnection();
+                 PreparedStatement insert = connection.prepareStatement(
+                         "INSERT INTO ia_tool_grant (user_id, tool_fqn, scope, conversation_id, deleted) "
+                                 + "VALUES (?, ?, 'permanent', NULL, FALSE)")) {
+                insert.setLong(1, userId);
+                insert.setString(2, fqn);
+                assertThrows(SQLException.class, insert::executeUpdate,
+                        "同键重复活跃授权应违反 uk_ia_tool_grant_active");
+            }
+            // 撤销(逻辑删)后:同键重授必须成功(DEF-04 核心口径)
+            try (Connection connection = openConnection();
+                 PreparedStatement revoke = connection.prepareStatement(
+                         "UPDATE ia_tool_grant SET deleted = TRUE WHERE user_id = ? AND tool_fqn = ?");
+                 PreparedStatement reGrant = connection.prepareStatement(
+                         "INSERT INTO ia_tool_grant (user_id, tool_fqn, scope, conversation_id, deleted) "
+                                 + "VALUES (?, ?, 'permanent', NULL, FALSE)")) {
+                revoke.setLong(1, userId);
+                revoke.setString(2, fqn);
+                assertEquals(1, revoke.executeUpdate(), "撤销应逻辑删原授权行");
+                reGrant.setLong(1, userId);
+                reGrant.setString(2, fqn);
+                assertEquals(1, reGrant.executeUpdate(), "撤销后同键重授应插入成功(逻辑删行不占键)");
+            }
+        } finally {
+            try (Connection connection = openConnection();
+                 PreparedStatement cleanup = connection.prepareStatement(
+                         "DELETE FROM ia_tool_grant WHERE user_id = ? AND tool_fqn = ?")) {
+                cleanup.setLong(1, userId);
+                cleanup.setString(2, fqn);
+                cleanup.executeUpdate();
+            }
+        }
+    }
+
     private static List<String> listIaTables() throws SQLException {
         List<String> tables = new ArrayList<>();
         // LIKE 'ia\_%':反斜杠转义下划线,避免把 iaXx 之类误匹配进来
@@ -228,6 +298,30 @@ class FlywayMigrationSmokeIT {
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?")) {
             statement.setString(1, indexName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
+    }
+
+    private static String indexDef(String indexName) throws SQLException {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?")) {
+            statement.setString(1, indexName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getString(1) : "";
+            }
+        }
+    }
+
+    private static boolean constraintExists(String table, String constraintName) throws SQLException {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT 1 FROM information_schema.table_constraints "
+                             + "WHERE table_schema = 'public' AND table_name = ? AND constraint_name = ?")) {
+            statement.setString(1, table);
+            statement.setString(2, constraintName);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next();
             }

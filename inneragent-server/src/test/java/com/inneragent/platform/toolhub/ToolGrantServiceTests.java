@@ -113,6 +113,23 @@ class ToolGrantServiceTests {
     }
 
     @Test
+    @DisplayName("DEF-04:插入命中活跃行唯一键(并发窗口)→ 409 业务语义,不再裸 500")
+    void duplicateKeyOnInsertMapsToConflict409() {
+        // 服务层查重通过(查无活跃行),但 INSERT 撞活跃行部分唯一索引(并发窗口)
+        when(grantMapper.selectActiveByUserAndFqn(userId(), FQN)).thenReturn(List.of());
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DuplicateKeyException(
+                "uk_ia_tool_grant_active"))
+                .when(grantMapper).insert(any(ToolGrant.class));
+
+        assertThatThrownBy(() -> service.grant(userId(), "list_users", "permanent", null, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("已存在")
+                .satisfies(e -> assertThat(((BusinessException) e).getCode()).isEqualTo(409));
+        // 冲突路径不落「granted」审计
+        verify(auditService, never()).append(any(ToolAuditService.ToolAuditEntry.class));
+    }
+
+    @Test
     @DisplayName("撤销:deleteById 逻辑删除 + 审计")
     void revokeDeletesAndAudits() {
         ToolGrant row = new ToolGrant();

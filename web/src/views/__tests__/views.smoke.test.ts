@@ -3,6 +3,7 @@
  * 断言:挂载不抛错 + 关键骨架渲染 + mock 数据可达。
  */
 import { describe, expect, it } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mountView } from './helpers'
 import LoginView from '@/views/LoginView.vue'
 import AdminLayout from '@/views/AdminLayout.vue'
@@ -52,6 +53,19 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('sha256:0002fp')
     // 注解图例(R/D/I/W)渲染
     expect(wrapper.findAll('.hint').length).toBeGreaterThan(0)
+    wrapper.unmount()
+  })
+
+  it('ToolsView:行内「历史」抽屉打开(#11 schema 历史入口;空态可引导)', async () => {
+    const wrapper = await mountView(ToolsView, '/tools')
+    const historyBtn = wrapper.findAll('button').find(b => b.text().includes('历史'))
+    expect(historyBtn).toBeTruthy()
+    await historyBtn!.trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(wrapper.text()).toContain('schema 历史')
+    // 种子无历史 → 空态引导文案
+    expect(wrapper.text()).toContain('暂无变更历史')
     wrapper.unmount()
   })
 

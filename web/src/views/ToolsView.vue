@@ -10,12 +10,12 @@
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, CircleCheck, CircleClose, Setting } from '@element-plus/icons-vue'
+import { Plus, Refresh, CircleCheck, CircleClose, Setting, Clock } from '@element-plus/icons-vue'
 import {
   useToolsStore, RISK_LEVELS, ADMIN_POLICIES, GRANT_INVALID_REASONS, parseAnnotations,
 } from '@/stores/tools'
 import { apiErrorMessage } from '@/stores/apps'
-import type { GrantScope, IaToolGrant, IaToolRegistry, ToolRiskLevel } from '@/api/types'
+import type { GrantScope, IaToolGrant, IaToolRegistry, IaToolSchemaHistory, ToolRiskLevel } from '@/api/types'
 
 const store = useToolsStore()
 const tab = ref<'registry' | 'grants'>('registry')
@@ -230,6 +230,53 @@ function invalidatedTag(g: IaToolGrant): string {
     ? (GRANT_INVALID_REASONS[g.invalidatedReason ?? 'tool_deleted'] ?? '已失效')
     : '有效'
 }
+
+// ===== schema 历史(优化建议 #11:仅 API 可达 → 行内「历史」抽屉时间线) =====
+const historyVisible = ref(false)
+const historyTool = ref<IaToolRegistry | null>(null)
+const historyLoading = ref(false)
+const historyEntries = ref<IaToolSchemaHistory[]>([])
+
+/** outcome → 展示文案(ia_tool_schema_history.outcome 真实码值) */
+const OUTCOME_META: Record<string, { label: string; type: 'primary' | 'warning' | 'danger' | 'info' }> = {
+  applied: { label: '已应用', type: 'primary' },
+  pending_review: { label: '待确认', type: 'warning' },
+  rejected: { label: '已拒绝', type: 'danger' },
+  silent_refresh: { label: '静默刷新', type: 'info' },
+}
+const TRIAGE_LABELS: Record<string, string> = {
+  unchanged: '无变更',
+  compatible: '兼容',
+  breaking: 'BREAKING',
+}
+
+async function openHistory(t: IaToolRegistry) {
+  historyTool.value = t
+  historyVisible.value = true
+  historyLoading.value = true
+  try {
+    historyEntries.value = await store.schemaHistory(t.id)
+  } catch (err) {
+    ElMessage.error(apiErrorMessage(err, '历史加载失败'))
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function historyReasons(detail: string | null): string[] {
+  if (!detail) return []
+  try {
+    const parsed = JSON.parse(detail)
+    return Array.isArray(parsed) ? parsed.map(String) : [String(parsed)]
+  } catch {
+    return [detail]
+  }
+}
+
+/** 指纹短形(时间线 diff 展示;完整值见详情) */
+function shortSha(sha: string): string {
+  return sha.length > 18 ? `${sha.slice(0, 14)}…` : sha
+}
 </script>
 
 <template>
@@ -285,9 +332,10 @@ function invalidatedTag(g: IaToolGrant): string {
                 <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="310" fixed="right">
+            <el-table-column label="操作" width="360" fixed="right">
               <template #default="{ row }">
                 <el-button text type="primary" size="small" :icon="Refresh" @click="refreshTool(row)">刷新</el-button>
+                <el-button text type="primary" size="small" :icon="Clock" @click="openHistory(row)">历史</el-button>
                 <el-button v-if="row.revalidateRequired" text type="success" size="small" :icon="CircleCheck" @click="confirmSchema(row)">确认</el-button>
                 <el-button v-if="row.revalidateRequired" text type="warning" size="small" :icon="CircleClose" @click="rejectSchema(row)">拒绝</el-button>
                 <el-button text type="primary" size="small" :icon="Setting" @click="openPolicy(row)">策略</el-button>
@@ -448,6 +496,40 @@ function invalidatedTag(g: IaToolGrant): string {
       </template>
     </el-dialog>
 
+    <!-- schema 历史(优化建议 #11:applied/pending_review/rejected/silent_refresh + 指纹 diff) -->
+    <el-drawer
+      v-model="historyVisible"
+      :title="`schema 历史:${historyTool?.fqn ?? ''}`"
+      size="520px"
+    >
+      <div v-if="historyTool" class="history-meta">
+        <span>当前指纹</span>
+        <span class="mono fingerprint">{{ historyTool.schemaSha256 ?? '—' }}</span>
+      </div>
+      <el-empty v-if="!historyLoading && historyEntries.length === 0" description="暂无变更历史(注册后未发生过 schema 分诊)" />
+      <el-timeline v-else v-loading="historyLoading" class="history-timeline">
+        <el-timeline-item
+          v-for="h in historyEntries"
+          :key="h.id"
+          :type="OUTCOME_META[h.outcome]?.type"
+          :timestamp="`${h.createTime ?? '—'} · 操作者:${h.actor ?? 'system'}`"
+        >
+          <div class="history-head">
+            <el-tag size="small" :type="OUTCOME_META[h.outcome]?.type">{{ OUTCOME_META[h.outcome]?.label ?? h.outcome }}</el-tag>
+            <el-tag size="small" type="info" effect="plain">{{ TRIAGE_LABELS[h.triage] ?? h.triage }}</el-tag>
+          </div>
+          <div class="mono fp-diff">
+            <span class="dim">{{ h.previousSha256 ? shortSha(h.previousSha256) : '(初始)' }}</span>
+            <span class="arrow">→</span>
+            <span>{{ h.newSha256 ? shortSha(h.newSha256) : '(清除)' }}</span>
+          </div>
+          <ul v-if="historyReasons(h.detail).length" class="history-reasons">
+            <li v-for="(r, i) in historyReasons(h.detail)" :key="i">{{ r }}</li>
+          </ul>
+        </el-timeline-item>
+      </el-timeline>
+    </el-drawer>
+
     <!-- 代授 -->
     <el-dialog v-model="grantVisible" title="代授工具授权" width="540px">
       <el-form label-width="110px">
@@ -501,5 +583,11 @@ function invalidatedTag(g: IaToolGrant): string {
 }
 .hint.on { background: #fde2e2; color: #c45656; }
 .form-hint { color: #909399; font-size: 12px; margin-top: 4px; width: 100%; }
+.history-meta { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; color: #606266; font-size: 13px; }
+.history-head { display: flex; gap: 6px; margin-bottom: 4px; }
+.history-timeline { padding-left: 4px; }
+.fp-diff { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.fp-diff .arrow { color: #c0c4cc; }
+.history-reasons { margin: 0; padding-left: 18px; color: #909399; font-size: 12px; }
 .mb12 { margin-bottom: 12px; }
 </style>

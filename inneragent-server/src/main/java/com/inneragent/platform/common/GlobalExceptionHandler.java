@@ -100,6 +100,18 @@ public class GlobalExceptionHandler {
         // 连接已断开，无法写回响应，直接返回
     }
 
+    /**
+     * [adapt] U1/D1:请求语义错误(IllegalArgumentException,如 enabledMcpTools
+     * 指名请求不存在的工具)→ 400 透传明确错误消息,不再被兜底处理器掩成
+     * 500「系统内部错误」。
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public CommonResult<?> handleIllegalArgumentException(IllegalArgumentException e) {
+        log.warn("请求语义错误: {}", e.getMessage());
+        return CommonResult.error(400, e.getMessage());
+    }
+
     /** [port] 兜底 500:记录完整堆栈便于追踪,响应体不泄露内部细节。 */
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)

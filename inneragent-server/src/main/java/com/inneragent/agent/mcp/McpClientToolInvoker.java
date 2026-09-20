@@ -137,7 +137,9 @@ public class McpClientToolInvoker implements McpToolInvoker {
                 actContext == null ? 0L : actContext.userId(),
                 actContext == null ? 0L : actContext.tenantId(),
                 null,
-                null,
+                // [adapt] U1/D1:运行身份沿 ToolExecutionContext.runId 透传
+                // (act.sub=inneragent-run:{runId};内核工具适配器显式携带)
+                actContext == null ? null : actContext.runId(),
                 entry.getFqn(),
                 endpointUrl)));
         try {

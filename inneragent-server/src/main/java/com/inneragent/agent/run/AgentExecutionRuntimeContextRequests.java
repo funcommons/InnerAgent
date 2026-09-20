@@ -170,7 +170,8 @@ public final class AgentExecutionRuntimeContextRequests {
                 project,
                 new PipelineRequestContext(
                         persisted.getRunId(), requestKind),
-                new ToolExecutionContext(userId, 1, userId, persisted.getTenantId()),
+                new ToolExecutionContext(userId, 1, userId, persisted.getTenantId(),
+                        persisted.getRunId()),
                 CancellationContext.noop(),
                 permissionContext(userId, toolExecutionMode));
     }

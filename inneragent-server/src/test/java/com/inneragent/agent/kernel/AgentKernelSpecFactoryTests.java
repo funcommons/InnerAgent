@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -162,8 +163,7 @@ class AgentKernelSpecFactoryTests {
     }
 
     @Test
-    void activeReferenceContextUsesSupportedPromptVariableNames() {
-        AiChatReqVO request = request().setContext(Map.of(
+    void activeReferenceContextUsesSupportedPromptVariableNames() {        AiChatReqVO request = request().setContext(Map.of(
                 "activeSkillReferences", "test-skill",
                 "activeMcpReferences", "assets/search_assets"));
 
@@ -367,5 +367,114 @@ class AgentKernelSpecFactoryTests {
     private AiChatReqVO request() {
         return new AiChatReqVO()
                 .setToolExecutionMode(ToolExecutionMode.DEFAULT.name());
+    }
+
+    // ------------------------------------------------------------------
+    // [adapt] U1/D1:MCP 工具目录(ia_tool_registry 聚合)并入内核工具面
+    // ------------------------------------------------------------------
+
+    @Test
+    void catalogToolsEnterTheKernelWhitelistByFqn() {
+        AgentKernelSpecFactory catalogFactory = factoryWithCatalog(catalogWith(hostRegistryTool()));
+
+        AgentKernelSpec spec = catalogFactory.createRoot(
+                request(), model, "root prompt", 42L);
+
+        assertThat(spec.toolWhitelist()).containsExactly("mcp__crm__list_users");
+        AgentKernelToolManifest manifest = spec.toolManifest().getFirst();
+        assertThat(manifest.toolName()).isEqualTo("mcp__crm__list_users");
+        // 可信宿主 readOnlyHint 采信(V15)→ manifest 只读位
+        assertThat(manifest.readOnly()).isTrue();
+        assertThat(manifest.concurrencySafe()).isFalse();
+        // manifest 哈希与 schema 规范化口径一致(注册时校验/快照 restore 同源)
+        var schema = com.inneragent.agent.tool.AgentScopeToolSchema.prepare(
+                new ObjectMapper(),
+                "{\"type\":\"object\",\"properties\":{\"zone\":{\"type\":\"string\"}}}",
+                "mcp__crm__list_users");
+        assertThat(manifest.schemaSha256())
+                .isEqualTo(AgentKernelToolManifest.schemaSha256(schema.canonicalJson()));
+    }
+
+    @Test
+    void enabledMcpToolsResolvesCatalogPlainToolNameToFqn() {
+        AgentKernelSpecFactory catalogFactory = factoryWithCatalog(catalogWith(hostRegistryTool()));
+
+        AgentKernelSpec spec = catalogFactory.createRoot(
+                request().setEnabledMcpTools(List.of("list_users")),
+                model,
+                "root prompt");
+
+        assertThat(spec.toolWhitelist()).containsExactly("mcp__crm__list_users");
+    }
+
+    @Test
+    void unavailableCatalogToolRequestFailsWithExplicitError() {
+        AgentKernelSpecFactory catalogFactory = factoryWithCatalog(catalogWith(hostRegistryTool()));
+
+        assertThatThrownBy(() -> catalogFactory.createRoot(
+                request().setEnabledMcpTools(
+                        List.of("mcp__demo-spring-host__create_host_record")),
+                model,
+                "root prompt"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Requested AgentScope MCP tools are unavailable")
+                .hasMessageContaining("mcp__demo-spring-host__create_host_record");
+    }
+
+    @Test
+    void disabledCatalogToolDoesNotEnterTheKernelWhitelist() {
+        AgentKernelSpecFactory catalogFactory = factoryWithCatalog(catalogWith(hostRegistryTool()));
+
+        AgentKernelSpec spec = catalogFactory.createRoot(
+                request().setEnabledMcpTools(List.of()),
+                model,
+                "root prompt");
+
+        assertThat(spec.toolWhitelist()).isEmpty();
+    }
+
+    private AgentKernelSpecFactory factoryWithCatalog(
+            com.inneragent.agent.mcp.McpToolCatalog catalog) {
+        AgentScopeModelFactory models = mock(AgentScopeModelFactory.class);
+        when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
+        when(mcp.manifestsForAgent(anyString())).thenReturn(List.of());
+        when(mcp.manifestsForAgent(anyString(), any())).thenReturn(List.of());
+        return new AgentKernelSpecFactory(
+                new AiAgentService(registry),
+                new AiToolConfigService(List.of(), registry),
+                models,
+                new AgentScopeV2Properties(),
+                new ObjectMapper(),
+                mcp,
+                catalog);
+    }
+
+    private com.inneragent.agent.mcp.McpToolCatalog catalogWith(
+            com.inneragent.platform.toolhub.ToolRegistryEntry entry) {
+        com.inneragent.platform.toolhub.mapper.ToolRegistryMapper mapper = mock(
+                com.inneragent.platform.toolhub.mapper.ToolRegistryMapper.class);
+        when(mapper.selectList(any())).thenReturn(List.of(entry));
+        return new com.inneragent.agent.mcp.McpToolCatalog(
+                mapper,
+                mock(com.inneragent.platform.toolhub.ToolGrantService.class),
+                new ObjectMapper());
+    }
+
+    private com.inneragent.platform.toolhub.ToolRegistryEntry hostRegistryTool() {
+        com.inneragent.platform.toolhub.ToolRegistryEntry entry =
+                new com.inneragent.platform.toolhub.ToolRegistryEntry();
+        entry.setId(1L);
+        entry.setServerKey("crm");
+        entry.setToolName("list_users");
+        entry.setFqn("mcp__crm__list_users");
+        entry.setDescription("查询客户");
+        entry.setParametersSchema(
+                "{\"type\":\"object\",\"properties\":{\"zone\":{\"type\":\"string\"}}}");
+        entry.setAnnotationsJson("{\"readOnlyHint\":true}");
+        entry.setRiskLevel("low");
+        entry.setSource(com.inneragent.platform.toolhub.ToolRegistryService.SOURCE_HOST_APP);
+        entry.setConcurrencySafe(false);
+        entry.setEnabled(true);
+        return entry;
     }
 }

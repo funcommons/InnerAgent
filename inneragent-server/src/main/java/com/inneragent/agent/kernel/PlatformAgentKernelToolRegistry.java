@@ -10,10 +10,13 @@ import com.inneragent.agent.tool.ToolExecutorRegistry;
 import com.inneragent.agent.kernel.AgentScopeSubAgentToolAdapter;
 import com.inneragent.agent.kernel.AgentScopeToolAdapter;
 import com.inneragent.agent.mcp.AgentScopeMcpRegistry;
+import com.inneragent.agent.mcp.McpToolCatalog;
+import com.inneragent.agent.mcp.McpToolCatalogEntry;
 import com.inneragent.agent.runtime.AgentRuntimeSchedulers;
 import com.inneragent.agent.tool.AgentScopeToolSchema;
 import com.inneragent.agent.tool.PlatformSubAgentRunPort;
 import com.inneragent.agent.run.RunLeaseGuard;
+import com.inneragent.platform.context.AppContext;
 import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.Toolkit;
@@ -25,7 +28,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Registers only the immutable tool whitelist captured by an AgentScope Harness kernel. */
+/**
+ * Registers only the immutable tool whitelist captured by an AgentScope Harness kernel.
+ *
+ * <p>[adapt] U1/D1:白名单中来自 MCP 工具目录的条目(目录 FQN)由
+ * {@link AgentScopeMcpToolAdapter} 装配为 AgentScope 工具,执行经
+ * {@code McpToolInvoker} 宿主桥;契约(schema 哈希/只读/并发安全)与
+ * spec manifest 校验一致,快照 restore 锁定不漂移。
+ */
 @Component
 public final class PlatformAgentKernelToolRegistry implements AgentKernelToolRegistry {
 
@@ -43,6 +53,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
     // (调用即抛,T2b 声明真实 Bean 后 @ConditionalOnMissingBean 让位),
     // 经注册链路下发到各工具适配器;未接管时内核行为与现状完全一致。
     private final ObjectProvider<com.inneragent.agent.mcp.McpToolInvoker> mcpToolInvokers;
+    // [adapt] U1/D1:MCP 工具目录(白名单中目录 FQN 条目的装配与契约校验来源)。
+    private final McpToolCatalog mcpToolCatalog;
 
     public PlatformAgentKernelToolRegistry(
             ToolExecutorRegistry executors,
@@ -55,7 +67,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             ObjectMapper objectMapper,
             AgentScopeMcpRegistry mcpRegistry,
             ObjectProvider<ActTokenSupplier> actTokenSuppliers,
-            ObjectProvider<com.inneragent.agent.mcp.McpToolInvoker> mcpToolInvokers) {
+            ObjectProvider<com.inneragent.agent.mcp.McpToolInvoker> mcpToolInvokers,
+            McpToolCatalog mcpToolCatalog) {
         this.executors = Objects.requireNonNull(executors, "executors must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -70,6 +83,7 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                 actTokenSuppliers, "actTokenSuppliers must not be null");
         this.mcpToolInvokers = Objects.requireNonNull(
                 mcpToolInvokers, "mcpToolInvokers must not be null");
+        this.mcpToolCatalog = mcpToolCatalog;
     }
 
     @Override
@@ -81,6 +95,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                 subAgentTools(spec.agentDefinitionStableKey());
         Map<String, AgentKernelToolManifest> manifest = manifest(spec);
         Long ownerUserId = AgentKernelSpecFactory.ownerUserId(spec);
+        long appId = AppContext.currentOrDefault();
+        McpToolCatalog catalog = mcpToolCatalog;
         AgentKernelToolkitResources mcpResources = AgentKernelToolkitResources.none();
         if (ownerUserId == null) {
             mcpRegistry.register(
@@ -98,9 +114,11 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                         ? mcpRegistry.isMcpTool(toolName, spec.agentDefinitionStableKey())
                         : mcpRegistry.isMcpTool(
                                 toolName, spec.agentDefinitionStableKey(), ownerUserId);
+                McpToolCatalogEntry catalogEntry = catalogEntry(catalog, appId, toolName);
                 int matches = (executor == null ? 0 : 1)
                         + (child == null ? 0 : 1)
-                        + (mcpTool ? 1 : 0);
+                        + (mcpTool ? 1 : 0)
+                        + (catalogEntry == null ? 0 : 1);
                 if (matches > 1) {
                     throw new IllegalStateException(
                             "AgentScope tool name is ambiguous in kernel whitelist: " + toolName);
@@ -130,6 +148,24 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                             childRuns::getIfAvailable,
                             leaseGuard,
                             objectMapper));
+                } else if (catalogEntry != null) {
+                    // [adapt] U1/D1:目录条目 → 宿主桥工具适配器(execution 经
+                    // McpToolInvoker;治理位 readOnlyEffective/concurrencySafe 定契约)
+                    AgentScopeToolSchema.PreparedSchema schema =
+                            prepareCatalogSchema(catalogEntry);
+                    requireManifest(
+                            expected,
+                            schema,
+                            catalogEntry.readOnlyEffective(),
+                            catalogEntry.concurrencySafe());
+                    toolkit.registerAgentTool(new AgentScopeMcpToolAdapter(
+                            catalogEntry,
+                            appId,
+                            schema,
+                            schedulers.toolBlocking(),
+                            leaseGuard,
+                            objectMapper,
+                            mcpToolInvokers.getIfAvailable()));
                 } else if (mcpTool) {
                     AgentTool registered = Objects.requireNonNull(
                             toolkit.getTool(toolName),
@@ -163,6 +199,25 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             }
             throw new IllegalStateException("AgentScope tool registration failed", failure);
         }
+    }
+
+    /** 目录条目按白名单名(FQN)反查;目录未装配时恒空。 */
+    private McpToolCatalogEntry catalogEntry(
+            McpToolCatalog catalog, long appId, String toolName) {
+        if (catalog == null) {
+            return null;
+        }
+        return catalog.find(appId, toolName).orElse(null);
+    }
+
+    /** 目录 schema 规范化(与 spec 侧 catalogManifest 同一 prepare 口径)。 */
+    private AgentScopeToolSchema.PreparedSchema prepareCatalogSchema(
+            McpToolCatalogEntry entry) {
+        String schemaJson = entry.parametersSchemaJson() == null
+                || entry.parametersSchemaJson().isBlank()
+                ? "{\"type\":\"object\"}"
+                : entry.parametersSchemaJson();
+        return AgentScopeToolSchema.prepare(objectMapper, schemaJson, entry.fqn());
     }
 
     private AgentScopeToolSchema.PreparedSchema prepareMcpSchema(

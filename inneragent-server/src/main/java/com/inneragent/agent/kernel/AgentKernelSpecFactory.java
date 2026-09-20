@@ -11,10 +11,13 @@ import com.inneragent.agent.tool.ToolExecutor;
 import com.inneragent.agent.kernel.AgentScopeModelFactory;
 import com.inneragent.agent.context.ProjectContext;
 import com.inneragent.agent.mcp.AgentScopeMcpRegistry;
+import com.inneragent.agent.mcp.McpToolCatalog;
+import com.inneragent.agent.mcp.McpToolCatalogEntry;
 import com.inneragent.agent.permission.ToolExecutionMode;
 import com.inneragent.agent.tool.AgentScopeToolSchema;
 import com.inneragent.agent.run.kernel.AgentKernelSnapshotPayload;
 import com.inneragent.agent.run.kernel.ToolManifestSnapshot;
+import com.inneragent.platform.context.AppContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -22,11 +25,21 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Creates immutable root and platform-child Harness kernel specifications. */
+/**
+ * Creates immutable root and platform-child Harness kernel specifications.
+ *
+ * <p>[adapt] U1/D1:内核工具面的 MCP 来源在 yml 静态注册表
+ * ({@link AgentScopeMcpRegistry})之外并入 MCP 工具目录
+ * ({@link McpToolCatalog},ia_tool_registry 聚合视图):目录条目以 FQN
+ * (mcp__{serverKey}__{toolName})进入白名单与 manifest,schema 经
+ * {@link AgentScopeToolSchema} 规范化后取哈希——与注册时校验、内核快照
+ * restore 锁定同一口径。enabledMcpTools 门控与可用性校验统一覆盖目录视图。
+ */
 @Component
 public final class AgentKernelSpecFactory {
 
@@ -41,6 +54,8 @@ public final class AgentKernelSpecFactory {
     private final AgentScopeV2Properties properties;
     private final ObjectMapper objectMapper;
     private final AgentScopeMcpRegistry mcpRegistry;
+    /** [adapt] U1/D1:目录视图(测试直构可空;可空时不并入目录工具)。 */
+    private final McpToolCatalog mcpToolCatalog;
 
     @Autowired
     public AgentKernelSpecFactory(
@@ -49,7 +64,8 @@ public final class AgentKernelSpecFactory {
             AgentScopeModelFactory modelFactory,
             AgentScopeV2Properties properties,
             ObjectMapper objectMapper,
-            AgentScopeMcpRegistry mcpRegistry) {
+            AgentScopeMcpRegistry mcpRegistry,
+            McpToolCatalog mcpToolCatalog) {
         this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -57,6 +73,7 @@ public final class AgentKernelSpecFactory {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.mcpRegistry = Objects.requireNonNull(mcpRegistry, "mcpRegistry must not be null");
+        this.mcpToolCatalog = mcpToolCatalog;
     }
 
     public AgentKernelSpecFactory(
@@ -71,7 +88,26 @@ public final class AgentKernelSpecFactory {
                 modelFactory,
                 properties,
                 objectMapper,
-                new AgentScopeMcpRegistry(properties, objectMapper));
+                new AgentScopeMcpRegistry(properties, objectMapper),
+                null);
+    }
+
+    /** 目录缺省形态(无目录视图;仅 yml 静态 MCP)。 */
+    public AgentKernelSpecFactory(
+            AiAgentService agentService,
+            AiToolConfigService toolConfigService,
+            AgentScopeModelFactory modelFactory,
+            AgentScopeV2Properties properties,
+            ObjectMapper objectMapper,
+            AgentScopeMcpRegistry mcpRegistry) {
+        this(
+                agentService,
+                toolConfigService,
+                modelFactory,
+                properties,
+                objectMapper,
+                mcpRegistry,
+                null);
     }
 
     public AgentKernelSpec createRoot(AiChatReqVO request, AiModel model, String systemPrompt) {
@@ -297,25 +333,94 @@ public final class AgentKernelSpecFactory {
                     "Requested AgentScope tools are unavailable: " + unavailable);
         }
         String definitionKey = agentType == null ? DEFAULT_AGENT_KEY : agentType;
-        List<AgentKernelToolManifest> availableMcpTools = ownerUserId == null
+        // [adapt] U1/D1:yml 静态 MCP(AgentScopeMcpRegistry)与目录 MCP
+        // (McpToolCatalog)并集为内核可用 MCP 工具面;目录条目以 FQN 命名。
+        List<AgentKernelToolManifest> availableMcpTools = new ArrayList<>(ownerUserId == null
                 ? mcpRegistry.manifestsForAgent(definitionKey)
-                : mcpRegistry.manifestsForAgent(definitionKey, ownerUserId);
-        if (requestedMcp != null) {
-            Set<String> availableMcpNames = new LinkedHashSet<>();
-            availableMcpTools.forEach(tool -> availableMcpNames.add(tool.toolName()));
-            Set<String> unavailableMcp = new LinkedHashSet<>(requestedMcp);
-            unavailableMcp.removeAll(availableMcpNames);
-            if (!unavailableMcp.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "Requested AgentScope MCP tools are unavailable: " + unavailableMcp);
+                : mcpRegistry.manifestsForAgent(definitionKey, ownerUserId));
+        List<McpToolCatalogEntry> catalogEntries = catalogEntries(ownerUserId);
+        for (McpToolCatalogEntry entry : catalogEntries) {
+            AgentKernelToolManifest catalogManifest = catalogManifest(entry);
+            if (availableMcpTools.stream().noneMatch(known ->
+                    known.toolName().equals(catalogManifest.toolName()))) {
+                availableMcpTools.add(catalogManifest);
             }
         }
+        // enabledMcpTools 门控:FQN 与目录工具名都可指名(统一解析为白名单名)
+        Set<String> requestedMcpResolved = requestedMcp == null
+                ? null
+                : resolveRequestedMcpTools(requestedMcp, availableMcpTools, catalogEntries);
         for (AgentKernelToolManifest mcpTool : availableMcpTools) {
-            if (requestedMcp == null || requestedMcp.contains(mcpTool.toolName())) {
+            if (requestedMcpResolved == null || requestedMcpResolved.contains(mcpTool.toolName())) {
                 add(manifest, whitelist, mcpTool);
             }
         }
         return new ToolSelection(manifest, whitelist);
+    }
+
+    /**
+     * [adapt] U1/D1:目录视图(ia_tool_registry 聚合;userId 缺省全量,
+     * 有用户时叠加 catalogForUser 的 granted 标注——确认策略消费链路见
+     * AgentToolPermissionPolicy,与本工厂通过 FQN 命名衔接)。
+     */
+    private List<McpToolCatalogEntry> catalogEntries(Long ownerUserId) {
+        if (mcpToolCatalog == null) {
+            return List.of();
+        }
+        long appId = AppContext.currentOrDefault();
+        return ownerUserId == null
+                ? mcpToolCatalog.catalog(appId)
+                : mcpToolCatalog.catalogForUser(appId, ownerUserId);
+    }
+
+    /** 目录条目 → 内核 manifest:schema 规范化哈希 + 目录治理位(只读/并发安全)。 */
+    private AgentKernelToolManifest catalogManifest(McpToolCatalogEntry entry) {
+        String schemaJson = entry.parametersSchemaJson() == null
+                || entry.parametersSchemaJson().isBlank()
+                ? "{\"type\":\"object\"}"
+                : entry.parametersSchemaJson();
+        AgentScopeToolSchema.PreparedSchema schema = AgentScopeToolSchema.prepare(
+                objectMapper, schemaJson, entry.fqn());
+        return new AgentKernelToolManifest(
+                entry.fqn(),
+                AgentKernelToolManifest.schemaSha256(schema.canonicalJson()),
+                entry.readOnlyEffective(),
+                entry.concurrencySafe());
+    }
+
+    /**
+     * enabledMcpTools 解析:请求名允许是白名单名(FQN)或目录工具名;无法解析
+     * 即「Requested AgentScope MCP tools are unavailable」(保持 4xx 明确错误语义)。
+     */
+    private Set<String> resolveRequestedMcpTools(
+            Set<String> requestedMcp,
+            List<AgentKernelToolManifest> availableMcpTools,
+            List<McpToolCatalogEntry> catalogEntries) {
+        Set<String> availableNames = new LinkedHashSet<>();
+        availableMcpTools.forEach(tool -> availableNames.add(tool.toolName()));
+        Map<String, String> toolNameAliases = new LinkedHashMap<>();
+        for (McpToolCatalogEntry entry : catalogEntries) {
+            toolNameAliases.put(entry.toolName().toLowerCase(Locale.ROOT), entry.fqn());
+        }
+        Set<String> resolved = new LinkedHashSet<>();
+        Set<String> unavailable = new LinkedHashSet<>();
+        for (String requested : requestedMcp) {
+            if (availableNames.contains(requested)) {
+                resolved.add(requested);
+                continue;
+            }
+            String canonical = toolNameAliases.get(requested.toLowerCase(Locale.ROOT));
+            if (canonical != null && availableNames.contains(canonical)) {
+                resolved.add(canonical);
+            } else {
+                unavailable.add(requested);
+            }
+        }
+        if (!unavailable.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Requested AgentScope MCP tools are unavailable: " + unavailable);
+        }
+        return resolved;
     }
 
     private void add(

@@ -263,63 +263,56 @@ class McpClientToolInvokerTests {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("R1:会话失效 → 同实例 re-initialize → 重试成功;无重建")
-    void sessionLossRecoversViaReInitializeAndSingleRetry() {
-        McpSyncClient client = mock(McpSyncClient.class);
-        AtomicBoolean recovered = new AtomicBoolean(false);
-        when(client.callTool(any())).thenAnswer(invocation -> {
-            if (recovered.get()) {
-                return okStructured(Map.of("status", "ok", "attempt", "after-recovery"));
-            }
-            throw new RuntimeException("MCP session with server terminated");
-        });
-        doAnswer(invocation -> {
-            recovered.set(true);
-            return Mockito.mock(McpSchema.InitializeResult.class);
-        }).when(client).initialize();
-        RecordingInvoker recording = invoker(queueOf(client));
+    @DisplayName("R1:会话失效 → 单飞退避后重建客户端 → 重试成功;旧客户端关闭")
+    void sessionLossRecoversViaRebuildAndSingleRetry() {
+        McpSyncClient broken = mock(McpSyncClient.class);
+        McpSyncClient healthy = mock(McpSyncClient.class);
+        when(broken.callTool(any()))
+                .thenThrow(new RuntimeException("MCP session with server terminated"));
+        when(healthy.callTool(any()))
+                .thenReturn(okStructured(Map.of("status", "ok", "attempt", "after-recovery")));
+        RecordingInvoker recording = invoker(queueOf(broken, healthy));
 
         McpToolInvocationResult result = recording.invoke(1L, "echo", Map.of(), ACT_CONTEXT);
 
         assertThat(result.error()).isFalse();
         assertThat(result.payloadJson()).contains("after-recovery");
-        verify(client, times(2)).callTool(any());     // 失败一次 + 重试一次(任务规格:重试一次)
-        verify(client, times(1)).initialize();        // 同实例 re-initialize
-        assertThat(recording.createdClients).hasSize(1); // 无重建
+        verify(broken, times(1)).callTool(any());     // 失败一次
+        verify(broken, times(1)).close();             // 重连编排关闭旧客户端
+        verify(healthy, times(1)).callTool(any());    // 重试一次(任务规格:重试一次)
+        assertThat(recording.createdClients).hasSize(2);
     }
 
     @Test
     @DisplayName("R1:重连耗尽(max-attempts=1 后重试仍失败)→ McpToolTransportException")
     void exhaustedReconnectAttemptsThrowTransportException() {
-        McpSyncClient client = mock(McpSyncClient.class);
-        when(client.callTool(any()))
+        McpSyncClient brokenA = mock(McpSyncClient.class);
+        McpSyncClient brokenB = mock(McpSyncClient.class);
+        when(brokenA.callTool(any()))
                 .thenThrow(new RuntimeException("MCP session with server terminated"));
-        RecordingInvoker recording = invoker(queueOf(client));
+        when(brokenB.callTool(any()))
+                .thenThrow(new RuntimeException("MCP session with server terminated"));
+        RecordingInvoker recording = invoker(queueOf(brokenA, brokenB));
 
         assertThatThrownBy(() -> recording.invoke(1L, "echo", Map.of(), ACT_CONTEXT))
                 .isInstanceOf(McpToolTransportException.class);
-        verify(client, times(2)).callTool(any());     // 首次 + 重试一次
-        verify(client, times(1)).initialize();
-        assertThat(recording.createdClients).hasSize(1);
+        verify(brokenA, times(1)).callTool(any());    // 首次
+        verify(brokenB, times(1)).callTool(any());    // 重试一次,仍失败
+        assertThat(recording.createdClients).hasSize(2);
     }
 
     @Test
-    @DisplayName("R1 单飞:并发会话失效只执行一次 re-initialize,其余并发方直接重试")
-    void concurrentSessionLossReinitializesOnce() throws Exception {
-        McpSyncClient client = mock(McpSyncClient.class);
-        AtomicBoolean recovered = new AtomicBoolean(false);
-        when(client.callTool(any())).thenAnswer(invocation -> {
-            if (recovered.get()) {
-                return okStructured(Map.of("status", "ok"));
-            }
-            throw new RuntimeException("MCP session with server terminated");
+    @DisplayName("R1 单飞:并发会话失效只重建一次客户端,其余并发方直接重试")
+    void concurrentSessionLossRebuildsOnce() throws Exception {
+        McpSyncClient broken = mock(McpSyncClient.class);
+        McpSyncClient healthy = mock(McpSyncClient.class);
+        when(broken.callTool(any()))
+                .thenThrow(new RuntimeException("MCP session with server terminated"));
+        when(healthy.callTool(any())).thenAnswer(invocation -> {
+            Thread.sleep(20); // 模拟宿主处理时延
+            return okStructured(Map.of("status", "ok"));
         });
-        doAnswer(invocation -> {
-            Thread.sleep(50); // 单飞窗口:其余失败方应在此等待而非重复 re-init
-            recovered.set(true);
-            return Mockito.mock(McpSchema.InitializeResult.class);
-        }).when(client).initialize();
-        RecordingInvoker recording = invoker(queueOf(client));
+        RecordingInvoker recording = invoker(queueOf(broken, healthy));
 
         int callers = 6;
         ExecutorService pool = Executors.newFixedThreadPool(callers);
@@ -340,10 +333,10 @@ class McpClientToolInvokerTests {
         } finally {
             pool.shutdownNow();
         }
-        verify(client, atLeastOnce()).callTool(any());
-        assertThat(recording.createdClients).hasSize(1);
-        // 单飞断言:6 个并发失败方,re-initialize 只允许执行一次
-        verify(client, times(1)).initialize();
+        // 单飞断言:6 个并发失败方,只允许一次重建(第二个 mock 被消费一次)
+        assertThat(recording.createdClients).hasSize(2);
+        verify(broken, times(1)).close();
+        verify(healthy, atLeastOnce()).callTool(any());
     }
 
     @Test

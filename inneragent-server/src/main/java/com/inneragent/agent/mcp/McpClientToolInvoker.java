@@ -50,8 +50,16 @@ import java.util.regex.Pattern;
  *   <li>错误细分:401/403 → {@link McpToolAuthException},超时 →
  *       {@link McpToolTimeoutException},断连/会话失效 →
  *       {@link McpToolTransportException};后者触发重连编排(单飞锁 +
- *       指数退避 → 同实例 {@code initialize()} → 重试,spike T04 实证)。</li>
+ *       指数退避 → 重建客户端/新会话 → 重试一次)。</li>
  * </ol>
+ *
+ * <p><strong>与 spike FINDINGS 的偏差(R1 实现形态)</strong>:spike 在 mcp 2.0.1
+ * 上验证「对同实例 {@code initialize()} 即可恢复」;本工程钉在 0.17.0,其
+ * {@code LifecycleInitializer.handleException} 已内建「session-not-found → 自动
+ * 复位 + 隐式重初始化」,与外部显式 {@code initialize()} 并发时后初始化通知
+ * 会话缺失(400 Session ID required)。故 0.17.0 形态的恢复动作 = 单飞锁内
+ * <em>重建客户端</em>(新传输/新会话、干净 initialize),编排语义
+ * (检测→单飞→退避→恢复→重试一次)与任务规格一致。
  */
 @Slf4j
 public class McpClientToolInvoker implements McpToolInvoker {
@@ -66,7 +74,11 @@ public class McpClientToolInvoker implements McpToolInvoker {
     private static final ThreadLocal<String> CALL_ACT_TOKEN = new ThreadLocal<>();
 
     /** 传输层错误消息中的 HTTP 状态码(0.17.0 传输不分型,spike R5)。 */
-    private static final Pattern STATUS_CODE = Pattern.compile("(?i)status code:?\\s*(\\d{3})");
+    private static final Pattern STATUS_CODE = Pattern.compile("(?i)code:?\\s*(\\d{3})\\b");
+
+    /** 宿主错误 JSON 体中的状态字段(Spring Boot 默认错误体形态)。 */
+    private static final Pattern JSON_STATUS_40X =
+            Pattern.compile("(?i)\"(?:status|statuscode)\"\\s*[:=]\\s*\"?(40[13])\"?");
 
     private final ToolRegistryMapper registryMapper;
     private final ActTokenIssuer actTokenIssuer;
@@ -116,11 +128,10 @@ public class McpClientToolInvoker implements McpToolInvoker {
         ToolRegistryEntry entry = registryEntry(appId, toolName);
         String endpointUrl = requireEndpoint(entry);
         String clientKey = clientKey(appId, endpointUrl);
-        ClientHandle handle = clients.get(clientKey, key -> createClient(key, endpointUrl, entry));
-        McpSyncClient client = handle.client();
-        // act token 每次调用现签(audience=endpoint_url,exp 60s):经 ThreadLocal
-        // 传给 transportContextProvider → httpRequestCustomizer 注入 X-IA-Act;
-        // initialize/重连发生在调用线程内,同管线携带头(spike T03 挂点实证)
+        // act token 每次调用现签(audience=endpoint_url,exp 60s):先于客户端
+        // 获取(懒建客户端的 initialize 也要携带 X-IA-Act)经 ThreadLocal 传给
+        // transportContextProvider → httpRequestCustomizer 注入;重连发生在
+        // 调用线程内,同管线携带头(spike T03 挂点实证)
         CALL_ACT_TOKEN.set(actTokenIssuer.issue(new ActTokenIssuer.ActTokenRequest(
                 actContext == null ? 0L : actContext.userId(),
                 actContext == null ? 0L : actContext.tenantId(),
@@ -129,6 +140,7 @@ public class McpClientToolInvoker implements McpToolInvoker {
                 entry.getFqn(),
                 endpointUrl)));
         try {
+            ClientHandle handle = clients.get(clientKey, key -> createClient(key, endpointUrl, entry));
             return invokeWithReconnect(handle, clientKey, toolName, args);
         } finally {
             CALL_ACT_TOKEN.remove();
@@ -169,9 +181,10 @@ public class McpClientToolInvoker implements McpToolInvoker {
     private McpToolInvocationResult invokeWithReconnect(
             ClientHandle handle, String clientKey, String toolName, Map<String, Object> args) {
         int attempt = 0;
+        ClientHandle current = handle;
         while (true) {
             try {
-                return callTool(handle.client(), toolName, args);
+                return callTool(current.client(), toolName, args);
             } catch (Exception failure) {
                 McpToolCallException mapped = mapFailure(failure);
                 if (!(mapped instanceof McpToolTransportException transport)
@@ -182,15 +195,19 @@ public class McpClientToolInvoker implements McpToolInvoker {
                 log.warn("宿主调用传输失败,进入重连编排(attempt={}/{}): key={}, tool={}, cause={}",
                         attempt, properties.getReconnect().getMaxAttempts(),
                         clientKey, toolName, String.valueOf(transport.getMessage()));
-                reconnectSingleFlight(handle, clientKey, attempt);
+                reconnectSingleFlight(current, clientKey, attempt);
+                // 重连后取当前句柄(可能是重建的客户端;被并发清理则兜底重建)
+                ClientHandle previous = current;
+                current = clients.get(clientKey,
+                        key -> createClient(key, previous.endpointUrl(), previous.entry()));
             }
         }
     }
 
     /**
-     * 单飞重连:同客户端只允许一位调用者执行「指数退避 + 同实例 re-initialize」
-     * (spike T04:对既有 McpSyncClient 再 initialize 即可恢复);并发失败者在
-     * 锁上等待,若等待期间他人已恢复(恢复时间晚于自身失败时间)则直接返回重试。
+     * 单飞重连:同客户端只允许一位调用者执行「指数退避 + 客户端重建」;
+     * 并发失败者在锁上等待,若等待期间他人已恢复(恢复时间晚于自身失败时间)
+     * 则直接返回重试。
      */
     private void reconnectSingleFlight(ClientHandle handle, String clientKey, int attempt) {
         ReentrantLock lock = reconnectLocks.computeIfAbsent(clientKey, key -> new ReentrantLock());
@@ -211,15 +228,20 @@ public class McpClientToolInvoker implements McpToolInvoker {
                 }
             }
             try {
-                // 同实例 re-initialize(非重建);重新初始化的请求在调用线程
-                // 上执行,ThreadLocal 仍携带本次 act token
-                handle.client().initialize();
+                // 恢复 = 单飞重建客户端(新传输/新会话,干净 initialize)。
+                // 说明:spike(2.0.1)验证的「同实例 re-initialize」在 0.17.0 上
+                // 与 SDK 内建的隐式重初始化(LifecycleInitializer.handleException
+                // 对 session-not-found 自动复位)并发抢跑,后初始化通知会话缺失
+                // 报 400;重建是确定性恢复路径(见类注释偏差记录)。
+                closeAndRemove(clientKey);
+                ClientHandle rebuilt = createClient(clientKey, handle.endpointUrl(), handle.entry());
+                clients.put(clientKey, rebuilt);
                 handle.markRecovered();
-                log.info("宿主会话已恢复(同实例 re-initialize): key={}, attempt={}", clientKey, attempt);
-            } catch (Exception reinitFailure) {
+                log.info("宿主会话已恢复(重连编排:客户端重建): key={}, attempt={}", clientKey, attempt);
+            } catch (Exception recoveryFailure) {
                 throw new McpToolTransportException(
-                        "宿主重连失败(re-initialize): " + clientKey + ", cause=" + reinitFailure.getMessage(),
-                        reinitFailure);
+                        "宿主重连失败(re-initialize): " + clientKey + ", cause=" + recoveryFailure.getMessage(),
+                        recoveryFailure);
             }
         } finally {
             lock.unlock();
@@ -252,6 +274,11 @@ public class McpClientToolInvoker implements McpToolInvoker {
         String path = uri.getRawPath() == null || uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
         HttpClientStreamableHttpTransport transport = HttpClientStreamableHttpTransport.builder(base)
                 .endpoint(path)
+                // 宿主桥按无状态形态承载(FINDINGS §2.5 裁定:stateless /ia-mcp 兼容
+                // 两代客户端;无 GET SSE 通道)→ 关闭可恢复流与启动即连接,
+                // callTool 应答走 POST 本响应,不依赖 GET 流
+                .resumableStreams(false)
+                .openConnectionOnStartup(false)
                 .httpRequestCustomizer(this::applyActHeader)
                 .build();
         McpSyncClient client = McpClient.sync(transport)
@@ -271,7 +298,7 @@ public class McpClientToolInvoker implements McpToolInvoker {
         }
         log.info("宿主 MCP 客户端已建立: key={}, endpoint={}, serverKey={}",
                 clientKey, endpointUrl, entry.getServerKey());
-        return new ClientHandle(client);
+        return new ClientHandle(client, endpointUrl, entry);
     }
 
     /** transportContextProvider 回调:取调用线程的 act token 组装传输上下文。 */
@@ -368,38 +395,79 @@ public class McpClientToolInvoker implements McpToolInvoker {
         if (failure instanceof McpToolCallException known) {
             return known;
         }
-        String message = messageOf(failure).toLowerCase(Locale.ROOT);
-        Matcher status = STATUS_CODE.matcher(messageOf(failure));
-        if (status.find()) {
+        // SDK 异常常为薄壳("Client failed to initialize..."),HTTP 状态/根因
+        // 深埋 cause 链(spike R5)→ 沿链聚合消息后再细分
+        String aggregated = aggregateMessages(failure);
+        String message = aggregated.toLowerCase(Locale.ROOT);
+        Matcher status = STATUS_CODE.matcher(aggregated);
+        Matcher jsonStatus = JSON_STATUS_40X.matcher(aggregated);
+        while (status.find()) {
             int code = Integer.parseInt(status.group(1));
             if (code == 401 || code == 403) {
-                return new McpToolAuthException("宿主鉴权失败(HTTP " + code + "): " + failure.getMessage(), failure);
+                return new McpToolAuthException("宿主鉴权失败(HTTP " + code + "): " + aggregated, failure);
             }
+        }
+        if (jsonStatus.find()) {
+            return new McpToolAuthException(
+                    "宿主鉴权失败(HTTP " + jsonStatus.group(1) + "): " + aggregated, failure);
         }
         if (message.contains("unauthorized") || message.contains("forbidden")) {
             return new McpToolAuthException("宿主鉴权失败: " + failure.getMessage(), failure);
         }
-        if (rootCause(failure) instanceof java.util.concurrent.TimeoutException
+        if (inChain(failure, java.util.concurrent.TimeoutException.class)
+                || inChain(failure, java.net.http.HttpTimeoutException.class)
                 || message.contains("timeout on blocking")
                 || message.contains("timed out")
                 || message.contains("request timeout")) {
             return new McpToolTimeoutException(
-                    "宿主调用超时(" + properties.getCallTimeout() + "): " + failure.getMessage(), failure);
+                    "宿主调用超时(" + properties.getCallTimeout() + "): " + aggregated, failure);
         }
         boolean sessionLost = failure instanceof McpTransportSessionNotFoundException
                 || (message.contains("session")
                     && (message.contains("terminat") || message.contains("not found")
                         || message.contains("does not recognize") || message.contains("invalid")));
-        boolean connectionLost = rootCause(failure) instanceof ConnectException
-                || failure instanceof java.net.http.HttpTimeoutException
+        boolean connectionLost = inChain(failure, ConnectException.class)
                 || message.contains("connection refused")
                 || message.contains("failed to connect")
-                || message.contains("connection reset");
+                || message.contains("connection reset")
+                || message.contains("closedchannelexception");
         if (sessionLost || connectionLost
-                || message.contains("transport") || message.contains("http")) {
-            return new McpToolTransportException("宿主传输失败: " + failure.getMessage(), failure);
+                || failure instanceof io.modelcontextprotocol.spec.McpTransportException
+                || message.contains("transport")) {
+            return new McpToolTransportException("宿主传输失败: " + aggregated, failure);
         }
-        return new McpToolCallException("宿主调用失败: " + failure.getMessage(), failure);
+        return new McpToolCallException("宿主调用失败: " + aggregated, failure);
+    }
+
+    /** cause 链上任一环为给定类型(SDK 薄壳异常的根因在深层)。 */
+    private static boolean inChain(Throwable failure, Class<? extends Throwable> type) {
+        Throwable current = failure;
+        int depth = 0;
+        while (current != null && depth < 8) {
+            if (type.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+            depth++;
+        }
+        return false;
+    }
+
+    /** 沿 cause 链聚合消息(SDK 薄壳异常的 HTTP 状态/根因在深层,spike R5)。 */
+    private static String aggregateMessages(Throwable failure) {
+        StringBuilder aggregated = new StringBuilder(messageOf(failure));
+        Throwable current = failure;
+        int depth = 0;
+        while (current.getCause() != null && current.getCause() != current && depth < 8) {
+            current = current.getCause();
+            String causeMessage = messageOf(current);
+            if (!messageOf(failure).equals(causeMessage)
+                    && aggregated.indexOf(causeMessage) < 0) {
+                aggregated.append(" | caused by ").append(causeMessage);
+            }
+            depth++;
+        }
+        return aggregated.toString();
     }
 
     private static String messageOf(Throwable failure) {
@@ -426,18 +494,34 @@ public class McpClientToolInvoker implements McpToolInvoker {
         }
     }
 
-    /** 缓存值:客户端 + 最近恢复时间(重连单飞的「他人已恢复」判据)。 */
+    /** 缓存值:客户端 + 定位信息(重建用)+ 最近恢复时间(单飞「他人已恢复」判据)。 */
     static final class ClientHandle {
 
         private final McpSyncClient client;
+        private final String endpointUrl;
+        private final ToolRegistryEntry entry;
         private volatile long lastRecoveredAtMillis;
 
         ClientHandle(McpSyncClient client) {
+            this(client, null, null);
+        }
+
+        ClientHandle(McpSyncClient client, String endpointUrl, ToolRegistryEntry entry) {
             this.client = Objects.requireNonNull(client, "client must not be null");
+            this.endpointUrl = endpointUrl;
+            this.entry = entry;
         }
 
         McpSyncClient client() {
             return client;
+        }
+
+        String endpointUrl() {
+            return endpointUrl;
+        }
+
+        ToolRegistryEntry entry() {
+            return entry;
         }
 
         long lastRecoveredAtMillis() {

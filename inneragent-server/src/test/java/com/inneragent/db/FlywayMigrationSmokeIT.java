@@ -93,7 +93,7 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(10, result.migrationsExecuted, "应依次执行 V1-V10 十个迁移(V8 注释刷新;V9 轮换双 key;V10 管理站账号认证)");
+        assertEquals(11, result.migrationsExecuted, "应依次执行 V1-V12 十一个迁移(V8 注释刷新;V9 轮换双 key;V10 管理站账号认证;V12 审计列宽)");
 
         List<String> actualTables = listIaTables();
         assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 24 张 ia_ 表");
@@ -104,7 +104,7 @@ class FlywayMigrationSmokeIT {
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(10, resultSet.getInt(1), "flyway_schema_history 应有 10 条成功记录(V8 注释刷新 + V9 轮换双 key + V10 管理站认证)");
+            assertEquals(11, resultSet.getInt(1), "flyway_schema_history 应有 11 条成功记录(V8 注释刷新 + V9 轮换双 key + V10 管理站认证 + V12 审计列宽)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -116,6 +116,13 @@ class FlywayMigrationSmokeIT {
                 "ia_tool_grant.invalidated 应存在(自动失效,V18)");
         assertEquals("character varying", columnType("ia_tool_grant", "conversation_id"),
                 "ia_tool_grant.conversation_id 应为 VARCHAR(会话 UUID 语义)");
+
+        // V12:审计裁决列宽 32——schema_revalidated(18)曾超 VARCHAR(16) 致
+        // BREAKING 确认端点在审计 fail-closed 下 500,放宽杜绝「枚举超列宽」
+        assertEquals(32, columnCharLength("ia_audit_log", "decision"),
+                "ia_audit_log.decision 应为 VARCHAR(32)(V12 放宽,容纳分诊/生命周期枚举)");
+        assertEquals(24, columnCharLength("ia_audit_log", "decision_source"),
+                "ia_audit_log.decision_source 应保持 VARCHAR(24)");
 
         // V9:签名公钥轮换双 key 列就位(P2-key;存量/种子行保持 NULL = 未轮换语义)
         assertTrue(columnExists("ia_app", "previous_sign_public_key"),
@@ -234,6 +241,23 @@ class FlywayMigrationSmokeIT {
             statement.setString(2, column);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getString(1) : null;
+            }
+        }
+    }
+
+    private static int columnCharLength(String table, String column) throws SQLException {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT character_maximum_length FROM information_schema.columns "
+                             + "WHERE table_schema = 'public' AND table_name = ? AND column_name = ?")) {
+            statement.setString(1, table);
+            statement.setString(2, column);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return -1;
+                }
+                int length = resultSet.getInt(1);
+                return resultSet.wasNull() ? -1 : length;
             }
         }
     }

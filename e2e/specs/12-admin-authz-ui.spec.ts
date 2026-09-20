@@ -1,15 +1,16 @@
 /**
  * e2e/specs/12-admin-authz-ui.spec.ts — L11 管理 API 鉴权矩阵(UI 可视部分)。
- * 匿名演示链路走补偿代理页(RECONNECT_HOST; DEF-05 下 demo-host 不可用, 见 07 分册)。
+ * [R2] DEF-05 修复后匿名演示链路改走 demo-host 默认接入(baseURL 默认值),
+ * 不再依赖补偿代理页(RECONNECT_HOST)。
  *
  * 与 T1 的 API 矩阵(assets/L1-07-鉴权矩阵.json)互补, 不重复造轮子:
- *  - 未带凭据直接访问管理页数据 → UI 侧路由守卫重定向(DEF-01 背景下登录页渲染);
+ *  - 未带凭据直接访问管理页数据 → UI 侧路由守卫重定向(登录页已可账号密码直登);
  *  - 管理端点凭据分层(无凭据 401 / 错误 admin key 403);
  *  - embed 链路匿名演示头语义: WC 宿主页无任何凭据时按服务端缺省演示用户可用
  *    (demo 模式可用性的 UI 级证据)。
  */
 import {
-  test, expect, RECONNECT_HOST, GATEWAY, SERVER_BASE, journalApi, openSdkChat, sendChat,
+  test, expect, DEMO_HOST, GATEWAY, SERVER_BASE, journalApi, openSdkChat, sendChat,
   waitTerminal, shot, saveText, cleanupDemoUserByConversation,
 } from '../helpers/sdk-support'
 
@@ -46,7 +47,7 @@ test.describe('L11 管理 API 鉴权矩阵(UI 可视部分)', () => {
   test('L11-03 匿名演示头语义: 无凭据 WC 宿主对话可用(demo 模式)', async ({ page }, testInfo) => {
     // 不注入 X-IA-Demo-User: 走服务端缺省演示用户 12993(allow-anonymous-demo)
     const journal = journalApi(page)
-    await openSdkChat(page, RECONNECT_HOST)
+    await openSdkChat(page, DEMO_HOST)
     // openSdkChat 已等待发送可用 → GET /me/models 以匿名身份可达
     await sendChat(page, TITLE)
     expect(await waitTerminal(page, 60_000), '匿名演示身份完成一次对话').toBe('已完成')

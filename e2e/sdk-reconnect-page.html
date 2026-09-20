@@ -18,8 +18,8 @@
   </script>
   <!--
     e2e/sdk-reconnect-page.html — L8 断流重连线专用 WC 宿主测试页(测试基建)。
-    与 examples/demo-host 等价的最小宿主: 挂载 <inneragent-chat> 并以同源
-    /ia/api/v1 为 baseURL(经 e2e/reconnect-host.mjs 可断中转访问 18090)。
+    与 examples/demo-host 等价的最小宿主: 挂载 <inneragent-chat> 以 SDK 默认
+    baseURL('/ia/api/v1')接入(经 e2e/reconnect-host.mjs 可断中转访问 18090)。
     该页与断流中转同源, 保证 SDK 请求全部经过「可断」链路。
   -->
   <style>
@@ -42,9 +42,9 @@
     const sdk = await import('/sdk/inneragent-chat.js')
     sdk.init({
       appKey: 'e2e-reconnect-host',
-      // DEF-05 补偿: SDK http 层双重拼接 baseURL(见 e2e/reconnect-host.mjs 头注),
-      // 本页以 baseURL='' 接入, 由可断中转在网关层把裸路径重写到 /ia/api/v1。
-      baseURL: '',
+      // [R2] DEF-05 补偿已删除: 修复后 SDK 调用点交相对路径、request() 统一拼
+      // baseURL(幂等), 本页不再传 baseURL → 走 SDK 默认 '/ia/api/v1', 请求以
+      // /ia 前缀直达本中转反代(纯透传, 无网关改写)。
       // 与 scripts/e2e-m1-journeys.sh 的旅程口径一致: agentType=demo(工具链含
       // get_current_time 与 MCP 注册工具, mock 脚本/写确认链路可用)。
       agentType: 'demo',

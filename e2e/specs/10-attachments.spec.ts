@@ -8,14 +8,19 @@
  *
  * 前置: e2e/env.sh up + demo-host(5180)。V7 迁移已给 mock-text 配 image/file
  * 双输入 + url/base64 双传输(support_vision=true)。
+ *
+ * [R2] DEF-05 修复后本线从补偿代理页(RECONNECT_HOST)切回 demo-host 默认接入
+ * (baseURL 默认值)。demo-host 未声明 agentType → SDK 默认 ai_media,其内置
+ * 工具面不含 get_current_time → legacy mock 走 FALLBACK_DELTAS(无收尾脚注),
+ * 故 L9-01 以 mockScript 驱动一个只读 MCP 目录工具(R2 校准,断言不变)。
  */
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  test, expect, RECONNECT_HOST, SERVER_BASE, injectDemoUser, journalApi, openSdkChat,
+  test, expect, DEMO_HOST, SERVER_BASE, injectDemoUser, journalApi, openSdkChat,
   sendChat, waitTerminal, shot, saveJournal, saveText, saveJson, psql,
-  cleanupDemoUser, uniqueDemoUser,
+  cleanupDemoUser, uniqueDemoUser, setMockScript,
 } from '../helpers/sdk-support'
 
 const FOOTER = '本回复由 mock 模型脚本生成'
@@ -33,7 +38,27 @@ test.describe('L9 附件上传线', () => {
     const journal = journalApi(page)
     const attachmentIds: string[] = []
 
-    await openSdkChat(page, RECONNECT_HOST)
+    // [R2 校准] demo-host 默认 agentType=ai_media(无 get_current_time),legacy mock
+    // 无工具结果 → 无收尾脚注。驱动一个只读 MCP 目录工具保证「工具执行→全文收尾」
+    // 与 R1 断言语义一致(FOOTER 断言不变)。
+    setMockScript('{"mockScript":[{"tool":"mcp__demo-spring-host__get_product_brief","args":{"productId":"88"}}]}')
+    try {
+      await runAttachmentFlow(page, testInfo, user, journal, attachmentIds)
+    } finally {
+      setMockScript('')
+      await page.close().catch(() => {})
+      cleanupDemoUser(user)
+    }
+  })
+
+  async function runAttachmentFlow(
+    page: import('@playwright/test').Page,
+    testInfo: import('@playwright/test').TestInfo,
+    user: number,
+    journal: ReturnType<typeof journalApi>,
+    attachmentIds: string[],
+  ): Promise<void> {
+    await openSdkChat(page, DEMO_HOST)
 
     // 1) Composer 附件入口 → 选文件 → 上传
     const pngPath = join(tmpdir(), `e2e-l9-${user}.png`)
@@ -92,16 +117,14 @@ test.describe('L9 附件上传线', () => {
     expect(forbidden.status(), '他人读回 → 404(不泄露存在性)').toBe(404)
 
     saveJournal(journal, `L9-01-api-journal-user${user}.txt`)
-    await page.close().catch(() => {})
-    cleanupDemoUser(user)
-  })
+  }
 
   test('L9-07 超限文件: >10MB 走 url 回退(设计内), >20MB 服务端拒收→UI 反馈', async ({ page }, testInfo) => {
     const user = uniqueDemoUser()
     await injectDemoUser(page, user)
     const journal = journalApi(page)
 
-    await openSdkChat(page, RECONNECT_HOST)
+    await openSdkChat(page, DEMO_HOST)
 
     // 1) 15MB(>10MB base64 上限, 但 mock-text 具备 url 传输 → SDK 回退 url, 服务端 ≤20MB 收下)
     const big15 = join(tmpdir(), `e2e-l9-big15-${user}.png`)
@@ -152,7 +175,7 @@ test.describe('L9 附件上传线', () => {
     const user = uniqueDemoUser()
     await injectDemoUser(page, user)
 
-    await openSdkChat(page, RECONNECT_HOST)
+    await openSdkChat(page, DEMO_HOST)
 
     const exePath = join(tmpdir(), `e2e-l9-evil-${user}.exe`)
     writeFileSync(exePath, Buffer.alloc(1024, 1))

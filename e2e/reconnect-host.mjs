@@ -122,18 +122,11 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  // ---- SDK 补偿层: baseURL='' 形态下 SDK http 层请求的裸路径重写 ----
-  // 背景(DEF-05 取证): SDK http.* 调用点自带 `${getBaseURL()}${path}`, 与
-  // request() 内部再次拼接 baseURL → 默认 '/ia/api/v1' 下双重前缀 404。
-  // 本中转允许页面以 baseURL='' 接入(裸路径 /me /conversations /attachments /runs),
-  // 在网关层重写到真实 API 根, 使功能线可测; 缺陷本体仍按 DEF-05 记录修复。
-  const SDK_BARE_PREFIX = /^\/(me|conversations|attachments|runs)(\/|$|\?)/
-  let pathname = url.pathname
-  if (SDK_BARE_PREFIX.test(pathname)) {
-    const rewritten = `/ia/api/v1${pathname}${url.search}`
-    log(`[rewrite] ${req.method} ${pathname}${url.search} → ${rewritten}`)
-    pathname = `/ia/api/v1${pathname}`
-  }
+  // ---- [R2] DEF-05 补偿(SDK_BARE_PREFIX 裸路径重写)已删除 ----
+  // DEF-05 修复后 SDK 调用点交相对路径、request() 统一拼 baseURL(幂等),
+  // 宿主页以默认 baseURL('/ia/api/v1')接入, 请求自带 /ia 前缀直达下方反代,
+  // 网关层不再做任何路径改写(纯透传)。
+  const pathname = url.pathname
 
   // ---- /ia/* 反代 18090(保留方法/头/体; SSE 流式透传) ----
   if (url.pathname === '/ia' || url.pathname.startsWith('/ia/') || pathname.startsWith('/ia/')) {

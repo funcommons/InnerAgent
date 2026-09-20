@@ -380,3 +380,64 @@ test('schema 历史:全链路留痕(applied/pending_review/rejected/silent_refre
   expect(outcomes).toContain('breaking/rejected')
   expect(outcomes).toContain('compatible/applied')
 })
+
+test('DEF-03 回归:注销→重注册复活生效 + 审计 tool_revived(不再静默占键)', async ({ request }) => {
+  // [R2 新增回归] R1 取证: 复活分支 updateById 被 @TableLogic 附加 WHERE deleted=false
+  // → 对死行更新 0 行, 响应 200 但库内仍 deleted → 工具永不生效且唯一键被占。
+  // 修复: revive 显式 SQL 绕过逻辑删谓词 + 审计 tool_revived。
+  const name = 'e2e_revive_tool'
+  const fqn = `mcp__${serverKey}__${name}`
+  // 防复跑: 物理清理同名行(含历史逻辑删行)与留痕
+  psql(`DELETE FROM ia_tool_schema_history WHERE tool_id IN (SELECT id FROM ia_tool_registry WHERE tool_name='${name}')`)
+  psql(`DELETE FROM ia_audit_log WHERE tool_fqn='${fqn}'`)
+  psql(`DELETE FROM ia_tool_registry WHERE tool_name='${name}'`)
+  try {
+    // 1) 首次注册
+    const reg1 = await request.post('/ia/api/v1/admin/tools', {
+      data: { serverKey, toolName: name, source: 'host_app', description: 'E2E 复活回归(首次)', parametersSchema: V1 },
+    })
+    expect(reg1.status()).toBe(200)
+    const id1 = Number((await reg1.json()).data.id)
+    expect(id1, '首次注册拿到活跃行 id').toBeGreaterThan(0)
+
+    // 2) 注销(API 删除 = 逻辑删; 库内死行残留并占唯一键)
+    const del = await request.delete(`/ia/api/v1/admin/tools/${id1}`)
+    expect(del.status()).toBe(200)
+    const deadRow = psql(`SELECT id, deleted FROM ia_tool_registry WHERE id=${id1}`)
+    saveText('L3-13-DEF03-注销后死行.txt', deadRow)
+    expect(deadRow, '注销后为逻辑删行(deleted=true, 残留占键)').toContain('t')
+
+    // 3) 同名重注册 → 200 且复活(修复前: 200 但库内仍 deleted, 静默失败)
+    const reg2 = await request.post('/ia/api/v1/admin/tools', {
+      data: { serverKey, toolName: name, source: 'host_app', description: 'E2E 复活回归(重注册)', parametersSchema: V1 },
+    })
+    expect(reg2.status()).toBe(200)
+    const body2 = await reg2.json()
+    expect(body2.data.fqn).toBe(fqn)
+    const aliveRow = psql(`SELECT id, deleted, enabled FROM ia_tool_registry WHERE tool_name='${name}' AND deleted=false`)
+    saveText('L3-13-DEF03-重注册后活跃行.txt', aliveRow)
+    expect(aliveRow, '重注册后存在活跃行且同 id(复活而非新行)').toContain(`${id1}|f`)
+    expect(aliveRow, '复活行默认启用').toContain('|t')
+
+    // 4) 工具详情可达 + 分诊可达(toolIdOf 语义: 修复前活跃行不可见 → 404)
+    const detail = await request.get(`/ia/api/v1/admin/tools/${id1}`)
+    expect(detail.status(), '复活行详情 200(非 404)').toBe(200)
+    const triage = await request.post(`/ia/api/v1/admin/tools/${id1}/schema`, { data: { parametersSchema: V1 } })
+    expect(triage.status(), '同版分诊 200(unchanged 路径可达)').toBe(200)
+
+    // 5) 审计: tool_revived(fqn 定位, FORCED_POLICY 来源)
+    const audit = await request.get(`/ia/api/v1/admin/audit-logs?decision=tool_revived&toolFqn=${encodeURIComponent(fqn)}&pageNo=1&pageSize=10`)
+    expect(audit.status()).toBe(200)
+    const auditBody = await audit.json()
+    saveJson('L3-13-DEF03-审计tool_revived.json', auditBody)
+    expect(auditBody.data?.list?.length ?? 0, '复活审计 tool_revived 恰 1 条').toBe(1)
+    expect(auditBody.data.list[0].toolFqn ?? auditBody.data.list[0].tool_fqn).toContain(name)
+    saveText('L3-13-DEF03-结论.txt',
+      '注销→重注册: 200 + 活跃行复活(同 id) + 详情/分诊可达 + 审计 tool_revived(DEF-03 修复验证)。')
+  } finally {
+    // 物理清理(仅保险 —— 复活路径正常后逻辑删行不复存在; 分册口径「物理清理仅保险」)
+    psql(`DELETE FROM ia_tool_schema_history WHERE tool_id IN (SELECT id FROM ia_tool_registry WHERE tool_name='${name}')`)
+    psql(`DELETE FROM ia_audit_log WHERE tool_fqn='${fqn}'`)
+    psql(`DELETE FROM ia_tool_registry WHERE tool_name='${name}'`)
+  }
+})

@@ -1,5 +1,5 @@
 /**
- * e2e/specs/11-tool-confirm.spec.ts — L10 工具确认 UI 线(核心;补偿代理页 UI +
+ * e2e/specs/11-tool-confirm.spec.ts — L10 工具确认 UI 线(核心;demo-host 默认接入 UI +
  * demo-spring-host 18091 六工具 + mock 模型脚本驱动)。
  *
  * 覆盖: 写工具(U2 update_product_brief)确认卡渲染→批准→续流 DONE+宿主状态变化;
@@ -9,9 +9,13 @@
  *
  * 前置: e2e/env.sh up + demo-host(5180) + demo-spring-host(18091) + 六工具已注册
  * (endpointUrl=http://localhost:18091/ia-mcp)。mockScript 经 psql 设置, finally 复位。
+ *
+ * [R2] DEF-05/07 修复后本线从补偿代理页(RECONNECT_HOST)切回 demo-host 默认接入
+ * (baseURL 默认值、无网关补偿):注册目录工具在默认接入下直接可达(DEF-07 回归
+ * 口径收严),确认卡/SCOPE_RESOLVED 全链路不再依赖任何请求体剔除补偿。
  */
 import {
-  test, expect, RECONNECT_HOST, injectDemoUser, journalApi, openSdkChat, sendChat,
+  test, expect, DEMO_HOST, injectDemoUser, journalApi, openSdkChat, sendChat,
   waitTerminal, shot, saveJournal, saveText, saveJson, psql, cleanupDemoUser,
   uniqueDemoUser, captureScopeResolved, readScopeEvents, setMockScript, hostState,
 } from '../helpers/sdk-support'
@@ -50,7 +54,7 @@ test.describe('L10 工具确认 UI 线', () => {
 
     setMockScript(`{"mockScript":[{"tool":"mcp__${SERVER_KEY}__update_product_brief","args":{"productId":"88","brief":"${brief}"}}]}`)
     try {
-      await openSdkChat(page, RECONNECT_HOST)
+      await openSdkChat(page, DEMO_HOST)
       // 宿主元素监听 SCOPE_RESOLVED(组件挂载后注册)
       await captureScopeResolved(page)
 
@@ -125,7 +129,7 @@ test.describe('L10 工具确认 UI 线', () => {
 
     setMockScript(`{"mockScript":[{"tool":"mcp__${SERVER_KEY}__copy_flow_template","args":{"sourceTemplateId":"3432","newTemplateName":"${templateName}","extraNode":"用户退款审核"}}]}`)
     try {
-      await openSdkChat(page, RECONNECT_HOST)
+      await openSdkChat(page, DEMO_HOST)
       await captureScopeResolved(page)
 
       await sendChat(page, '以流程模板 3432 为底稿复制新流程模板')
@@ -171,7 +175,7 @@ test.describe('L10 工具确认 UI 线', () => {
       {"tool":"mcp__${SERVER_KEY}__update_product_brief","args":{"productId":"88","brief":"${brief}"}}
     ]}`)
     try {
-      await openSdkChat(page, RECONNECT_HOST)
+      await openSdkChat(page, DEMO_HOST)
       await captureScopeResolved(page)
       await sendChat(page, '先查商品 88 简介,再把简介更新为优化版')
 
@@ -226,7 +230,7 @@ test.describe('L10 工具确认 UI 线', () => {
 
     setMockScript(`{"mockScript":[{"tool":"mcp__${SERVER_KEY}__list_login_records","args":{"userId":"${user}","days":30}}]}`)
     try {
-      await openSdkChat(page, RECONNECT_HOST)
+      await openSdkChat(page, DEMO_HOST)
       await captureScopeResolved(page)
 
       await sendChat(page, '查一下最近 30 天的登录记录')

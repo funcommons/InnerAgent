@@ -6,7 +6,7 @@
  *    直登;本夹具走 sessionStorage['ia:admin-key'] + X-IA-Admin-Key 引导通道,
  *    为 AdminTokenFilter 合法自动化凭据,各业务线沿用以免逐用例登录);
  *  - api:直连 18090 的 APIRequestContext(X-IA-Admin-Key 注入);
- *  - shot():关键步截图 → test-report/2026-09-21-01/assets;
+ *  - shot():关键步截图 → test-report/2026-09-21-02/assets(R2 轮);
  *  - psql():docker exec psql 佐证/数据准备/清理;
  *  - saveJson()/saveText():API 证据落文件(报告 md 内嵌引用);
  *  - 控制台/页面异常捕获:失败时落文件并 attachment。
@@ -17,7 +17,8 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const REPO = '/Users/justin/codes/funcommons/InnerAgent'
-export const REPORT_DIR = join(REPO, 'test-report', '2026-09-21-01')
+// R2 复测轮:证据落 2026-09-21-02(R1 证据保留在 2026-09-21-01,收官文档可回引)
+export const REPORT_DIR = join(REPO, 'test-report', '2026-09-21-02')
 export const ASSETS = join(REPORT_DIR, 'assets')
 
 export const GATEWAY = process.env.GATEWAY_URL || 'http://localhost:18081'

@@ -23,6 +23,23 @@ public class PageResult<T> implements Serializable {
     private Long total;
 
     /**
+     * 页码(P2-admin 18a:web 契约 PageResult 形=list+total+pageNo+pageSize;
+     * audit-logs 分页端点回填,既有两参构造域保持 null 兼容)
+     */
+    private Integer pageNo;
+
+    /** 每页条数(同上;旧域为 null) */
+    private Integer pageSize;
+
+    /**
+     * 兼容两参构造(既有调用点/测试沿用;pageNo/pageSize 不回填)。
+     */
+    public PageResult(List<T> list, Long total) {
+        this.list = list;
+        this.total = total;
+    }
+
+    /**
      * 从 MyBatis-Plus IPage 转换
      */
     public static <T> PageResult<T> of(IPage<T> page) {

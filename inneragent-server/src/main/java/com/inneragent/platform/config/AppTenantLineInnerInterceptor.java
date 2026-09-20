@@ -46,6 +46,10 @@ public class AppTenantLineInnerInterceptor implements InnerInterceptor {
      * <p>[adapt] P1-T2a：ia_tool_registry / ia_tool_grant 为业务表且携带 app_id，
      * 按约定移出忽略清单（仅系统表忽略），由 app_id Handler 注入与过滤；
      * ia_tool_grant 的 tenant_id 仍按缺省策略（无租户上下文时不注入，落 DDL 默认 0）。
+     *
+     * <p>[adapt] 任务 #18b（W5）：ia_webhook_delivery 为平台级投递队列——
+     * 投递调度器以系统身份跨应用扫描（行已显式携带 app_id，回调配置按行取），
+     * 不参与行级注入/过滤；管理端检索走显式 appId 条件。
      */
     public static final Set<String> IGNORED_TABLES = Set.of(
             "ia_app",
@@ -55,6 +59,7 @@ public class AppTenantLineInnerInterceptor implements InnerInterceptor {
             "ia_agent_state",
             "ia_agent_state_cleanup_policy",
             "ia_agent_workspace_config",
+            "ia_webhook_delivery",
             "flyway_schema_history");
 
     private final List<TenantLineInnerInterceptor> delegates = List.of(

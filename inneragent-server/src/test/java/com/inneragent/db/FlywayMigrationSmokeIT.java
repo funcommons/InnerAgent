@@ -26,7 +26,7 @@ import org.testcontainers.utility.DockerImageName;
  * Flyway 迁移链冒烟测试(P0-T4 建立;P1 台账④随 V5__storage_config.sql、
  * P1-T2a 随 V6 工具中枢增补、P1-T3b 随 V7__agent_attachment.sql 对话附件增补、
  * P2-srv U1 随 V8 decision_source 注释刷新、P2-key 随 V9__app_sign_key_rotation_grace.sql
- * 签名公钥轮换双 key 列增补)。
+ * 签名公钥轮换双 key 列增补、P2-obs 随 V11__webhook_delivery.sql 终态 Webhook 投递增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
  * 上执行 classpath:db/migration 全链迁移,断言 22 张 ia_ 业务表全部建成、种子数据落库,
@@ -43,7 +43,7 @@ class FlywayMigrationSmokeIT {
             .withUsername("inneragent")
             .withPassword("inneragent");
 
-    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件(字典序,22 张)。 */
+    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件 + V11 终态 Webhook 投递(字典序,23 张)。 */
     private static final List<String> EXPECTED_IA_TABLES = List.of(
             // V7:对话附件(字典序居 ia_agent_* 首位)
             "ia_agent_attachment",
@@ -71,7 +71,9 @@ class FlywayMigrationSmokeIT {
             "ia_storage_config",
             "ia_tool_grant",
             "ia_tool_registry",
-            "ia_tool_schema_history");
+            "ia_tool_schema_history",
+            // V11:终态 Webhook 投递记录(任务 #18b)
+            "ia_webhook_delivery");
 
     private static Flyway flyway() {
         return Flyway.configure()

@@ -143,6 +143,31 @@ inneragent:
     # 存量用户不被轮换立即全量下线。支持 Duration 简单格式(72h/30m/7d);
     # 配 0 或负值 = 关闭宽限(轮换即时全量生效)。
     embed-key-grace: 72h
+  webhook:
+    # 终态 Webhook 投递(任务 #18b;02-技术方案 §7.1「HMAC 签名,5 次指数退避」):
+    # 运行终态(PRD 最小事件集 run.finished/failed/cancelled)经
+    # RunTerminalCoordinator 提交后入队 ia_webhook_delivery,调度器领取投递
+    # (SKIP LOCKED + claim 租约,多实例不重投);回调地址/密钥取 ia_app 行。
+    enabled: true
+    # 指数退避序列(第 n 次失败后的等待;超出取最后一档)
+    retry-backoffs: 1m,5m,30m,2h,12h
+    # 单条投递最大尝试次数(含首投)
+    max-attempts: 5
+    # 单次投递 HTTP 超时
+    http-timeout: 10s
+    # 每轮扫描最多领取条数
+    batch-size: 50
+    # claim 租约时长(超期可被其他实例接管)
+    claim-lease: 30s
+  observability:
+    genai:
+      # OTel GenAI 语义约定(任务 #18b,V27):invoke_agent/chat/execute_tool/
+      # MCP client span;内容属性默认关(对齐审计脱敏),开启后按
+      # content-max-chars 截断记录 prompt/completion 摘要。
+      # 采样与导出不在服务内:classpath 有 OTel provider(javaagent/SDK)后
+      # span 自动生效,缺省 GlobalOpenTelemetry noop。
+      capture-content: false
+      content-max-chars: 512
 
 logging:
   level:

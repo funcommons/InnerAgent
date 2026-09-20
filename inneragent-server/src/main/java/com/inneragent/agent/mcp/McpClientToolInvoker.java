@@ -92,14 +92,28 @@ public class McpClientToolInvoker implements McpToolInvoker {
     /** 每客户端的重连单飞锁(R1:并发失败只允许一位执行退避 + re-init)。 */
     private final ConcurrentHashMap<String, ReentrantLock> reconnectLocks = new ConcurrentHashMap<>();
 
+    /** [adapt] 任务 #18b(W5):MCP client span 工厂(null=noop 旁路)。 */
+    private final com.inneragent.agent.observability.GenAiSpanFactory spanFactory;
+
     public McpClientToolInvoker(ToolRegistryMapper registryMapper,
                                 ActTokenIssuer actTokenIssuer,
                                 ObjectMapper objectMapper,
                                 McpInvokerProperties properties) {
+        this(registryMapper, actTokenIssuer, objectMapper, properties, null);
+    }
+
+    public McpClientToolInvoker(ToolRegistryMapper registryMapper,
+                                ActTokenIssuer actTokenIssuer,
+                                ObjectMapper objectMapper,
+                                McpInvokerProperties properties,
+                                com.inneragent.agent.observability.GenAiSpanFactory spanFactory) {
         this.registryMapper = Objects.requireNonNull(registryMapper, "registryMapper must not be null");
         this.actTokenIssuer = Objects.requireNonNull(actTokenIssuer, "actTokenIssuer must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
+        this.spanFactory = spanFactory == null
+                ? com.inneragent.agent.observability.GenAiSpanFactory.noop()
+                : spanFactory;
         this.clients = Caffeine.newBuilder()
                 .maximumSize(properties.getMaxClients())
                 .expireAfterAccess(properties.getClientExpireAfterAccess())
@@ -142,11 +156,59 @@ public class McpClientToolInvoker implements McpToolInvoker {
                 actContext == null ? null : actContext.runId(),
                 entry.getFqn(),
                 endpointUrl)));
+        // [adapt] 任务 #18b(W5):MCP client span(宿主 tools/call)。
+        com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan span =
+                startMcpClientSpan(entry, toolName, args, actContext);
         try {
             ClientHandle handle = clients.get(clientKey, key -> createClient(key, endpointUrl, entry));
-            return invokeWithReconnect(handle, clientKey, toolName, args);
+            McpToolInvocationResult result = invokeWithReconnect(handle, clientKey, toolName, args);
+            if (span != null) {
+                span.end();
+            }
+            return result;
+        } catch (RuntimeException failure) {
+            if (span != null) {
+                span.error(failure);
+                span.end();
+            }
+            throw failure;
         } finally {
             CALL_ACT_TOKEN.remove();
+        }
+    }
+
+    /**
+     * [adapt] 任务 #18b(W5):MCP client span(对齐 MCP semconv 的
+     * mcp.method.name=tools/call;属性 mcp.tool.name + server.key;
+     * 入参 JSON 为内容属性,默认关)。
+     */
+    private com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan startMcpClientSpan(
+            ToolRegistryEntry entry,
+            String toolName,
+            Map<String, Object> args,
+            ToolExecutionContext actContext) {
+        if (spanFactory.isNoop()) {
+            return null;
+        }
+        try {
+            return spanFactory
+                    .spanBuilder(com.inneragent.agent.observability.GenAiSemanticAttributes
+                            .Operations.MCP_TOOLS_CALL)
+                    .attr(com.inneragent.agent.observability.GenAiSemanticAttributes.OPERATION_NAME,
+                            com.inneragent.agent.observability.GenAiSemanticAttributes
+                                    .Operations.MCP_TOOLS_CALL)
+                    .attr(com.inneragent.agent.observability.GenAiSemanticAttributes.TOOL_NAME,
+                            toolName)
+                    .attr(com.inneragent.agent.observability.GenAiSemanticAttributes.MCP_SERVER_KEY,
+                            entry.getServerKey())
+                    .attr(com.inneragent.agent.observability.GenAiSemanticAttributes.RUN_ID,
+                            actContext == null ? null : actContext.runId())
+                    .contentAttr(com.inneragent.agent.observability.GenAiSemanticAttributes.PROMPT,
+                            args == null ? null : objectMapper.writeValueAsString(args))
+                    .startSpan();
+        } catch (Exception spanFailure) {
+            log.debug("MCP client span start skipped: {}", spanFailure.toString());
+            return null;
         }
     }
 

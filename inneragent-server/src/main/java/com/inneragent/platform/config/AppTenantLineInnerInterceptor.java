@@ -50,6 +50,10 @@ public class AppTenantLineInnerInterceptor implements InnerInterceptor {
      * <p>[adapt] P2-admin 18a：ia_admin_account / ia_admin_login_log 为管理面
      * 平台级表（管理员跨应用，按 username 全局定位，与 AppContext 无关），
      * 列按迁移规范保留（DEFAULT 1/0）但不参与行级注入。
+     *
+     * <p>[adapt] 任务 #18b（W5）：ia_webhook_delivery 为平台级投递队列——
+     * 投递调度器以系统身份跨应用扫描（行已显式携带 app_id，回调配置按行取），
+     * 不参与行级注入/过滤；管理端检索走显式 appId 条件。
      */
     public static final Set<String> IGNORED_TABLES = Set.of(
             "ia_app",
@@ -61,6 +65,7 @@ public class AppTenantLineInnerInterceptor implements InnerInterceptor {
             "ia_agent_state",
             "ia_agent_state_cleanup_policy",
             "ia_agent_workspace_config",
+            "ia_webhook_delivery",
             "flyway_schema_history");
 
     private final List<TenantLineInnerInterceptor> delegates = List.of(

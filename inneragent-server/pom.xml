@@ -21,6 +21,7 @@
 		<anthropic-java.version>2.26.0</anthropic-java.version>
 		<dashscope-sdk-java.version>2.22.16</dashscope-sdk-java.version>
 		<agentscope.version>2.0.0</agentscope.version>
+		<opentelemetry-bom.version>1.62.0</opentelemetry-bom.version>
 		<victools.version>4.38.0</victools.version>
 		<testcontainers.version>1.21.3</testcontainers.version>
 		<awaitility.version>4.3.0</awaitility.version>
@@ -29,6 +30,15 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- OTel GenAI span 工厂(任务 #18b):api 版本经 BOM 对齐(1.62.0),
+				覆盖 agentscope-core 的传递版本,避免跨版本 API 漂移 -->
+			<dependency>
+				<groupId>io.opentelemetry</groupId>
+				<artifactId>opentelemetry-bom</artifactId>
+				<version>${opentelemetry-bom.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<dependency>
 				<groupId>com.github.victools</groupId>
 				<artifactId>jsonschema-generator-bom</artifactId>
@@ -259,6 +269,18 @@
 			<version>2.31.23</version>
 		</dependency>
 
+		<!-- OTel GenAI span 工厂(任务 #18b):api 直连 GlobalOpenTelemetry,
+			缺省 noop,classpath 有 provider(javaagent/SDK)后生效。optional=true
+			不向下传递;agentscope-core 本就传递携带 opentelemetry-api,显式声明
+			仅为钉版与表达意图。semconv 的 GenAI 属性仍在 incubating 工件
+			(GenAiIncubatingAttributes),为防约定漂移以本工程常量收敛
+			(GenAiSemanticAttributes),不引 incubating jar。 -->
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-api</artifactId>
+			<optional>true</optional>
+		</dependency>
+
 		<!-- MCP 宿主桥客户端(P1-T2b:tools/call + X-IA-Act 身份透传)。版本钉在
 			0.17.0 = agentscope-core 2.0.0 的传递版本(显式声明仅将其提为直接依赖):
 			官方 mcp:2.0.1(spike 验证形态)会全工程升版,agentscope-core 的
@@ -277,6 +299,18 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- OTel SDK + InMemorySpanExporter:仅测试侧做四类 span 属性断言
+			(任务 #18b;运行时缺省仍为 noop,不引 exporter) -->
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-sdk</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-sdk-testing</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

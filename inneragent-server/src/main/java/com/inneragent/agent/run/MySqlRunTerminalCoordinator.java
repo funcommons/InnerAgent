@@ -16,7 +16,11 @@ import com.inneragent.agent.run.model.AgentEventEnvelope;
 import com.inneragent.agent.run.model.CommittedAgentEvent;
 import com.inneragent.agent.run.model.RunTerminalRequest;
 import com.inneragent.agent.run.model.SystemTerminalActor;
+import com.inneragent.platform.context.AppContext;
+import com.inneragent.platform.webhook.WebhookDeliveryService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -29,6 +33,7 @@ import java.util.UUID;
 /** Reactive terminal adapter with fail-closed StateStore completion checks. */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
 
     private static final String STATE_STORE_FAILURE_MESSAGE =
@@ -39,6 +44,13 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
     private final StateStoreFailureGuard stateStoreFailureGuard;
     private final AgentRuntimeSchedulers schedulers;
     private final AgentRunRedisSignalService signals;
+    /**
+     * [adapt] 任务 #18b(W5):终态 Webhook——终态事务提交后异步入队投递
+     * 记录(PRD「终态通知」最小事件集:run.finished/failed/cancelled)。
+     * ObjectProvider 软依赖:webhook 未装配时静默跳过,入队异常绝不影响
+     * 终态本身(见 {@link #notifyWebhookTerminal(CommittedAgentEvent)})。
+     */
+    private final ObjectProvider<WebhookDeliveryService> webhookDelivery;
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
 
     @Autowired
@@ -70,11 +82,63 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
     private Mono<Optional<CommittedAgentEvent>> afterTerminalCommit(
             Optional<CommittedAgentEvent> committed) {
         recordTerminal(committed);
+        committed.ifPresent(this::notifyWebhookTerminal);
         return committed.filter(CommittedAgentEvent::publishRequired)
                 .map(event -> signals.publishWakeup(event.runId(), event.sequence())
                         .onErrorResume(failure -> Mono.empty())
                         .thenReturn(committed))
                 .orElseGet(() -> Mono.just(committed));
+    }
+
+    /**
+     * [adapt] 任务 #18b(W5):终态 Webhook 入队。映射:DONE→run.finished、
+     * ERROR→run.failed、CANCELLED→run.cancelled;仅当 outputType 非空
+     * (终态事件)时触发。fire-and-forget:任何异常只记 WARN。
+     */
+    private void notifyWebhookTerminal(CommittedAgentEvent event) {
+        String outputType = event.outputType();
+        if (outputType == null) {
+            return;
+        }
+        WebhookDeliveryService service = webhookDelivery.getIfAvailable();
+        if (service == null) {
+            return;
+        }
+        try {
+            String eventType = switch (outputType) {
+                case "DONE" -> WebhookDeliveryService.EVENT_RUN_FINISHED;
+                case "ERROR" -> WebhookDeliveryService.EVENT_RUN_FAILED;
+                case "CANCELLED" -> WebhookDeliveryService.EVENT_RUN_CANCELLED;
+                default -> null;
+            };
+            if (eventType == null) {
+                return;
+            }
+            String errorCode = event.envelope().payload() == null
+                    ? null
+                    : textOrNull(event.envelope().payload().get("errorCode"));
+            String errorMessage = event.envelope().payload() == null
+                    ? null
+                    : textOrNull(event.envelope().payload().get("error"));
+            service.onRunTerminal(new WebhookDeliveryService.TerminalEvent(
+                    AppContext.currentOrDefault(),
+                    eventType,
+                    event.runId(),
+                    outputType,
+                    event.committedAt() == null
+                            ? Instant.now().toString()
+                            : event.committedAt().toString(),
+                    errorCode,
+                    errorMessage));
+        } catch (Exception failure) {
+            // Webhook 入队失败不影响运行终态;投递记录缺失属可观测降级。
+            log.warn("Webhook terminal enqueue failed: runId={}, type={}",
+                    event.runId(), failure.getClass().getSimpleName(), failure);
+        }
+    }
+
+    private static String textOrNull(com.fasterxml.jackson.databind.JsonNode node) {
+        return node == null || node.isNull() ? null : node.asText();
     }
 
     private void recordTerminal(Optional<CommittedAgentEvent> committed) {

@@ -36,6 +36,8 @@ public final class AgentScopeHarnessFactory {
     private final AgentScopeSkillRegistry skillRegistry;
     private final BaseStore workspaceStore;
     private final com.inneragent.agent.run.ModelUsageSettlementPort usagePort;
+    /** [adapt] 任务 #18b(W5):chat span 工厂(缺省 noop)。 */
+    private final com.inneragent.agent.observability.GenAiSpanFactory spanFactory;
 
     @Autowired
     public AgentScopeHarnessFactory(
@@ -46,7 +48,8 @@ public final class AgentScopeHarnessFactory {
             AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
             ObjectProvider<AgentScopeSkillRegistry> skillRegistries,
             ObjectProvider<AgentWorkspaceBaseStore> workspaceStores,
-            ObjectProvider<com.inneragent.agent.run.ModelUsageSettlementPort> usagePort) {
+            ObjectProvider<com.inneragent.agent.run.ModelUsageSettlementPort> usagePort,
+            ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories) {
         this(
                 modelFactory,
                 toolRegistry,
@@ -55,7 +58,8 @@ public final class AgentScopeHarnessFactory {
                 shutdownRecoveryBridge,
                 skillRegistries.getIfAvailable(AgentScopeHarnessFactory::disabledSkillRegistry),
                 workspaceStores.getIfAvailable(),
-                usagePort.getIfAvailable());
+                usagePort.getIfAvailable(),
+                spanFactories.getIfAvailable());
     }
 
     AgentScopeHarnessFactory(
@@ -78,6 +82,20 @@ public final class AgentScopeHarnessFactory {
             AgentScopeSkillRegistry skillRegistry,
             BaseStore workspaceStore,
             com.inneragent.agent.run.ModelUsageSettlementPort usagePort) {
+        this(modelFactory, toolRegistry, stateStore, failures, shutdownRecoveryBridge,
+                skillRegistry, workspaceStore, usagePort, null);
+    }
+
+    AgentScopeHarnessFactory(
+            AgentKernelModelFactory modelFactory,
+            AgentKernelToolRegistry toolRegistry,
+            AgentStateStore stateStore,
+            StateStoreFailureGuard failures,
+            AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
+            AgentScopeSkillRegistry skillRegistry,
+            BaseStore workspaceStore,
+            com.inneragent.agent.run.ModelUsageSettlementPort usagePort,
+            com.inneragent.agent.observability.GenAiSpanFactory spanFactory) {
         this.modelFactory = Objects.requireNonNull(modelFactory, "modelFactory must not be null");
         this.toolRegistry = Objects.requireNonNull(toolRegistry, "toolRegistry must not be null");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore must not be null");
@@ -88,6 +106,7 @@ public final class AgentScopeHarnessFactory {
                 skillRegistry, "skillRegistry must not be null");
         this.workspaceStore = workspaceStore;
         this.usagePort = usagePort;
+        this.spanFactory = spanFactory;
     }
 
     public AgentScopeHarnessFactory(
@@ -132,7 +151,7 @@ public final class AgentScopeHarnessFactory {
                     .description(spec.description())
                     .sysPrompt(spec.systemPrompt())
                     .model(new StateStoreGuardedChatModel(
-                            ownedModel.model(), failures, contextWindow, usagePort))
+                            ownedModel.model(), failures, contextWindow, usagePort, spanFactory))
                     .stateStore(stateStore)
                     .toolkit(toolkit)
                     .permissionContext(AgentToolPermissionPolicy.contextFor(

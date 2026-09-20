@@ -55,6 +55,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
     private final ObjectProvider<com.inneragent.agent.mcp.McpToolInvoker> mcpToolInvokers;
     // [adapt] U1/D1:MCP 工具目录(白名单中目录 FQN 条目的装配与契约校验来源)。
     private final McpToolCatalog mcpToolCatalog;
+    // [adapt] 任务 #18b(W5):GenAI span 工厂(execute_tool/MCP 挂点;缺省 noop)。
+    private final ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories;
 
     public PlatformAgentKernelToolRegistry(
             ToolExecutorRegistry executors,
@@ -68,7 +70,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             AgentScopeMcpRegistry mcpRegistry,
             ObjectProvider<ActTokenSupplier> actTokenSuppliers,
             ObjectProvider<com.inneragent.agent.mcp.McpToolInvoker> mcpToolInvokers,
-            McpToolCatalog mcpToolCatalog) {
+            McpToolCatalog mcpToolCatalog,
+            ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories) {
         this.executors = Objects.requireNonNull(executors, "executors must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -84,6 +87,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
         this.mcpToolInvokers = Objects.requireNonNull(
                 mcpToolInvokers, "mcpToolInvokers must not be null");
         this.mcpToolCatalog = mcpToolCatalog;
+        this.spanFactories = Objects.requireNonNull(
+                spanFactories, "spanFactories must not be null");
     }
 
     @Override
@@ -134,7 +139,9 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                             executor, schema, schedulers.toolBlocking(), leaseGuard, objectMapper,
                             actTokenSuppliers.getIfAvailable(),
                             // [adapt] P1-T2a:MCP 调用端口随适配器下发(T2b 接管点)
-                            mcpToolInvokers.getIfAvailable()));
+                            mcpToolInvokers.getIfAvailable(),
+                            // [adapt] 任务 #18b(W5):execute_tool span 挂点
+                            spanFactories.getIfAvailable()));
                 } else if (child != null) {
                     AgentScopeToolSchema.PreparedSchema schema =
                             AgentScopeToolSchema.prepareSubAgent(

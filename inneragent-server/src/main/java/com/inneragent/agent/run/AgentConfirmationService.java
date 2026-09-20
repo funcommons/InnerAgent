@@ -7,6 +7,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.config.AgentScopeV2Properties;
+import com.inneragent.platform.context.AppContext;
+import com.inneragent.platform.toolhub.ToolAuditService;
+import com.inneragent.platform.toolhub.ToolDecisionSource;
 import com.inneragent.server.controller.vo.ToolConfirmationReqVO;
 import com.inneragent.agent.kernel.AgentKernelSpecFactory;
 import com.inneragent.agent.permission.ToolExecutionMode;
@@ -22,6 +25,7 @@ import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.ToolCallState;
 import io.agentscope.core.message.UserMessage;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -33,11 +37,20 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Authorizes, durably claims, and resumes a user-confirmed AgentScope tool pause. */
+/**
+ * Authorizes, durably claims, and resumes a user-confirmed AgentScope tool pause.
+ *
+ * <p>[adapt] U1/D3:确认决策实弹审计接线(V22)——批准/拒绝在决策生效前逐工具
+ * 追加 {@code ia_audit_log}(decision=allowed/denied,decision_source=live-confirm,
+ * run_id/tool_fqn/入参快照),失败即业务失败(fail-closed,决策不生效)。
+ */
 @Service
 public final class AgentConfirmationService {
 
     private static final TypeReference<Map<String, Object>> OBJECT_MAP = new TypeReference<>() { };
+
+    private static final String DECISION_ALLOWED = "allowed";
+    private static final String DECISION_DENIED = "denied";
 
     private final AgentWaitingStatePort waitingState;
     private final AgentExecutionRuntimeContextRequests runtimeContexts;
@@ -46,6 +59,12 @@ public final class AgentConfirmationService {
     private final AgentRuntimeInstanceIdentity instanceIdentity;
     private final AgentScopeV2Properties properties;
     private final ObjectMapper objectMapper;
+    /**
+     * [adapt] U1/D3:确认流实弹审计写入口(V22:decision_source=live-confirm)。
+     * riskLevel 经工具目录(可选依赖)按工具名/FQN 反查;内置工具无目录行落 null。
+     */
+    private final ToolAuditService audits;
+    private final ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs;
 
     public AgentConfirmationService(
             AgentWaitingStatePort waitingState,
@@ -54,7 +73,9 @@ public final class AgentConfirmationService {
             AgentKernelSnapshotBuilder snapshotBuilder,
             AgentRuntimeInstanceIdentity instanceIdentity,
             AgentScopeV2Properties properties,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ToolAuditService audits,
+            ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs) {
         this.waitingState = Objects.requireNonNull(waitingState, "waitingState must not be null");
         this.runtimeContexts = Objects.requireNonNull(
                 runtimeContexts, "runtimeContexts must not be null");
@@ -65,6 +86,8 @@ public final class AgentConfirmationService {
                 instanceIdentity, "instanceIdentity must not be null");
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.audits = Objects.requireNonNull(audits, "audits must not be null");
+        this.toolCatalogs = Objects.requireNonNull(toolCatalogs, "toolCatalogs must not be null");
     }
 
     public Mono<Void> respond(ToolConfirmationReqVO request, long currentUserId) {
@@ -107,6 +130,9 @@ public final class AgentConfirmationService {
                 .map(toolCall -> new ConfirmResult(
                         decisions.get(toolCall.getId()), toolCall))
                 .toList();
+        // [adapt] U1/D3:决策生效前落审计(fail-closed:审计写入失败即抛出,
+        // 中止本次确认,决策不生效)。批准与拒绝双路径均逐工具追加。
+        auditDecisions(runId, currentUserId, decisions, toolCalls);
         Msg resumeMessage = UserMessage.builder()
                 .metadata(Map.of(Msg.METADATA_CONFIRM_RESULTS, results))
                 .build();
@@ -120,6 +146,59 @@ public final class AgentConfirmationService {
                 properties.getExecution().getOwnerLease());
         return waitingState.resumeConfirmation(transition)
                 .flatMap(resumed -> launchResume(resumed, resumeMessage));
+    }
+
+    /**
+     * [adapt] U1/D3:确认决策逐工具追加 ia_audit_log(V22)。
+     * decision=allowed/denied;decision_source=live-confirm(V22 裁定:确认流
+     * 实弹决策由运行侧落库);conversationId 在确认载荷中不可得,留空。
+     */
+    private void auditDecisions(
+            String runId,
+            long currentUserId,
+            Map<String, Boolean> decisions,
+            List<ToolUseBlock> toolCalls) {
+        long appId = AppContext.currentOrDefault();
+        for (ToolUseBlock toolCall : toolCalls) {
+            Boolean approved = decisions.get(toolCall.getId());
+            if (approved == null) {
+                continue;
+            }
+            audits.append(new ToolAuditService.ToolAuditEntry(
+                    appId,
+                    null,
+                    currentUserId,
+                    null,
+                    runId,
+                    toolCall.getName(),
+                    approved ? DECISION_ALLOWED : DECISION_DENIED,
+                    ToolDecisionSource.LIVE_CONFIRM.code(),
+                    catalogRiskLevel(toolCall.getName()),
+                    paramsJson(toolCall),
+                    null,
+                    null,
+                    null));
+        }
+    }
+
+    /** 工具风险等级:注册目录(ia_tool_registry)可查则落目录值,否则留空。 */
+    private String catalogRiskLevel(String toolNameOrFqn) {
+        com.inneragent.agent.mcp.McpToolCatalog catalog = toolCatalogs.getIfAvailable();
+        if (catalog == null) {
+            return null;
+        }
+        return catalog.find(AppContext.currentOrDefault(), toolNameOrFqn)
+                .map(com.inneragent.agent.mcp.McpToolCatalogEntry::riskLevel)
+                .orElse(null);
+    }
+
+    /** 确认时的工具入参快照(敏感打码由调用方负责;序列化失败退化为字符串视图)。 */
+    private String paramsJson(ToolUseBlock toolCall) {
+        try {
+            return objectMapper.writeValueAsString(toolCall.getInput());
+        } catch (JsonProcessingException serializationFailure) {
+            return String.valueOf(toolCall.getInput());
+        }
     }
 
     private Mono<Void> launchResume(ResumedAgentRun resumed, Msg resumeMessage) {

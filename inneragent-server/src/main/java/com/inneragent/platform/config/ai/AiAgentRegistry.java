@@ -61,6 +61,7 @@ public class AiAgentRegistry {
          * 注册内置 Agent 定义
          */
         private void registerBuiltinAgents() {
+                registerDemoAgent();
                 registerAiMediaAgent();
                 registerConceptVisualizerAgent();
                 registerScriptFullParseAgent();
@@ -81,6 +82,29 @@ public class AiAgentRegistry {
         }
 
         // ========== 各 Agent 定义 ==========
+
+        /**
+         * 注册 InnerAgent 演示 Agent(P0 冒烟链路)
+         * <p>
+         * 只挂 InnerAgent 内置只读工具({@code get_current_time}/{@code parse_text_file}),
+         * 不引用融光业务工具;配合 mock 模型(见 V4__demo_seed.sql 与
+         * MockAiProvider)可在无真实密钥的环境下完整跑通
+         * “发起运行 → 模型 → 工具调用 → 工具结果 → 流式回复 → DONE”链路。
+         */
+        private void registerDemoAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("demo")
+                                .name("InnerAgent 演示助手")
+                                .systemPrompt("""
+                                                你是 InnerAgent 的演示助手,用于本地演示与 P0 冒烟验证。
+                                                回答保持简短、友好,并使用中文。
+                                                需要当前时间时,必须调用 get_current_time 工具查询,不要凭空编造。
+                                                需要读取工作区文本文件时,调用 parse_text_file 工具。""")
+                                .instructionTemplate("")
+                                .toolNames(List.of("get_current_time", "parse_text_file"))
+                                .enableTools(1)
+                                .build());
+        }
 
         private void registerAiMediaAgent() {
                 register(AiAgentDefinition.builder()

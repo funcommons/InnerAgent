@@ -37,6 +37,13 @@ public class AgentRunCoordinator {
 
     private static final long INITIAL_OWNER_EPOCH = 1L;
 
+    /**
+     * P0 演示链路还没有租户体系:会话 tenant_id 落 DDL 默认值 0,
+     * 而运行时内核上下文(ToolExecutionContext)要求正数租户,
+     * 这里对缺失租户回填演示租户 1;接入真实认证后由会话携带真实租户,不再触发。
+     */
+    private static final long DEMO_TENANT_ID = 1L;
+
     private final AgentRunRepository runRepository;
     private final AgentMessageAllocator messageAllocator;
     private final TransactionTemplate transactionTemplate;
@@ -78,7 +85,7 @@ public class AgentRunCoordinator {
                 .conversationId(conversation.getConversationId())
                 .userId(conversation.getUserId())
                 .projectId(conversation.getProjectId())
-                .tenantId(conversation.getTenantId())
+                .tenantId(normalizeTenantId(conversation.getTenantId()))
                 .agentType(command.agentType())
                 .kernelFingerprint(command.kernelSnapshot().fingerprint())
                 .agentDefinitionSnapshotJson(command.kernelSnapshot().snapshotJson())
@@ -241,6 +248,10 @@ public class AgentRunCoordinator {
             throw new IllegalArgumentException("Agent run deadline must be in the future");
         }
         return persisted;
+    }
+
+    private static Long normalizeTenantId(Long tenantId) {
+        return tenantId != null && tenantId > 0 ? tenantId : DEMO_TENANT_ID;
     }
 
     private LocalDateTime leaseUntil(

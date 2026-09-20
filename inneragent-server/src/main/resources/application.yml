@@ -55,6 +55,11 @@ app:
   time-zone: Asia/Shanghai
   agent-workspace:
     local-base-path: ${AGENT_WORKSPACE_LOCAL_PATH:./data/agent-workspace}
+# P0 冒烟 mock 模型启用说明(无需任何开关):
+#   ia_model_api_config.platform='mock' 且 text_protocol='mock' 即命中
+#   MockAiProvider(V4__demo_seed.sql 已 seed 默认对话模型 mock-text)。
+#   风险:mock 回复为脚本固定文案,演示部署可能被当真模型;生产环境严禁保留
+#   platform='mock' 配置,详见 MockAiProvider 类注释。
 
 # AgentScope 内核运行时(前缀与 AgentScopeV2Properties 注解一致;[adapt] 自融光
 # fusion.agentscope.v2 段,state 表名换 ia_agent_state,确认超时按 PRD 决策 24h,

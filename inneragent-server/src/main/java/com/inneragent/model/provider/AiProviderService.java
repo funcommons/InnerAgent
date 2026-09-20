@@ -61,8 +61,6 @@ public class AiProviderService {
                 apiConfig != null ? apiConfig.getId() : null,
                 apiConfig != null ? apiConfig.getPlatform() : null,
                 apiConfig != null ? apiConfig.getTextProtocol() : null,
-                apiConfig != null ? apiConfig.getImageProtocol() : null,
-                apiConfig != null ? apiConfig.getVideoProtocol() : null,
                 apiConfig != null ? apiConfig.getApiType() : null,
                 apiConfig != null ? apiConfig.getApiUrl() : null,
                 apiConfig != null ? apiConfig.getAutoAppendV1Path() : null,

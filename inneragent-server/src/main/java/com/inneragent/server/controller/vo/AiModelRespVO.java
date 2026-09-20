@@ -29,7 +29,6 @@ public class AiModelRespVO {
     private List<String> reasoningEffortLevels;
     private Integer contextWindow;
     private Long apiConfigId;
-    private Long comfyuiWorkflowId;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

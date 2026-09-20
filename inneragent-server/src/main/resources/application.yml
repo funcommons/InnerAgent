@@ -23,6 +23,19 @@ spring:
       password: ${IA_REDIS_PASSWORD:}
   cache:
     type: caffeine
+  autoconfigure:
+    exclude:
+      # 模型接入由 ia_model_api_config 在运行期自管(密钥存库),不由 Spring AI
+      # 自动装配提供;dashscope starter 的自动配置强制要求 spring.ai.dashscope.api-key
+      # 且本项目无任何消费者,整体排除(P1 若接宿主桥再评估)。
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAgentAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeImageAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeVideoAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
 
 mybatis-plus:
   configuration:
@@ -32,8 +45,52 @@ mybatis-plus:
     db-config:
       id-type: assign_id
       logic-delete-field: deleted
-      logic-delete-value: 1
-      logic-not-delete-value: 0
+      # 实体 BaseEntity.deleted 为 Boolean @TableLogic,取值用 true/false
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+# 应用配置([adapt] 自融光 application.yaml app 段)
+app:
+  # Java 时区使用 IANA Zone ID
+  time-zone: Asia/Shanghai
+  agent-workspace:
+    local-base-path: ${AGENT_WORKSPACE_LOCAL_PATH:./data/agent-workspace}
+
+# AgentScope 内核运行时(前缀与 AgentScopeV2Properties 注解一致;[adapt] 自融光
+# fusion.agentscope.v2 段,state 表名换 ia_agent_state,确认超时按 PRD 决策 24h,
+# onetoken 计费域未移植整段删除)
+fusion:
+  agentscope:
+    v2:
+      cache:
+        maximum-size: 64
+        expire-after-access: 30m
+        capacity-wait: 5s
+      state:
+        mode: postgres
+        table-name: "ia_agent_state"
+      ingress:
+        max-events: 4096
+        max-bytes: 8388608
+        coalesce-delay: 50ms
+        coalesce-max-chars: 1024
+      execution:
+        owner-lease: 30s
+        run-timeout: 30m
+        confirmation-timeout: 24h
+        max-iters: 999
+      skills:
+        enabled: true
+        fail-fast: true
+        display-names: {}
+        repositories:
+          bundled:
+            location: classpath:agentscope/skills
+            lazy: false
+      mcp:
+        enabled: ${AGENTSCOPE_MCP_ENABLED:false}
+        fail-fast: true
+        servers: {}
 
 springdoc:
   api-docs:

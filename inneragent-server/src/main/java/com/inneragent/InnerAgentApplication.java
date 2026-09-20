@@ -15,7 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableCaching
 @EnableScheduling
-@MapperScan("com.inneragent.**.mapper")
+@MapperScan({"com.inneragent.**.mapper", "com.inneragent.platform.mapper"})
 public class InnerAgentApplication {
 
 	public static void main(String[] args) {

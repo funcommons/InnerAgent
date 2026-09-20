@@ -65,7 +65,7 @@ public class AiModelService {
                                Integer maxConcurrency, List<String> multimodalInputTypes,
                                Map<String, List<String>> multimodalInputTransports,
                                Boolean supportReasoning, List<String> reasoningEffortLevels,
-                               Integer contextWindow, Long comfyuiWorkflowId) {
+                               Integer contextWindow) {
         AiModel model = aiModelMapper.selectById(id);
         if (model == null) throw new BusinessException(404, "AI模型不存在");
         Long nextApiConfigId = apiConfigId != null ? apiConfigId : model.getApiConfigId();
@@ -90,9 +90,6 @@ public class AiModelService {
         if (reasoningEffortLevels != null) model.setReasoningEffortLevels(reasoningEffortLevels);
         if (contextWindow != null) model.setContextWindow(contextWindow > 0 ? contextWindow : null);
         if (apiConfigId != null) model.setApiConfigId(apiConfigId);
-        if (comfyuiWorkflowId != null) {
-            model.setComfyuiWorkflowId(comfyuiWorkflowId > 0 ? comfyuiWorkflowId : null);
-        }
         normalizeMetadata(model);
         validateRequestProtocol(model);
         validateCapabilityPreset(model);

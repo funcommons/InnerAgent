@@ -34,6 +34,4 @@ public class AiModelUpdateReqVO {
     @Min(value = 0, message = "上下文窗口不能小于 0")
     private Integer contextWindow;
     private Long apiConfigId;
-
-    private Long comfyuiWorkflowId;
 }

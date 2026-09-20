@@ -36,6 +36,19 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<!-- victools BOM 把 swagger-annotations(-jakarta) 压到 2.2.38,低于 springdoc
+				2.8.16 所带 swagger-core/models 2.2.43 的预期,/ia/api-docs 运行期抛
+				NoSuchMethodError(Schema.$dynamicRef);统一 pin 到 2.2.43 对齐 -->
+			<dependency>
+				<groupId>io.swagger.core.v3</groupId>
+				<artifactId>swagger-annotations-jakarta</artifactId>
+				<version>2.2.43</version>
+			</dependency>
+			<dependency>
+				<groupId>io.swagger.core.v3</groupId>
+				<artifactId>swagger-annotations</artifactId>
+				<version>2.2.43</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
@@ -43,6 +56,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<!-- spring.cache.type=caffeine 对应的缓存实现(版本由 Boot parent 管理) -->
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

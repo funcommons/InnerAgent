@@ -110,10 +110,9 @@ public class AiModelMetadataResolver {
         if (apiConfig == null || modelType == null) {
             return null;
         }
+        // [adapt] 图像/视频协议列已随 V2 DDL 裁剪,仅文本协议可由接入配置提供默认值
         return switch (modelType) {
             case 1 -> apiConfig.getTextProtocol();
-            case 2 -> apiConfig.getImageProtocol();
-            case 3 -> apiConfig.getVideoProtocol();
             default -> null;
         };
     }

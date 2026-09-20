@@ -10,10 +10,11 @@ import lombok.*;
 /**
  * API 配置实体
  * <p>
- * 对应数据库表：ia_api_config
+ * 对应数据库表：ia_model_api_config([adapt] 融光原名 ia_api_config,V2 DDL 因引入
+ * ia_app 多应用语义改名,且去除图像/视频专属列)
  * 管理 AI 服务的 API 接入配置，支持多种平台。
  */
-@TableName("ia_api_config")
+@TableName("ia_model_api_config")
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
@@ -34,12 +35,6 @@ public class ApiConfig extends BaseEntity {
 
     /** 文本模型默认请求协议；同一接入配置可按能力类型使用不同协议 */
     private String textProtocol;
-
-    /** 图片模型默认请求协议 */
-    private String imageProtocol;
-
-    /** 视频模型默认请求协议 */
-    private String videoProtocol;
 
     /** API 类型：1-文本对话 2-图片生成 3-视频生成 */
     private Integer apiType;

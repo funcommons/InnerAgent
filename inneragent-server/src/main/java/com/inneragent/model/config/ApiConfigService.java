@@ -29,8 +29,6 @@ public class ApiConfigService {
             apiConfig.setAutoAppendV1Path(true);
         }
         apiConfig.setTextProtocol(normalizeProtocol(apiConfig.getTextProtocol()));
-        apiConfig.setImageProtocol(normalizeProtocol(apiConfig.getImageProtocol()));
-        apiConfig.setVideoProtocol(normalizeProtocol(apiConfig.getVideoProtocol()));
         apiConfig.setApiUrl(normalizeApiUrl(apiConfig.getPlatform(), apiConfig.getApiUrl()));
         normalizeProxyConfig(apiConfig);
         apiConfigMapper.insert(apiConfig);
@@ -39,7 +37,7 @@ public class ApiConfigService {
 
     @Transactional
     public void updateApiConfig(Long id, String name, String platform,
-                                 String textProtocol, String imageProtocol, String videoProtocol,
+                                 String textProtocol,
                                  String apiUrl,
                                  Boolean autoAppendV1Path,
                                  String proxyType, String proxyHost, Integer proxyPort,
@@ -52,8 +50,6 @@ public class ApiConfigService {
         if (name != null) config.setName(name);
         if (platform != null) config.setPlatform(platform);
         if (textProtocol != null) config.setTextProtocol(normalizeProtocol(textProtocol));
-        if (imageProtocol != null) config.setImageProtocol(normalizeProtocol(imageProtocol));
-        if (videoProtocol != null) config.setVideoProtocol(normalizeProtocol(videoProtocol));
         if (apiUrl != null) config.setApiUrl(normalizeApiUrl(effectivePlatform, apiUrl));
         if (autoAppendV1Path != null) config.setAutoAppendV1Path(autoAppendV1Path);
         if (proxyType != null) config.setProxyType(proxyType);
@@ -198,20 +194,12 @@ public class ApiConfigService {
     }
 
     private void applyPlatformDefaults(ApiConfig config) {
+        // [adapt] 图像/视频专属协议列(image_protocol/video_protocol)已随 V2 DDL 裁剪,
+        // ComfyUI 图片/视频默认协议逻辑不再适用;仅保留 comfyui 平台的文本协议清空与 /v1 前缀关闭。
         if (config == null || !"comfyui".equalsIgnoreCase(config.getPlatform())) {
             return;
         }
         config.setTextProtocol(null);
-        if (StrUtil.isBlank(config.getImageProtocol())) {
-            config.setImageProtocol("comfyui");
-        }
-        if (StrUtil.isBlank(config.getVideoProtocol())) {
-            config.setVideoProtocol("comfyui");
-        }
-        if (!"comfyui".equalsIgnoreCase(config.getImageProtocol())
-                || !"comfyui".equalsIgnoreCase(config.getVideoProtocol())) {
-            throw new BusinessException(400, "ComfyUI 图片和视频默认协议必须为 comfyui");
-        }
         config.setAutoAppendV1Path(false);
     }
 

@@ -21,6 +21,7 @@ public class ApiConfigService {
 
     private final ApiConfigMapper apiConfigMapper;
     private final ObjectProvider<ChatModelFactory> chatModelFactoryProvider;
+    private final ObjectProvider<ApiConfigReferenceGuard> referenceGuards;
 
     @Transactional
     public Long createApiConfig(ApiConfig apiConfig) {
@@ -71,6 +72,9 @@ public class ApiConfigService {
 
     @Transactional
     public void deleteApiConfig(Long id) {
+        // 引用校验(P2-key,对齐 StorageConfig 的 ReferenceGuard 模式):
+        // 仍被 ia_ai_model.api_config_id 引用时 409 中止,不做级联悬空
+        referenceGuards.orderedStream().forEach(guard -> guard.assertDeletable(id));
         apiConfigMapper.deleteById(id);
         evictModelCaches();
     }

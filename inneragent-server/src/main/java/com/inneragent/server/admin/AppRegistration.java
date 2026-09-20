@@ -7,6 +7,8 @@ import com.inneragent.platform.common.BaseEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDateTime;
+
 /**
  * 宿主应用注册(ia_app,V2 DDL;02-技术方案 §5.1)。
  *
@@ -32,6 +34,12 @@ public class AppRegistration extends BaseEntity {
 
     /** 宿主应用签名公钥(PEM;embed token RS256 验签) */
     private String signPublicKey;
+
+    /** 上一代签名公钥(PEM;轮换宽限期内存量 embed token 验签用,再次轮换覆盖;V9) */
+    private String previousSignPublicKey;
+
+    /** 当前签名公钥的轮换时刻(宽限期起点;NULL 表示从未轮换;V9) */
+    private LocalDateTime signKeyRotatedAt;
 
     /** 终态通知 Webhook 回调地址(可空) */
     private String webhookUrl;

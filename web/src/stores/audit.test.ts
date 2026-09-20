@@ -70,6 +70,14 @@ describe('audit store', () => {
     expect(store.filters.pageNo).toBe(1)
   })
 
+  it('#18 exportRows:按当前筛选条件取数(decision=denied → 4 条)', async () => {
+    const store = useAuditStore()
+    store.filters.decision = 'denied'
+    const rows = await store.exportRows()
+    expect(rows).toHaveLength(4)
+    expect(rows.every(r => r.decision === 'denied')).toBe(true)
+  })
+
   it('decision_source 与 decision 字典完备(真实码值,含 V8 expired)', () => {
     expect(DECISION_SOURCES.map(d => d.value)).toEqual(['mode-default', 'user-grant', 'forced-policy', 'live-confirm', 'expired', 'full-access'])
     expect(AUDIT_DECISIONS.map(d => d.value)).toEqual([

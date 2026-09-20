@@ -107,5 +107,23 @@ export const useAuditStore = defineStore('audit', {
       this.filters.pageNo = 1
       return this.load()
     },
+    /** 导出取数(#18):按当前筛选条件单次拉取(上限 1000 条)供 CSV 落盘 */
+    async exportRows(): Promise<IaAuditLog[]> {
+      const f = this.filters
+      const appId = f.appId.trim() ? Number(f.appId.trim()) : undefined
+      const userId = f.userId.trim() ? Number(f.userId.trim()) : undefined
+      const page = await auditAdminApi.page({
+        appId: appId !== undefined && !Number.isNaN(appId) ? appId : undefined,
+        userId: userId !== undefined && !Number.isNaN(userId) ? userId : undefined,
+        decisionSource: (f.decisionSource || undefined) as DecisionSource | undefined,
+        decision: f.decision || undefined,
+        toolFqn: f.toolFqn || undefined,
+        from: f.from || undefined,
+        to: f.to || undefined,
+        pageNo: 1,
+        pageSize: 1000,
+      })
+      return page.list
+    },
   },
 })

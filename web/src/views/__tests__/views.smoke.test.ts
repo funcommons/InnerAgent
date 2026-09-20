@@ -39,6 +39,9 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('已登记')
     expect(wrapper.text()).toContain('未登记')
     expect(wrapper.text()).toContain('180')
+    // 密钥指纹列(#10):等宽展示前 12 位,tooltip 携完整指纹
+    expect(wrapper.text()).toContain('a1b2c3d4e5f6')
+    expect(wrapper.text()).not.toContain('a1b2c3d4e5f60718')
     wrapper.unmount()
   })
 

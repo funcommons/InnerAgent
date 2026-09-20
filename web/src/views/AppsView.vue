@@ -9,7 +9,7 @@
  */
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Key, EditPen } from '@element-plus/icons-vue'
+import { Plus, Refresh, Key, EditPen, CopyDocument } from '@element-plus/icons-vue'
 import { useAppsStore, apiErrorMessage, isValidPemPublicKey } from '@/stores/apps'
 import type { IaApp } from '@/api/types'
 
@@ -99,6 +99,16 @@ function openKey(app: IaApp, mode: 'register' | 'rotate') {
   keyVisible.value = true
 }
 
+/** 复制公钥指纹(宿主侧比对锚点;优化建议 #10) */
+async function copyFingerprint(fp: string) {
+  try {
+    await navigator.clipboard.writeText(fp)
+    ElMessage.success('指纹已复制')
+  } catch {
+    ElMessage.warning('复制失败,请手动选择复制')
+  }
+}
+
 async function saveKey() {
   if (!keyApp.value) return
   if (!isValidPemPublicKey(keyPem.value)) {
@@ -165,6 +175,18 @@ async function saveKey() {
           <template #default="{ row }">
             <el-tag v-if="row.signPublicKey" type="success" size="small">已登记</el-tag>
             <el-tag v-else type="warning" size="small">未登记</el-tag>
+          </template>
+        </el-table-column>
+        <!-- 密钥指纹(优化建议 #10):等宽前 12 位 + 复制完整指纹;宿主侧比对锚点 -->
+        <el-table-column label="密钥指纹" min-width="150">
+          <template #default="{ row }">
+            <div v-if="row.signKeyFingerprint" class="fp-cell">
+              <el-tooltip :content="`完整指纹:${row.signKeyFingerprint}`" placement="top">
+                <span class="mono fp">{{ row.signKeyFingerprint.slice(0, 12) }}</span>
+              </el-tooltip>
+              <el-button text size="small" :icon="CopyDocument" class="fp-copy" @click="copyFingerprint(row.signKeyFingerprint)" />
+            </div>
+            <span v-else class="dim">—</span>
           </template>
         </el-table-column>
         <el-table-column prop="conversationRetentionDays" label="保留期(天)" width="105" align="right" />
@@ -254,6 +276,15 @@ async function saveKey() {
         title="轮换后新公钥立即生效;旧公钥保留 72 小时验证宽限,期间双公钥并存,存量 embed token 在宽限期内仍可正常验签。"
       />
       <el-form label-width="90px">
+        <el-form-item v-if="keyMode === 'rotate' && (keyApp?.signKeyFingerprint || keyApp?.signKeyRotatedAt)" label="当前指纹">
+          <div class="fp-detail">
+            <span class="mono">{{ keyApp?.signKeyFingerprint ?? '—' }}</span>
+            <span class="form-hint">
+              最近轮换:{{ keyApp?.signKeyRotatedAt ?? '从未轮换(登记后未更换)' }}
+              · 轮换后旧公钥保留 72 小时验证宽限(V9 双公钥并存)
+            </span>
+          </div>
+        </el-form-item>
         <el-form-item label="RSA 公钥" required>
           <el-input
             v-model="keyPem"
@@ -302,6 +333,23 @@ async function saveKey() {
 .mono {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 12px;
+}
+.fp-cell {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.fp {
+  color: #606266;
+}
+.fp-copy {
+  padding: 4px;
+}
+.fp-detail {
+  width: 100%;
+}
+.fp-detail .form-hint {
+  margin-top: 2px;
 }
 .dim {
   color: #c0c4cc;

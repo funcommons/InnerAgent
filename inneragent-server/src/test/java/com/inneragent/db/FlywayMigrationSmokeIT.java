@@ -23,10 +23,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Flyway 迁移链冒烟测试(P0-T4)。
+ * Flyway 迁移链冒烟测试(P0-T4 建立;P1 台账④随 V5__storage_config.sql 更新)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
- * 上执行 classpath:db/migration 全链迁移,断言 19 张 ia_ 业务表全部建成、种子数据落库,
+ * 上执行 classpath:db/migration 全链迁移,断言 20 张 ia_ 业务表全部建成、种子数据落库,
  * 并重复执行 migrate 验证幂等。由 maven-failsafe-plugin 执行(类名 *IT 结尾)。</p>
  */
 @Testcontainers
@@ -40,7 +40,7 @@ class FlywayMigrationSmokeIT {
             .withUsername("inneragent")
             .withPassword("inneragent");
 
-    /** 技术方案 §5.1 规定的 19 张 ia_ 业务表(按表名字典序,与 SQL ORDER BY 对齐)。 */
+    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置表(字典序)。 */
     private static final List<String> EXPECTED_IA_TABLES = List.of(
             // V1:Agent 核心
             "ia_agent_conversation",
@@ -62,6 +62,8 @@ class FlywayMigrationSmokeIT {
             "ia_app",
             "ia_audit_log",
             "ia_model_api_config",
+            // V5:工作区/媒体对象存储配置
+            "ia_storage_config",
             "ia_tool_grant",
             "ia_tool_registry");
 
@@ -79,21 +81,21 @@ class FlywayMigrationSmokeIT {
 
     @Test
     @Order(1)
-    void migrateCreatesAllNineteenIaTablesAndSeeds() throws SQLException {
+    void migrateCreatesAllTwentyIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(3, result.migrationsExecuted, "应依次执行 V1/V2/V3 三个迁移");
+        assertEquals(5, result.migrationsExecuted, "应依次执行 V1-V5 五个迁移");
 
         List<String> actualTables = listIaTables();
-        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 19 张 ia_ 表");
+        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 20 张 ia_ 表");
 
-        // flyway_schema_history:三条记录且全部 success
+        // flyway_schema_history:五条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(3, resultSet.getInt(1), "flyway_schema_history 应有 3 条成功记录");
+            assertEquals(5, resultSet.getInt(1), "flyway_schema_history 应有 5 条成功记录");
         }
 
         // 种子数据:默认应用 / 状态清理策略单例 / 工作区配置单例

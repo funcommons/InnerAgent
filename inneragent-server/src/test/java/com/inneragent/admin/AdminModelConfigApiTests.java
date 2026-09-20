@@ -232,6 +232,20 @@ class AdminModelConfigApiTests {
     }
 
     @Test
+    @DisplayName("DELETE 仍被 AI 模型引用:409(ReferenceGuard 语义,对齐 StorageConfig)")
+    void deleteConflictsWhenReferencedByModel() throws Exception {
+        org.mockito.Mockito.doThrow(new BusinessException(409, "该模型接入配置仍被 2 个 AI 模型引用,不能删除"))
+                .when(apiConfigService).deleteApiConfig(11L);
+
+        mockMvcWithKey.perform(delete("/ia/api/v1/admin/model-configs/11")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(409))
+                .andExpect(jsonPath("$.msg").value(
+                        org.hamcrest.Matchers.containsString("2 个 AI 模型引用")));
+    }
+
+    @Test
     @DisplayName("POST /{id}/test:连通成功 ok=true;失败 ok=false(均 200,错误为数据非异常)")
     void testEndpointReportsConnectivityResult() throws Exception {
         when(aiProviderService.listRemoteModels(11L)).thenReturn(List.of(

@@ -4,10 +4,12 @@
  */
 import { afterAll, afterEach, beforeAll } from 'vitest'
 import { server } from './server'
+import { resetMockData } from './data'
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => {
   server.resetHandlers()
+  resetMockData()
   sessionStorage.clear()
 })
 afterAll(() => server.close())

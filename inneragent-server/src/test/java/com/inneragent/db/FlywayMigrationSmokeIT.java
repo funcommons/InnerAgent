@@ -23,10 +23,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Flyway 迁移链冒烟测试(P0-T4 建立;P1 台账④随 V5__storage_config.sql、P1-T2a 随 V6 工具中枢增补)。
+ * Flyway 迁移链冒烟测试(P0-T4 建立;P1 台账④随 V5__storage_config.sql、
+ * P1-T2a 随 V6 工具中枢增补、P1-T3b 随 V7__agent_attachment.sql 对话附件增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
- * 上执行 classpath:db/migration 全链迁移,断言 21 张 ia_ 业务表全部建成、种子数据落库,
+ * 上执行 classpath:db/migration 全链迁移,断言 22 张 ia_ 业务表全部建成、种子数据落库,
  * 并重复执行 migrate 验证幂等。由 maven-failsafe-plugin 执行(类名 *IT 结尾)。</p>
  */
 @Testcontainers
@@ -40,8 +41,10 @@ class FlywayMigrationSmokeIT {
             .withUsername("inneragent")
             .withPassword("inneragent");
 
-    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置表 + V6 schema 历史(字典序,21 张)。 */
+    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件(字典序,22 张)。 */
     private static final List<String> EXPECTED_IA_TABLES = List.of(
+            // V7:对话附件(字典序居 ia_agent_* 首位)
+            "ia_agent_attachment",
             // V1:Agent 核心
             "ia_agent_conversation",
             "ia_agent_definition",
@@ -85,18 +88,18 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(6, result.migrationsExecuted, "应依次执行 V1-V6 六个迁移");
+        assertEquals(7, result.migrationsExecuted, "应依次执行 V1-V7 七个迁移");
 
         List<String> actualTables = listIaTables();
-        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 21 张 ia_ 表");
+        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 22 张 ia_ 表");
 
-        // flyway_schema_history:六条记录且全部 success
+        // flyway_schema_history:七条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(6, resultSet.getInt(1), "flyway_schema_history 应有 6 条成功记录");
+            assertEquals(7, resultSet.getInt(1), "flyway_schema_history 应有 7 条成功记录");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -132,6 +135,20 @@ class FlywayMigrationSmokeIT {
             assertTrue(workspaceResultSet.next(), "应预置 id=1 的工作空间配置单例");
             assertEquals("database", workspaceResultSet.getString(1));
             assertEquals("idle", workspaceResultSet.getString(2));
+        }
+
+        // V7:附件表关键列就位 + 演示 mock 模型补多模态能力(P1-T3b 附件上传可演示)
+        assertTrue(columnExists("ia_agent_attachment", "content_ref"),
+                "ia_agent_attachment.content_ref 应存在(V7)");
+        assertTrue(columnExists("ia_agent_attachment", "content_sha256"),
+                "ia_agent_attachment.content_sha256 应存在(V7)");
+        try (Connection connection = openConnection();
+             PreparedStatement modelStatement = connection.prepareStatement(
+                     "SELECT multimodal_input_types::text FROM ia_ai_model WHERE code = 'mock-text'");
+             ResultSet modelResultSet = modelStatement.executeQuery()) {
+            assertTrue(modelResultSet.next(), "应预置 code=mock-text 的演示模型");
+            assertEquals("[\"image\", \"file\"]", modelResultSet.getString(1),
+                    "V7 应为演示模型补 image/file 多模态输入类型");
         }
     }
 

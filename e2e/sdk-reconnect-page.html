@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InnerAgent SDK · e2e reconnect host</title>
+  <!-- WC dist 以 bare specifier 外置 vue/pinia(vite external); 原生 node 静态服务
+       无模块改写能力, 经 import map 映射到本地 vendor 文件(vue/pinia 取自 sdk-js
+       node_modules, 只读引用; devtools-api 为 e2e 桩件)。 -->
+  <script type="importmap">
+  {
+    "imports": {
+      "vue": "/vendor/vue.esm-browser.js",
+      "pinia": "/vendor/pinia.esm-browser.js",
+      "@vue/devtools-api": "/vendor/devtools-api-stub.js"
+    }
+  }
+  </script>
+  <!--
+    e2e/sdk-reconnect-page.html — L8 断流重连线专用 WC 宿主测试页(测试基建)。
+    与 examples/demo-host 等价的最小宿主: 挂载 <inneragent-chat> 并以同源
+    /ia/api/v1 为 baseURL(经 e2e/reconnect-host.mjs 可断中转访问 18090)。
+    该页与断流中转同源, 保证 SDK 请求全部经过「可断」链路。
+  -->
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f8fafc; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 16px; }
+    p.host-note { color: #cc0000; font-style: italic; }
+    inneragent-chat {
+      display: block; height: 620px;
+      border: 2px solid #334155; border-radius: 14px; overflow: hidden; background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>InnerAgent SDK · e2e reconnect host</h1>
+    <p class="host-note">宿主样式探针: 本段应保持红色斜体(组件样式不外泄)。</p>
+    <inneragent-chat id="chat" view="chat"></inneragent-chat>
+  </div>
+  <script type="module">
+    const sdk = await import('/sdk/inneragent-chat.js')
+    sdk.init({
+      appKey: 'e2e-reconnect-host',
+      // DEF-05 补偿: SDK http 层双重拼接 baseURL(见 e2e/reconnect-host.mjs 头注),
+      // 本页以 baseURL='' 接入, 由可断中转在网关层把裸路径重写到 /ia/api/v1。
+      baseURL: '',
+      // 与 scripts/e2e-m1-journeys.sh 的旅程口径一致: agentType=demo(工具链含
+      // get_current_time 与 MCP 注册工具, mock 脚本/写确认链路可用)。
+      agentType: 'demo',
+      tokenGetter: async () => null, // 本地联调: 服务端匿名演示头兜底
+    })
+    sdk.registerInnerAgentChat()
+    // SCOPE_RESOLVED 捕获由 e2e/helpers/sdk-support.ts captureScopeResolved() 注册
+    // (此前页面自带监听 + 测试监听 → 同一事件双重入账, 造成「重复派发」假象, 已移除)
+    console.log('[e2e-reconnect-host] <inneragent-chat> registered; tokenGetter=null')
+  </script>
+</body>
+</html>

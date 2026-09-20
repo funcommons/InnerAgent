@@ -1,0 +1,18 @@
+{
+  "createTime": "2026-09-21T02:06:02.755201",
+  "updateTime": "2026-09-21T02:06:02.755211",
+  "deleted": false,
+  "tenantId": 0,
+  "id": 70,
+  "appId": 1,
+  "userId": 8802,
+  "toolFqn": "mcp__e2etools__e2e_refresh_tool",
+  "scope": "permanent",
+  "conversationId": null,
+  "riskAtGrant": "medium",
+  "schemaSha256": "a3c3a668cf33b41f2e37bf2debad9031174889ddf61c167eb0a042ff268d4622",
+  "source": "admin",
+  "invalidated": true,
+  "invalidatedReason": "schema_breaking",
+  "decisionNote": "e2e breaking 级联预置"
+}

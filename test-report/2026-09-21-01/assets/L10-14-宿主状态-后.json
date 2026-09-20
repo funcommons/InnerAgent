@@ -1,0 +1,197 @@
+{
+  "records": {},
+  "recordCount": 0,
+  "products": {
+    "88": {
+      "productId": "88",
+      "name": "便携磁吸充电宝",
+      "brief": "E2E-R1-L10-两轮脚本-muaa9ngb",
+      "briefVersion": 12,
+      "createdAt": "2026-09-01 由运营创建",
+      "updatedAt": "2026-09-20T20:43:08.852769Z",
+      "briefHistory": [
+        {
+          "version": 1,
+          "brief": "大容量磁吸无线充电宝,支持 20W 快充,一贴即充,出差通勤随身备。",
+          "updatedBy": "seed",
+          "updatedAt": "2026-09-01 由运营创建"
+        },
+        {
+          "version": 2,
+          "brief": "E2E-R1后半-批准路径简介",
+          "updatedBy": "12993",
+          "updatedByRun": "9ffe2a5274484601bcc2d1e2ee757b2c",
+          "updatedAt": "2026-09-20T18:24:56.035407Z"
+        },
+        {
+          "version": 3,
+          "brief": "E2E-R1-L10-两轮脚本-mua9wl63",
+          "updatedBy": "92070",
+          "updatedByRun": "19ffbe04b2284260ad6efbca9920076e",
+          "updatedAt": "2026-09-20T20:32:59.358530Z"
+        },
+        {
+          "version": 4,
+          "brief": "E2E-R1-L10-批准路径简介-mua9yvlx",
+          "updatedBy": "92062",
+          "updatedByRun": "9c7cddb3c6144f99bdda4ef4fd6f076e",
+          "updatedAt": "2026-09-20T20:34:46.246604Z"
+        },
+        {
+          "version": 5,
+          "brief": "E2E-R1-L10-两轮脚本-mua9z22t",
+          "updatedBy": "92064",
+          "updatedByRun": "0853d731544a4fc48b8c571f95b84fe7",
+          "updatedAt": "2026-09-20T20:34:54.607311Z"
+        },
+        {
+          "version": 6,
+          "brief": "E2E-R1-L10-两轮脚本-muaa07fl",
+          "updatedBy": "92031",
+          "updatedByRun": "983aeb5c30f0476ca6f6e6696cc1ca2e",
+          "updatedAt": "2026-09-20T20:35:48.189297Z"
+        },
+        {
+          "version": 7,
+          "brief": "E2E-R1-L10-批准路径简介-muaa275t",
+          "updatedBy": "92083",
+          "updatedByRun": "cd29b1758e1345d88467fe4dd1909489",
+          "updatedAt": "2026-09-20T20:37:21.078909Z"
+        },
+        {
+          "version": 8,
+          "brief": "E2E-R1-L10-两轮脚本-muaa2dji",
+          "updatedBy": "92085",
+          "updatedByRun": "4321e24140964eff98b1c4a34f084e3f",
+          "updatedAt": "2026-09-20T20:37:29.312676Z"
+        },
+        {
+          "version": 9,
+          "brief": "E2E-R1-L10-批准路径简介-muaa7cju",
+          "updatedBy": "92098",
+          "updatedByRun": "e57fb89bfaca4c049b8773c142664fd6",
+          "updatedAt": "2026-09-20T20:41:21.352157Z"
+        },
+        {
+          "version": 10,
+          "brief": "E2E-R1-L10-两轮脚本-muaa7iw9",
+          "updatedBy": "92100",
+          "updatedByRun": "a256487ccc114e768dc68811220de972",
+          "updatedAt": "2026-09-20T20:41:29.628059Z"
+        },
+        {
+          "version": 11,
+          "brief": "E2E-R1-L10-批准路径简介-muaa9gyb",
+          "updatedBy": "92099",
+          "updatedByRun": "cd6c9bb0be8b4d469608a919e0d7363d",
+          "updatedAt": "2026-09-20T20:43:00.513368Z"
+        },
+        {
+          "version": 12,
+          "brief": "E2E-R1-L10-两轮脚本-muaa9ngb",
+          "updatedBy": "92101",
+          "updatedByRun": "bca750136f6e49a985300898877eb05f",
+          "updatedAt": "2026-09-20T20:43:08.852769Z"
+        }
+      ]
+    },
+    "129": {
+      "productId": "129",
+      "name": "降噪头戴耳机",
+      "brief": "主动降噪头戴耳机,40 小时续航,双设备同时连接,通勤与办公皆宜。",
+      "briefVersion": 1,
+      "createdAt": "2026-09-03 由运营创建",
+      "updatedAt": "2026-09-03 由运营创建",
+      "briefHistory": [
+        {
+          "version": 1,
+          "brief": "主动降噪头戴耳机,40 小时续航,双设备同时连接,通勤与办公皆宜。",
+          "updatedBy": "seed",
+          "updatedAt": "2026-09-03 由运营创建"
+        }
+      ]
+    },
+    "306": {
+      "productId": "306",
+      "name": "多功能桌面支架",
+      "brief": "铝合金桌面支架,四档高度调节,兼容手机与平板,走线隐藏设计。",
+      "briefVersion": 1,
+      "createdAt": "2026-09-05 由运营创建",
+      "updatedAt": "2026-09-05 由运营创建",
+      "briefHistory": [
+        {
+          "version": 1,
+          "brief": "铝合金桌面支架,四档高度调节,兼容手机与平板,走线隐藏设计。",
+          "updatedBy": "seed",
+          "updatedAt": "2026-09-05 由运营创建"
+        }
+      ]
+    }
+  },
+  "productCount": 3,
+  "flowTemplates": {
+    "3432": {
+      "templateId": "3432",
+      "name": "标准客服流程",
+      "nodes": [
+        "受理",
+        "分类分级",
+        "处理",
+        "回访"
+      ],
+      "createdAt": "2026-09-01 由运营创建"
+    },
+    "3433": {
+      "templateId": "3433",
+      "name": "轻量咨询流程",
+      "nodes": [
+        "受理",
+        "处理",
+        "回访"
+      ],
+      "createdAt": "2026-09-01 由运营创建"
+    }
+  },
+  "flowTemplateCount": 2,
+  "loginRecordCount": 16,
+  "invocations": {
+    "get_host_time": 2141,
+    "get_product_brief": 1155,
+    "update_product_brief": 11,
+    "list_login_records": 1013
+  },
+  "lastClaims": {
+    "get_host_time": {
+      "userId": "92231",
+      "actSub": "inneragent-run:00dfd93eba304910a9254fe9a42286d6",
+      "runId": "00dfd93eba304910a9254fe9a42286d6",
+      "appKey": "",
+      "tenantId": "1",
+      "toolName": "mcp__demo-spring-host__get_host_time"
+    },
+    "get_product_brief": {
+      "userId": "92101",
+      "actSub": "inneragent-run:bca750136f6e49a985300898877eb05f",
+      "runId": "bca750136f6e49a985300898877eb05f",
+      "appKey": "",
+      "tenantId": "1",
+      "toolName": "mcp__demo-spring-host__get_product_brief"
+    },
+    "update_product_brief": {
+      "userId": "92101",
+      "actSub": "inneragent-run:bca750136f6e49a985300898877eb05f",
+      "runId": "bca750136f6e49a985300898877eb05f",
+      "appKey": "",
+      "tenantId": "1",
+      "toolName": "mcp__demo-spring-host__update_product_brief"
+    },
+    "list_login_records": {
+      "userId": "92102",
+      "actSub": "inneragent-run:404bbf774ac44c7ca39177b5b026709d",
+      "runId": "404bbf774ac44c7ca39177b5b026709d",
+      "appKey": "",
+      "tenantId": "1",
+      "toolName": "mcp__demo-spring-host__list_login_records"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 35,
+    "appKey": "e2e-app-rc1",
+    "name": "E2E 测试应用",
+    "signPublicKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAucK2g/QF7/oko/cgqYU1\ncXofLa77fAgaOrALammcz/N7wFIWJ5fOvwO8TUcpXPR/fIEPQB/hCDd9HFkrnlZe\nEEkvQtogtPGYw2eF9hMnDOccJolUxJBTwwT48afBvKtE23z8NYhMe99UZ55KRhNE\ndqfnRBkNsquRFqUN/1Z6ukzwNRGiAV91gVzoOKm2nIS67MSIGWr04FkDgJAxOJaJ\nNRX5rZX4vqwwn39jQa3e+QBkq764mOdZZJ4xy2knvEdJqSc7lszJDgG3HXR0UV8J\nyKRGX7n+48oj1fG72I9EWv8ZDUb0RlfFM8jq0yZEuMsdycW8JXQ147AsGdTTYtUh\ntQIDAQAB\n-----END PUBLIC KEY-----",
+    "signKeyFingerprint": "59d10f6374706302",
+    "signKeyRotatedAt": "2026-09-21T02:05:54.122251Z",
+    "webhookUrl": "https://e2e.example.com/hook",
+    "webhookSecretMasked": "",
+    "conversationRetentionDays": 180,
+    "status": 1,
+    "createTime": "2026-09-21T02:05:51.145223Z",
+    "updateTime": "2026-09-21T02:05:51.145233Z"
+  }
+}

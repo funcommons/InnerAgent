@@ -1,0 +1,11 @@
+{
+  "server": [
+    "mode-default",
+    "user-grant",
+    "forced-policy",
+    "live-confirm",
+    "expired",
+    "full-access"
+  ],
+  "uiHasExpired": false
+}

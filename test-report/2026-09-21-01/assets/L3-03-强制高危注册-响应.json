@@ -1,0 +1,33 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "createTime": "2026-09-21T02:05:58.220706",
+    "updateTime": "2026-09-21T02:05:58.220716",
+    "deleted": false,
+    "id": 112,
+    "appId": 1,
+    "serverKey": "e2etools",
+    "toolName": "e2e_delete_tool",
+    "fqn": "mcp__e2etools__e2e_delete_tool",
+    "description": "E2E 删除类工具(名称含 delete)",
+    "parametersSchema": null,
+    "annotationsJson": null,
+    "riskLevel": "high",
+    "adminPolicy": null,
+    "resumeSafe": false,
+    "concurrencySafe": false,
+    "source": "host_app",
+    "endpointUrl": null,
+    "credentialsEnc": null,
+    "schemaSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "toolVersion": null,
+    "revalidateRequired": false,
+    "pendingSchema": null,
+    "pendingAnnotationsJson": null,
+    "pendingSchemaSha256": null,
+    "pendingRefreshAt": null,
+    "enabled": true,
+    "lastTestStatus": null
+  }
+}

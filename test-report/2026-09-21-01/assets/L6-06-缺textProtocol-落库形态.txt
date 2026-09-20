@@ -1,0 +1,2 @@
+platform|text_protocol|api_url|status:
+ollama||http://localhost:9|1

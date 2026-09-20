@@ -1,0 +1,11 @@
+{
+  "revoke": 200,
+  "reGrant": {
+    "status": 500,
+    "body": {
+      "code": 500,
+      "msg": "系统内部错误",
+      "data": null
+    }
+  }
+}

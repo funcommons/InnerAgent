@@ -1,0 +1,4 @@
+UI「刷新」空体分诊:verdict=compatible(应 unchanged)、effectiveSchemaSha256=空串指纹,
+且 schema_sha256 列被持久化为空串指纹 —— parameters_schema 内容与指纹脱节落库,
+后续以指纹为基准的分诊/授权快照失真;分诊历史新增 compatible/applied 失真行。
+修复意见见报告 DEF-02(P1)。

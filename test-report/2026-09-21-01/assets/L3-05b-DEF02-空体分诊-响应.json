@@ -1,0 +1,15 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "toolId": 110,
+    "fqn": "mcp__e2etools__e2e_refresh_tool",
+    "verdict": "compatible",
+    "reasons": [
+      "nested_schema_changed"
+    ],
+    "revalidateRequired": false,
+    "effectiveSchemaSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "pendingSchemaSha256": null
+  }
+}

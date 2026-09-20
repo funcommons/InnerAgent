@@ -1,0 +1,28 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "list": [
+      {
+        "id": 198,
+        "appId": 1,
+        "tenantId": 0,
+        "userId": 7002,
+        "conversationId": null,
+        "runId": null,
+        "toolFqn": "mcp__e2eaudit__den",
+        "decision": "denied",
+        "decisionSource": "live-confirm",
+        "riskLevel": "high",
+        "paramsMaskedJson": "{\"reason\":\"deny\"}",
+        "resultSummary": null,
+        "errorText": null,
+        "durationMs": 8,
+        "createTime": "2026-09-20T17:52:10.647388"
+      }
+    ],
+    "total": 1,
+    "pageNo": 1,
+    "pageSize": 10
+  }
+}

@@ -1,0 +1,1 @@
+denied|live-confirm|mcp__demo-spring-host__copy_flow_template

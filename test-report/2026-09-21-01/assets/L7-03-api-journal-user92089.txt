@@ -1,0 +1,23 @@
+#0 [200] http://localhost:18085/me/models?type=1
+{"code":0,"msg":"success","data":[{"id":1,"name":"mock-text","code":"mock-text","description":"P0 冒烟 mock 文本模型(MockAiProvider,确定性脚本输出,生产禁用)","status":1,"defaultModel":true,"supportVision":true,"multimodalInputTypes":["image","file"],"multimodalInputTransports":{"file":["url","base64"],"image":["url","base64"]},"supportReasoning":false,"reasoningEffortLevels":[],"contextWindow":8192}]}
+
+#1 [200] http://localhost:18085/me/reference-options
+{"code":0,"msg":"success","data":{"skills":[],"mcpTools":[]}}
+
+#2 [200] http://localhost:18085/conversations?pageNo=1&pageSize=20&category=assistant
+{"code":0,"msg":"success","data":{"list":[],"total":0,"pageNo":null,"pageSize":null}}
+
+#3 [200] http://localhost:18085/runs
+(body unavailable)
+
+#4 [200] http://localhost:18085/me/reference-options
+{"code":0,"msg":"success","data":{"skills":[],"mcpTools":[]}}
+
+#5 [200] http://localhost:18085/me/models?type=1
+{"code":0,"msg":"success","data":[{"id":1,"name":"mock-text","code":"mock-text","description":"P0 冒烟 mock 文本模型(MockAiProvider,确定性脚本输出,生产禁用)","status":1,"defaultModel":true,"supportVision":true,"multimodalInputTypes":["image","file"],"multimodalInputTransports":{"file":["url","base64"],"image":["url","base64"]},"supportReasoning":false,"reasoningEffortLevels":[],"contextWindow":8192}]}
+
+#6 [200] http://localhost:18085/conversations?pageNo=1&pageSize=20&category=assistant
+{"code":0,"msg":"success","data":{"list":[{"createTime":"2026-09-21T04:40:26.227778","updateTime":"2026-09-20T20:40:30.313778","deleted":false,"tenantId":0,"id":154,"conversationId":"8382d3e5-671f-410f-a19b-c8a2c7099a83","userId":92089,"projectId":null,"contextType":null,"agentType":"demo","category":"assistant","contextId":null,"title":"现在几点了?","messageCount":4,"nextMessageOrder":5,"lastMessageTime":"2026-09-21T04:40:30.314051","status":"completed","agentStateLastActiveAt":"2026-09-20T20:40:30.314","agentStateExpiredAt":null,"agentStateStatus":"ACTIVE"}],"total":1,"pageNo":null,"pageSize":null}}
+
+#7 [200] http://localhost:18085/conversations/8382d3e5-671f-410f-a19b-c8a2c7099a83/messages
+{"code":0,"msg":"success","data":[{"createTime":"2026-09-21T04:40:26.235335","updateTime":"2026-09-21T04:40:26.235337","deleted":false,"tenantId":0,"id":2789,"conversationId":"8382d3e5-671f-410f-a19b-c8a2c7099a83","runId":"d196f30bbc2349919559515e8950f0f0","projectionKey":null,"role":"user","content":"现在几点了?","referencesJson":null,"toolName":null,"toolStatus":null,"toolCallId":null,"parentToolCallId":null,"reasoningContent":null,"reasoningDurationMs":null,"messageOrder":1},{"createTime":"2026-09-21T04:40:30.305624","updateTime":"2026-09-21T04:40:30.305628","deleted":false,"tenantId":0,"id":2790,"conversationId":"8382d3e5-671f-410f-a19b-c8a2c7099a83","runId":"d196f30bbc2349919559515e8950f0f0","projectionKey":"c06867bb4e079f76d7a637278eb9c886606ea6149425ecbbd09a3c32c5ea11e8","role":"tool","content":"{}","referencesJson":null,"toolName":"get_current_time","toolStatus":"running","toolCallId":"mock-call-9185","parentToolCallId":null,"reasoningContent":null,"reasoningDurationMs":null,"messageOrder":2},{"createTime":"2026-09-21T04:40:30.309934","updateTime":"2026-09-21T04:40:30.309936","deleted":false,"tenantId":0,"id":2791,"conversationId":"8382d3e5-671f-410f-a19b-c8a2c7099a83","runId":"d196f30bbc2349919559515e8950f0f0","projectionKey":"da2839511ee40711e6e8167bda128931dc468e612069de8742d84bb2a88fc0ed","role":"tool","content":"{\"status\":\"success\",\"timezone\":\"Asia/Shanghai\",\"time\":\"2026-09-21T04:40:26.248817+08:00\",\"epochMillis\":1789936826248}","referencesJson":null,"toolName":"get_current_time","toolStatus":"success","toolCallId":"mock-call-9185","parentToolCallId":null,"reasoningContent":null,"reasoningDurationMs":null,"messageOrder":3},{"createTime":"2026-09-21T04:40:30.313463","updateTime":"2026-09-21T04:40:30.313464","deleted":false,"tenantId":0,"id":2792,"conversationId":"8382d3e5-671f-410f-a19b-c8a2c7099a83","runId":"d196f30bbc2349919559515e8950f0f0","projectionKey":"f68c61ea077f3357922a3f3dbbc0489b3e04d78ddcc1d73134ac2eb48fc6d614","role":"assistant","content":"[mock] 你好,当前时间是 2026-09-21T04:40:26.248817+08:00(时区 Asia/Shanghai),来自 get_current_time 工具。(本回复由 mock 模型脚本生成,仅用于 P0 冒烟与测试,生产禁用。)","referencesJson":null,"toolName":null,"toolStatus":null,"toolCallId":null,"parentToolCallId":null,"reasoningContent":null,"reasoningDurationMs":null,"messageOrder":4}]}

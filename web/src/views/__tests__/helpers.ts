@@ -6,6 +6,7 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import ElementPlus from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -23,7 +24,8 @@ export async function mountView(component: unknown, path: string): Promise<VueWr
 
   const wrapper = mount(component as never, {
     global: {
-      plugins: [ElementPlus, router],
+      // 与 main.ts 同参(zh-cn locale,#3):保证视图冒烟断言落在本地化文案上
+      plugins: [[ElementPlus, { locale: zhCn }], router],
     },
   })
   await flushPromises()

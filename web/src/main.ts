@@ -7,6 +7,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
@@ -27,7 +28,8 @@ async function bootstrap() {
   const pinia = createPinia()
   app.use(pinia)
   app.use(router)
-  app.use(ElementPlus)
+  // [优化建议 #3] 全组件 zh-cn locale:消除 Total/OK/Cancel 等英文混排
+  app.use(ElementPlus, { locale: zhCn })
 
   // 恢复会话需在路由解析前完成(守卫读取登录态)
   useAuthStore(pinia).restore()

@@ -109,6 +109,12 @@ export interface AssistantConversationRuntime {
   messagesLoading: boolean
   messagesError?: string
   connectionError?: string
+  /**
+   * [P1 #5] 断流静默提示态:传输层断开但可自动恢复(已有 runId / reconnect 模式)。
+   * UI 渲染非阻断「连接中断,自动重连中…」并抑制手动重试;事件送达即清除。
+   * 与终态失败(start 建流被拒 / 重连耗尽)互斥。
+   */
+  reconnecting?: boolean
   unread: boolean
   toolExecutionMode: ToolExecutionMode
 }
@@ -140,6 +146,7 @@ export function makeRuntime(
     knownRunId,
     messagesLoaded: false,
     messagesLoading: false,
+    reconnecting: false,
     unread: false,
     toolExecutionMode,
   }
@@ -432,6 +439,12 @@ export const useAssistantStore = defineStore('assistant', () => {
   const REPLAY_RETRY_COOLDOWN_MS = 4500
   const replayAttempts = new Map<string, number>()
   const replayLastAttemptAt = new Map<string, number>()
+  /**
+   * [P1 #5] 自动重连耗尽判定:连续传输失败达上限即升级错误态并停止自动重试。
+   * 上限与补偿回填(REPLAY_MAX_ATTEMPTS)同源 = 5;成功的事件送达 / 新 run 复位。
+   */
+  const CONNECT_FAILURE_LIMIT = REPLAY_MAX_ATTEMPTS
+  const reconnectFailures = new Map<string, number>()
 
   /** 投影已消费过根终态事件(DONE/ERROR/CANCELLED 已入 reducer) */
   const pipelineReachedTerminal = (pipeline: AgentPipelineState): boolean =>
@@ -473,6 +486,14 @@ export const useAssistantStore = defineStore('assistant', () => {
   const resetCompensatingReplay = (conversationId: string): void => {
     replayAttempts.delete(conversationId)
     replayLastAttemptAt.delete(conversationId)
+  }
+
+  /**
+   * [P1 #5] 传输恢复(新事件送达):清除重连提示态与连续失败计数。
+   */
+  const markConnectionRestored = (conversationId: string): void => {
+    if (!reconnectFailures.delete(conversationId)) return
+    updateRuntime(conversationId, (runtimeValue) => ({ ...runtimeValue, reconnecting: false }))
   }
 
   const scheduleEnsureRetry = (delay = 5000): void => {
@@ -560,6 +581,8 @@ export const useAssistantStore = defineStore('assistant', () => {
           knownRunId: response.runId || runtime.knownRunId,
           remoteLastSequence: response.lastSequence,
           connectionError: terminal ? undefined : runtime.connectionError,
+          // [P1 #5] 服务端终态落地 → 重连提示态一并清除
+          reconnecting: terminal ? false : runtime.reconnecting,
           // A background completion makes the persisted transcript stale,
           // but it still must not trigger a content request while closed.
           messagesLoaded: terminal || runChanged ? false : runtime.messagesLoaded,
@@ -709,6 +732,9 @@ export const useAssistantStore = defineStore('assistant', () => {
           || (currentRuntime.pipeline.runId && currentRuntime.pipeline.runId !== event.runId)
           || event.sequence <= currentRuntime.pipeline.lastSequence) return
 
+        // [P1 #5] 有效事件送达 = 传输恢复:清除「连接中断,自动重连中…」提示态
+        markConnectionRestored(conversationId)
+
         try {
           const nextPipeline = reduceAssistantEvent(currentRuntime.pipeline, event)
           const terminal = hasTerminal(event)
@@ -772,24 +798,38 @@ export const useAssistantStore = defineStore('assistant', () => {
           || current.connectionGeneration !== generation
           || current.conversationId !== conversationId) return
         const startRejected = current.connectionMode === 'start' && !current.runId
-        updateRuntime(conversationId, (runtimeValue) => ({
-          ...runtimeValue,
-          connectionError: error.message,
-          status: startRejected ? 'failed' : runtimeValue.status,
-          statusConfirmed: startRejected ? true : runtimeValue.statusConfirmed,
-          conversation: startRejected
-            ? { ...runtimeValue.conversation, status: 'failed' }
-            : runtimeValue.conversation,
-        }))
         if (startRejected) {
+          // [P1 #5] 终态失败:服务端拒绝建流(模型未配置等),既有语义不变。
+          updateRuntime(conversationId, (runtimeValue) => ({
+            ...runtimeValue,
+            reconnecting: false,
+            connectionError: error.message,
+            status: 'failed',
+            statusConfirmed: true,
+            conversation: { ...runtimeValue.conversation, status: 'failed' },
+          }))
           conversations.value = conversations.value.map((conversation) =>
             conversation.conversationId === conversationId
               ? { ...conversation, status: 'failed' }
               : conversation)
+          clearConnection(generation)
+          return
         }
+        // [P1 #5] 可自动恢复的传输错误:进入静默提示态(reconnecting),抑制
+        // 阻断式 connectionError;仅连续失败耗尽(上限 5)才升级错误态并停止
+        // 自动重试 —— 会话状态保留,由状态轮询按服务端事实收敛终态。
+        const failures = (reconnectFailures.get(conversationId) ?? 0) + 1
+        reconnectFailures.set(conversationId, failures)
+        const exhausted = failures >= CONNECT_FAILURE_LIMIT
+        updateRuntime(conversationId, (runtimeValue) => ({
+          ...runtimeValue,
+          reconnecting: !exhausted,
+          connectionError: exhausted
+            ? `连接中断，自动重连未成功：${error.message}`
+            : undefined,
+        }))
         clearConnection(generation)
-        if (startRejected) return
-        scheduleEnsureRetry()
+        if (!exhausted) scheduleEnsureRetry()
         scheduleStatusPolling()
       },
       onComplete: () => {
@@ -873,6 +913,7 @@ export const useAssistantStore = defineStore('assistant', () => {
             knownRunId: response.runId,
             remoteLastSequence: response.lastSequence,
             connectionError: statusIsRunning(nextStatus) ? runtime.connectionError : undefined,
+            reconnecting: statusIsRunning(nextStatus) ? runtime.reconnecting : false,
             messagesLoaded: statusIsRunning(nextStatus) ? runtime.messagesLoaded : false,
           }))
         }
@@ -945,6 +986,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     metadataGenerations.clear()
     replayAttempts.clear()
     replayLastAttemptAt.clear()
+    reconnectFailures.clear()
   }
 
   // ============ 工具确认 (旧 respondToToolConfirmations) ============
@@ -1381,6 +1423,7 @@ export const useAssistantStore = defineStore('assistant', () => {
       remoteLastSequence: 0,
       messagesError: undefined,
       connectionError: undefined,
+      reconnecting: false,
       conversation: {
         ...current.conversation,
         status: 'running',
@@ -1388,6 +1431,8 @@ export const useAssistantStore = defineStore('assistant', () => {
         projectId: conversationProjectId,
       },
     }))
+    // [P1 #5] 新 run 起点:复位重连失败计数
+    reconnectFailures.delete(conversationId)
     conversations.value = conversations.value.map((item) => item.conversationId === conversationId
       ? { ...item, status: 'running', title: conversationTitle, projectId: conversationProjectId }
       : item)
@@ -1444,6 +1489,7 @@ export const useAssistantStore = defineStore('assistant', () => {
       ...current,
       status: 'CANCEL_REQUESTED',
       connectionError: undefined,
+      reconnecting: false,
       pipeline: {
         ...current.pipeline,
         status: 'cancelling',

@@ -63,6 +63,10 @@ const liveTimeline = computed<TimelineItem[]>(() =>
 const errorMessage = computed(() =>
   runtime.value?.messagesError || runtime.value?.pipeline.error || runtime.value?.connectionError)
 
+// [P1 #5] 断流静默提示态(store 抑制 connectionError 时由 reconnecting 驱动);
+// 渲染非阻断「连接中断,自动重连中…」横幅并抑制手动重试, 恢复即消失。
+const reconnecting = computed(() => !!runtime.value?.reconnecting)
+
 // ---- 滚动跟随 (旧 use-assistant-message-scroll: 贴底/流式跟随/上滚脱离/回到底部) ----
 const contentVersion = computed(() => runtime.value
   ? `${runtime.value.messagesLoaded}:${runtime.value.messages.length}:${runtime.value.pipeline.lastSequence}`
@@ -213,6 +217,16 @@ function hasContent(): boolean {
           {{ t('assistant.thinking') }}
         </p>
 
+        <!-- [P1 #5] 可自动恢复的传输错误: 非阻断静默提示(自动重连中), 恢复即消失 -->
+        <p
+          v-if="reconnecting"
+          class="assistant-messages__reconnecting"
+          data-testid="assistant-reconnecting"
+        >
+          <i class="ri-loader-4-line is-spinning" />
+          {{ t('assistant.reconnecting') }}
+        </p>
+
         <div v-if="errorMessage" class="assistant-messages__error" data-testid="assistant-message-error">
           <i class="ri-error-warning-line" aria-hidden="true" />
           <span class="assistant-messages__error-text">{{ errorMessage }}</span>
@@ -323,6 +337,20 @@ function hasContent(): boolean {
   padding: 10px 0;
   font-size: 12px;
   color: var(--app-text-secondary);
+}
+
+/* [P1 #5] 断流静默提示条(非阻断状态条, 对齐 Figma/Linear 断网横幅范式) */
+.assistant-messages__reconnecting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--el-color-warning-light-7, #f3d19e);
+  background: var(--el-color-warning-light-9, #fdf6ec);
+  font-size: 12px;
+  color: var(--app-color-warning, var(--el-color-warning, #e6a23c));
 }
 
 .is-spinning {

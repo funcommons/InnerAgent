@@ -1,0 +1,35 @@
+services:
+  inneragent-postgres:
+    image: postgres:17-alpine
+    container_name: inneragent-postgres
+    environment:
+      POSTGRES_DB: inneragent
+      POSTGRES_USER: inneragent
+      POSTGRES_PASSWORD: inneragent
+    ports:
+      - "15432:5432"
+    volumes:
+      - inneragent-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inneragent -d inneragent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  inneragent-redis:
+    image: redis:7-alpine
+    container_name: inneragent-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "16379:6379"
+    volumes:
+      - inneragent-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  inneragent-pg-data:
+  inneragent-redis-data:

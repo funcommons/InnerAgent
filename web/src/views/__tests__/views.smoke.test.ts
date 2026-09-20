@@ -8,6 +8,7 @@ import LoginView from '@/views/LoginView.vue'
 import AdminLayout from '@/views/AdminLayout.vue'
 import AppsView from '@/views/AppsView.vue'
 import ToolsView from '@/views/ToolsView.vue'
+import AuditView from '@/views/AuditView.vue'
 
 describe('视图挂载冒烟', () => {
   it('LoginView:渲染登录表单并可输入', async () => {
@@ -44,6 +45,14 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('sha256:0002fp')
     // 注解图例(R/D/I/W)渲染
     expect(wrapper.findAll('.hint').length).toBeGreaterThan(0)
+    wrapper.unmount()
+  })
+
+  it('AuditView:渲染审计流水并含脱敏参数锚点', async () => {
+    const wrapper = await mountView(AuditView, '/audit')
+    expect(wrapper.text()).toContain('mcp__demo_host__reset_password')
+    expect(wrapper.text()).toContain('模式默认')
+    expect(wrapper.text()).toContain('2026-09-20T07:59:00Z')
     wrapper.unmount()
   })
 })

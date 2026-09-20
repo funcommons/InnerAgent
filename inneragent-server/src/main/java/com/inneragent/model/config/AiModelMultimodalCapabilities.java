@@ -25,7 +25,8 @@ public final class AiModelMultimodalCapabilities {
     public static final String TRANSPORT_BASE64 = "base64";
 
     private static final int MAX_INPUT_COUNT = 8;
-    private static final int MAX_BASE64_INPUT_BYTES = 10 * 1024 * 1024;
+    /** 单个 Base64 输入上限;附件上传(base64 传输)沿用同一上限。 */
+    public static final int MAX_BASE64_INPUT_BYTES = 10 * 1024 * 1024;
     private static final int MAX_TOTAL_BASE64_BYTES = 20 * 1024 * 1024;
     private static final Set<String> INPUT_TYPES = Set.of(
             TYPE_IMAGE, TYPE_VIDEO, TYPE_AUDIO, TYPE_FILE);

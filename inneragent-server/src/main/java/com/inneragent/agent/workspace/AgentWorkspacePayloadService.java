@@ -27,6 +27,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.UUID;
@@ -54,13 +55,63 @@ public class AgentWorkspacePayloadService {
     }
 
     public AgentWorkspaceStoredPayload write(String payload, AgentWorkspaceLocation location) {
-        byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
+        return writeText(payload.getBytes(StandardCharsets.UTF_8), location, payload);
+    }
+
+    /**
+     * 写入二进制正文(P1-T3b 对话附件):local/object_storage 落原始字节;
+     * database 后端以 Base64 存 TEXT 列(sha256/size 均按原始字节计,
+     * 读取走 {@link #readBytes})。扩展名/Content-Type 仅影响对象键与 S3 元数据。
+     */
+    public AgentWorkspaceStoredPayload writeBytes(
+            byte[] bytes, AgentWorkspaceLocation location, String extension, String contentType) {
         String sha256 = sha256(bytes);
         return switch (location.backendType()) {
             case AgentWorkspaceBackend.DATABASE -> new AgentWorkspaceStoredPayload(
-                    location.backendType(), null, null, null, payload, sha256, bytes.length);
-            case AgentWorkspaceBackend.LOCAL -> writeLocal(bytes, location, sha256);
-            case AgentWorkspaceBackend.OBJECT_STORAGE -> writeObject(bytes, location, sha256);
+                    location.backendType(), null, null, null,
+                    Base64.getEncoder().encodeToString(bytes), sha256, bytes.length);
+            case AgentWorkspaceBackend.LOCAL -> writeLocal(
+                    bytes, location, sha256, extension);
+            case AgentWorkspaceBackend.OBJECT_STORAGE -> writeObject(
+                    bytes, location, sha256, extension, contentType);
+            default -> throw new IllegalStateException("Unsupported backend: " + location.backendType());
+        };
+    }
+
+    /** 读取二进制正文(与 {@link #writeBytes} 配对;database 后端按 Base64 解码)。 */
+    public byte[] readBytes(AgentWorkspaceStoredPayload stored) {
+        try {
+            return switch (stored.backendType()) {
+                case AgentWorkspaceBackend.DATABASE -> Base64.getDecoder()
+                        .decode(requirePayload(stored.databasePayload()));
+                case AgentWorkspaceBackend.LOCAL -> Files.readAllBytes(
+                        resolveLocal(stored.localPath(), stored.contentRef()));
+                case AgentWorkspaceBackend.OBJECT_STORAGE -> {
+                    ResolvedS3StorageConfig config = resolveS3(stored.storageConfigId());
+                    yield s3ClientFactory.getClient(config)
+                            .getObjectAsBytes(GetObjectRequest.builder()
+                                    .bucket(config.bucketName())
+                                    .key(stored.contentRef())
+                                    .build())
+                            .asByteArray();
+                }
+                default -> throw new IllegalStateException(
+                        "Unsupported backend: " + stored.backendType());
+            };
+        } catch (IOException failure) {
+            throw new BusinessException("读取智能体工作空间正文失败: " + failure.getMessage());
+        }
+    }
+
+    private AgentWorkspaceStoredPayload writeText(
+            byte[] bytes, AgentWorkspaceLocation location, String payloadText) {
+        String sha256 = sha256(bytes);
+        return switch (location.backendType()) {
+            case AgentWorkspaceBackend.DATABASE -> new AgentWorkspaceStoredPayload(
+                    location.backendType(), null, null, null, payloadText, sha256, bytes.length);
+            case AgentWorkspaceBackend.LOCAL -> writeLocal(bytes, location, sha256, "json");
+            case AgentWorkspaceBackend.OBJECT_STORAGE -> writeObject(
+                    bytes, location, sha256, "json", CONTENT_TYPE);
             default -> throw new IllegalStateException("Unsupported backend: " + location.backendType());
         };
     }
@@ -120,9 +171,10 @@ public class AgentWorkspacePayloadService {
     private AgentWorkspaceStoredPayload writeLocal(
             byte[] bytes,
             AgentWorkspaceLocation location,
-            String sha256) {
+            String sha256,
+            String extension) {
         Path root = resolveLocalRoot(location.localPath());
-        String relative = objectKey("objects");
+        String relative = objectKey("objects", extension);
         Path target = resolveLocal(root.toString(), relative);
         try {
             Files.createDirectories(target.getParent());
@@ -149,9 +201,11 @@ public class AgentWorkspacePayloadService {
     private AgentWorkspaceStoredPayload writeObject(
             byte[] bytes,
             AgentWorkspaceLocation location,
-            String sha256) {
+            String sha256,
+            String extension,
+            String contentType) {
         ResolvedS3StorageConfig config = resolveS3(location.storageConfigId());
-        String relative = objectKey("agent-workspace/objects");
+        String relative = objectKey("agent-workspace/objects", extension);
         String prefix = config.basePath() == null || config.basePath().isBlank()
                 ? ""
                 : config.basePath().replace('\\', '/').replaceAll("^/+|/+$", "") + "/";
@@ -160,7 +214,7 @@ public class AgentWorkspacePayloadService {
         client.putObject(PutObjectRequest.builder()
                         .bucket(config.bucketName())
                         .key(key)
-                        .contentType(CONTENT_TYPE)
+                        .contentType(contentType)
                         .contentLength((long) bytes.length)
                         .build(),
                 RequestBody.fromBytes(bytes));
@@ -215,10 +269,13 @@ public class AgentWorkspacePayloadService {
         return target;
     }
 
-    private String objectKey(String prefix) {
+    private String objectKey(String prefix, String extension) {
+        String suffix = extension == null || extension.isBlank()
+                ? "bin"
+                : extension;
         LocalDate today = LocalDate.now();
         return prefix + "/" + today.getYear() + "/" + String.format("%02d", today.getMonthValue())
-                + "/" + UUID.randomUUID().toString().replace("-", "") + ".json";
+                + "/" + UUID.randomUUID().toString().replace("-", "") + "." + suffix;
     }
 
     private String requirePayload(String payload) {

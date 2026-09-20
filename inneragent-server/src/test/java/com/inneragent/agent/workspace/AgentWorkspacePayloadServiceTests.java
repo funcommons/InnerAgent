@@ -52,6 +52,39 @@ class AgentWorkspacePayloadServiceTests {
         assertThat(Files.exists(storedFile)).isFalse();
     }
 
+    @Test
+    void binaryBytesRoundTripThroughDatabaseBackendAsBase64() {
+        AgentWorkspacePayloadService service = service();
+        byte[] bytes = new byte[]{0, 1, 2, -1, 127, 42};
+
+        AgentWorkspaceStoredPayload stored = service.writeBytes(
+                bytes,
+                new AgentWorkspaceLocation(AgentWorkspaceBackend.DATABASE, null, null),
+                "png",
+                "image/png");
+
+        // TEXT 列兼容:database 后端以 Base64 承载二进制,sha/size 按原始字节
+        assertThat(stored.databasePayload())
+                .isEqualTo(java.util.Base64.getEncoder().encodeToString(bytes));
+        assertThat(stored.size()).isEqualTo(bytes.length);
+        assertThat(service.readBytes(stored)).isEqualTo(bytes);
+    }
+
+    @Test
+    void binaryBytesRoundTripThroughLocalBackendWithExtensionHint() throws Exception {
+        AgentWorkspacePayloadService service = service();
+
+        AgentWorkspaceStoredPayload stored = service.writeBytes(
+                new byte[]{9, 8, 7},
+                new AgentWorkspaceLocation(
+                        AgentWorkspaceBackend.LOCAL, null, temporaryDirectory.toString()),
+                "png",
+                "image/png");
+
+        assertThat(stored.contentRef()).endsWith(".png");
+        assertThat(service.readBytes(stored)).isEqualTo(new byte[]{9, 8, 7});
+    }
+
     private AgentWorkspacePayloadService service() {
         return new AgentWorkspacePayloadService(
                 mock(StorageConfigService.class),

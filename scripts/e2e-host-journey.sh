@@ -31,12 +31,31 @@ pass() { PASS=$((PASS+1)); say "  PASS: $*"; }
 fail() { FAIL=$((FAIL+1)); say "  FAIL: $*"; }
 section() { say ""; say "== $* =="; }
 
+# 终止 mvn 包装进程及其 fork 的 JVM(spring-boot:run 会 fork 子 Java 进程,
+# 仅 kill 包装进程会留下孤儿 JVM 占住 18090/18091,复跑即端口冲突)。
+# 注:变量展开保持不加引号的分词形态,zsh/bash 双兼容(勿用 zsh 专属 ${=})。
+kill_tree() {
+  [[ -n "$1" ]] || return 0
+  local children
+  children=$(pgrep -P "$1" 2>/dev/null || true)
+  kill "$1" 2>/dev/null
+  for child in $children; do kill_tree "$child"; done
+  sleep 0.3
+  kill -9 "$1" 2>/dev/null
+}
+
 cleanup() {
   if [[ "${IA_JOURNEY_KEEP:-0}" != "1" && -n "$STARTED_MINE" ]]; then
     say ""
     say "[cleanup] 停止本脚本启动的进程/容器…"
-    [[ -n "$HOST_PID" ]] && kill "$HOST_PID" 2>/dev/null
-    [[ -n "$SERVER_PID" ]] && kill "$SERVER_PID" 2>/dev/null
+    [[ -n "$HOST_PID" ]] && kill_tree "$HOST_PID"
+    [[ -n "$SERVER_PID" ]] && kill_tree "$SERVER_PID"
+    # 兜底:清掉仍占用服务/宿主端口的残留 JVM(前次异常退出孤儿)
+    local orphan
+    for orphan in $(lsof -ti :18090 :18091 2>/dev/null || true); do
+      say "[cleanup] 清理残留端口进程: $orphan"
+      kill_tree "$orphan"
+    done
     sleep 2
     docker compose -f "$REPO/docker/dev-compose.yml" -f "$REPO/scripts/dev-compose.e2e-ports.yml" down >/dev/null 2>&1
     say "[cleanup] 完成。工作目录(证据)保留: $WORK"
@@ -260,6 +279,19 @@ except Exception:
   || fail "注册表断言失败 count=$REG_COUNT aud_ok=$AUD_OK"
 
 # =============================================================================
+section "[2.5] mock 模型脚本化配置(D2):指定第 1 轮调用 create_host_record"
+# 默认 mock 模型(ia_ai_model.code=mock-text)写入 mockScript 配置:
+#   第 1 轮调用注册表工具 create_host_record(带 title 入参);U1 写确认链路
+#   在无真实模型环境下由确定性脚本驱动。拒绝路径结束后(第 7 节前)恢复 legacy。
+MOCK_SCRIPT="{\"mockScript\":[{\"tool\":\"${WRITE_FQN}\",\"args\":{\"title\":\"U1验收\"}}]}"
+psqlq "update ia_ai_model set config='$MOCK_SCRIPT' where code='mock-text'" >/dev/null
+UPDATE_N=$(psqlq "select count(*) from ia_ai_model where code='mock-text' and config='$MOCK_SCRIPT'")
+printf '%s' "$UPDATE_N" > "$WORK/mock-script-rows.txt"
+[[ "$UPDATE_N" =~ ^[0-9]+$ && "$UPDATE_N" -ge 1 ]] \
+  && pass "mock 模型已配置 mockScript(config 落库,ia_ai_model ${UPDATE_N} 行)" \
+  || fail "mock 模型脚本化配置失败 rows=${UPDATE_N:-ERR}"
+
+# =============================================================================
 section "[3] act token 证据:宿主 /ia-mcp 验签 fail-closed"
 ANON=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$HOST_BASE/ia-mcp" \
   -H 'Content-Type: application/json' \
@@ -307,7 +339,7 @@ printf '%s' "$POST_STATE" > "$WORK/host-state-after-approve.json"
 POST_RECORDS=$(printf '%s' "$POST_STATE" | jqget 'recordCount'); [[ -z "$POST_RECORDS" ]] && POST_RECORDS=-1
 WRITE_CALLS=$(printf '%s' "$POST_STATE" | jqget 'invocations.create_host_record'); [[ -z "$WRITE_CALLS" ]] && WRITE_CALLS=0
 if [[ "$WRITE_CALLS" -ge 1 ]]; then
-  pass "宿主进程执行证据:create_host_record 调用次数=$WRITE_CALLS, 内存记录 $PRE_RECORDS→$POST_RECORDS"
+  pass "宿主进程执行证据:create_host_record 调用次数=$WRITE_CALLS, 内存记录 ${PRE_RECORDS}→${POST_RECORDS}"
   CLAIMS=$(printf '%s' "$POST_STATE" | python3 -c "
 import json,sys
 try: print(json.dumps(json.load(sys.stdin)['lastClaims'].get('create_host_record',{}),ensure_ascii=False))
@@ -353,8 +385,8 @@ POST_STATE_REJ=$(curl -s "$HOST_BASE/ia-demo/state")
 printf '%s' "$POST_STATE_REJ" > "$WORK/host-state-after-reject.json"
 REJ_RECORDS=$(printf '%s' "$POST_STATE_REJ" | jqget 'recordCount'); [[ -z "$REJ_RECORDS" ]] && REJ_RECORDS=-1
 [[ "$REJ_RECORDS" == "$PRE_RECORDS_REJ" ]] \
-  && pass "宿主未执行:内存记录数不变($PRE_RECORDS_REJ→$REJ_RECORDS)" \
-  || fail "宿主内存记录数变化 $PRE_RECORDS_REJ→$REJ_RECORDS(拒绝后仍执行?)"
+  && pass "宿主未执行:内存记录数不变(${PRE_RECORDS_REJ}→${REJ_RECORDS})" \
+  || fail "宿主内存记录数变化 ${PRE_RECORDS_REJ}→${REJ_RECORDS}(拒绝后仍执行?)"
 
 AUDIT_DENIED=$(psqlq "select count(*) from ia_audit_log where decision='denied'")
 [[ "$AUDIT_DENIED" =~ ^[0-9]+$ && "$AUDIT_DENIED" -ge 1 ]] \
@@ -362,23 +394,27 @@ AUDIT_DENIED=$(psqlq "select count(*) from ia_audit_log where decision='denied'"
   || fail "[D3] ia_audit_log 无 denied 行(count=${AUDIT_DENIED:-ERR})"
 
 # =============================================================================
-section "[6] 缺陷证据 D1 定点:enabledMcpTools 指名请求宿主工具 → 内核工具面拒绝"
-PROBE_FILE="$WORK/probe-enabled-mcp.txt"
-HTTP_CODE=$(curl -s -o "$PROBE_FILE" -w '%{http_code}' -X POST "$BASE/ia/api/v1/runs" \
+section "[6] D1 修复实证:enabledMcpTools 指名请求宿主工具 → 内核工具面接受"
+PROBE_FILE="$WORK/probe-enabled-mcp.sse"
+PROBE_CODE=$(curl -sN --max-time 8 -o "$PROBE_FILE" -w '%{http_code}' \
+  -X POST "$BASE/ia/api/v1/runs" \
   -H 'Content-Type: application/json' -H "X-IA-Demo-User: $DEMO_USER" -d @- <<JSON
 {"conversationId":null,"message":"触发 create_host_record","agentType":"demo","toolExecutionMode":"DEFAULT","enabledSkills":[],"enabledMcpTools":["$WRITE_FQN"]}
 JSON
 )
-say "  HTTP $HTTP_CODE;响应: $(head -c 400 "$PROBE_FILE" | tr -d '\n')"
-# 全局异常处理器会把 IllegalArgumentException 掩成 500「系统内部错误」;
-# 真实消息「Requested AgentScope MCP tools are unavailable: [fqn]」在主服务日志中
-LOGHIT=$( { grep -l "Requested AgentScope MCP tools are unavailable" "$WORK/server.log" \
-                /tmp/ia-host-journey.*/server.log 2>/dev/null || true; } | head -1)
-if grep -qi "unavailable" "$PROBE_FILE" || [[ -n "$LOGHIT" ]]; then
-  pass "内核明证:指名 MCP 工具被拒『Requested AgentScope MCP tools are unavailable: [$WRITE_FQN]』——ia_tool_registry 注册项不在内核工具清单${LOGHIT:+(日志: $LOGHIT)}"
-else
-  say "  (响应与日志均未含 unavailable 字样,人工复核 $PROBE_FILE)"
-fi
+say "  HTTP $PROBE_CODE;流事件: $(grep -c 'data:' "$PROBE_FILE" 2>/dev/null) 行"
+[[ "$PROBE_CODE" == "200" ]] \
+  && pass "指名 MCP 工具(FQN)进入内核白名单:POST /runs 返回 200(修复前 500 unavailable)" \
+  || fail "指名 MCP 工具仍被拒(HTTP $PROBE_CODE: $(head -c 200 "$PROBE_FILE" | tr -d '\n'))"
+grep -qi "unavailable" "$PROBE_FILE" \
+  && fail "SSE 流出现 unavailable(校验仍失败)" \
+  || pass "无 unavailable 校验失败(ia_tool_registry 注册项已在内核工具清单)"
+grep -q '"outputType"' "$PROBE_FILE" \
+  && pass "SSE 事件流建立(D1:白名单=注册目录,内核按 catalog 装配工具)" \
+  || fail "SSE 流无事件"
+
+# 恢复 mock 模型 legacy 脚本(第 7 节走内置 get_current_time 证据)
+psqlq "update ia_ai_model set config=null where code='mock-text'" >/dev/null
 
 # =============================================================================
 section "[7] 补充证据:确认流实弹真机(ALWAYS_ASK + 内置 get_current_time)"

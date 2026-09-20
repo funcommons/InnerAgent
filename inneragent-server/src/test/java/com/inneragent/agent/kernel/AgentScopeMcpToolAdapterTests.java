@@ -66,7 +66,9 @@ class AgentScopeMcpToolAdapterTests {
         assertThat(capturedToolName.get()).isEqualTo("create_host_record");
         assertThat(capturedArgs.get()).containsEntry("title", "U1验收");
         assertThat(capturedContext.get().runId()).isEqualTo("run-1");
-        assertThat(capturedTenant.get()).isEqualTo(7L);
+        // 适配器不注入租户上下文:ia_tool_registry 为 app 级治理表(无 tenant_id
+        // 列),租户注入会让注册表定位 SQL 报错;租户身份仅经 actContext 透传
+        assertThat(capturedTenant.get()).isNull();
         assertThat(result.getId()).isEqualTo("call-1");
         assertThat(result.getName()).isEqualTo("mcp__demo-spring-host__create_host_record");
         TextBlock output = (TextBlock) result.getOutput().getFirst();

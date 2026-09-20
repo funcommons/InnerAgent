@@ -13,7 +13,6 @@ import com.inneragent.agent.tool.AbstractPlatformAgentTool;
 import com.inneragent.agent.tool.AgentScopeToolSchema;
 import com.inneragent.agent.run.RunLeaseGuard;
 import com.inneragent.platform.context.AppContext;
-import com.inneragent.platform.tenant.TenantContext;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.tool.ToolBase;
@@ -88,13 +87,13 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
                     requireContext(runtime, ToolExecutionContext.class);
             Map<String, Object> input = Objects.requireNonNull(
                     param.getInput(), "AgentScope tool input must not be null");
-            // 宿主调用按发起 run 的租户/应用执行:目录定位与行级过滤依赖显式上下文
-            // (跨线程不依赖 ThreadLocal 恢复;调用端签发 act token 需 userId/tenant/runId)
+            // 宿主调用显式携带 appId(AppContext):目录定位/行级过滤按应用隔离。
+            // 注意不设租户上下文——ia_tool_registry 为 app 级治理表(无 tenant_id
+            // 列),租户注入会让 invoker 的注册表定位 SQL 报错;act token 身份
+            // (userId/tenantId/runId)经 actContext 显式传给调用端签发。
             Mono<McpToolInvocationResult> invocation = Mono.fromCallable(() ->
-                            AppContext.runInApp(appId, () -> TenantContext.runInTenant(
-                                    toolContext.tenantId(),
-                                    () -> mcpToolInvoker.invoke(
-                                            appId, entry.toolName(), input, toolContext))))
+                            AppContext.runInApp(appId, () -> mcpToolInvoker.invoke(
+                                    appId, entry.toolName(), input, toolContext)))
                     .subscribeOn(toolScheduler);
             return cancellation.checkpoint()
                     .then(assertLease(run))

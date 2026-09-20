@@ -370,7 +370,11 @@ public class McpClientToolInvoker implements McpToolInvoker {
         if (toolName == null || toolName.isBlank()) {
             throw new McpToolCallException("工具名为空,无法定位注册表条目");
         }
-        ToolRegistryEntry entry = registryMapper.selectActiveByToolName(toolName.trim());
+        // [adapt] U1/D1:注册表定位按租户系统模式执行——ia_tool_registry 为
+        // app 级治理表(V2 DDL 无 tenant_id 列),租户上下文存在时行级拦截器
+        // 注入 tenant_id 条件会导致 SQL 报错;隔离维度是 app_id(显式携带)。
+        ToolRegistryEntry entry = com.inneragent.platform.tenant.TenantContext.runAsSystem(
+                () -> registryMapper.selectActiveByToolName(toolName.trim()));
         if (entry == null) {
             throw new McpToolCallException("工具未注册或未启用(appId=" + appId + "): " + toolName);
         }

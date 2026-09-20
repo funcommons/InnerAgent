@@ -281,8 +281,10 @@ public class MockAiProvider implements AiProvider {
                 if (hasTool(tools, call.toolName())) {
                     return Flux.just(toolCallResponse(call.toolName(), call.args()));
                 }
-                log.warn("[mock] 脚本第 {} 轮工具 {} 不在 toolkit,跳过工具调用直接作答",
-                        round + 1, call.toolName());
+                log.warn("[mock] 脚本第 {} 轮工具 {} 不在 toolkit,跳过工具调用直接作答;model 可见工具={}",
+                        round + 1, call.toolName(),
+                        tools == null ? List.of() : tools.stream()
+                                .map(ToolSchema::getName).toList());
             }
             return answerFlux(lastToolResult);
         }
@@ -302,10 +304,14 @@ public class MockAiProvider implements AiProvider {
 
         /** 一轮脚本:发起指定工具调用(确定性入参)。 */
         private ChatResponse toolCallResponse(String toolName, Map<String, Object> input) {
+            // content = 入参 JSON 字符串:AgentScope 流式累加器/参数校验以
+            // ToolUseBlock.content 为模型产出参数的载体(缺失时按空参校验,
+            // required 字段将误报缺失),与 input 需同时携带
             ToolUseBlock toolCall = ToolUseBlock.builder()
                     .id("mock-call-" + responseSequence.incrementAndGet())
                     .name(toolName)
                     .input(input)
+                    .content(JSONUtil.toJsonStr(input))
                     .build();
             return ChatResponse.builder()
                     .id("mock-resp-" + responseSequence.incrementAndGet())

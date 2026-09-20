@@ -1,0 +1,22 @@
+{
+  "name": "@inneragent/sdk-core",
+  "version": "0.1.0",
+  "description": "InnerAgent SDK core: API 重映射 (/ia/api/v1)、SSE 事件协议、助手状态机 (pinia)。移植自融光 frontend/src/api+store, 改动类型见各文件头注释。",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "build": "vite build --config vite.config.ts"
+  },
+  "dependencies": {
+    "pinia": "^3.0.4",
+    "vue": "^3.5.25"
+  },
+  "devDependencies": {
+    "@vue/tsconfig": "^0.8.1"
+  }
+}

@@ -25,7 +25,8 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * Flyway 迁移链冒烟测试(P0-T4 建立;P1 台账④随 V5__storage_config.sql、
  * P1-T2a 随 V6 工具中枢增补、P1-T3b 随 V7__agent_attachment.sql 对话附件增补、
- * P2-srv U1 随 V8 decision_source 注释刷新)。
+ * P2-srv U1 随 V8 decision_source 注释刷新、P2-key 随 V9__app_sign_key_rotation_grace.sql
+ * 签名公钥轮换双 key 列增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
  * 上执行 classpath:db/migration 全链迁移,断言 22 张 ia_ 业务表全部建成、种子数据落库,
@@ -89,18 +90,18 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(8, result.migrationsExecuted, "应依次执行 V1-V8 八个迁移(V8 为 decision_source 注释刷新,无表变更)");
+        assertEquals(9, result.migrationsExecuted, "应依次执行 V1-V9 九个迁移(V8 注释刷新;V9 为 ia_app 轮换双 key 列增补)");
 
         List<String> actualTables = listIaTables();
         assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 22 张 ia_ 表");
 
-        // flyway_schema_history:七条记录且全部 success
+        // flyway_schema_history:九条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(8, resultSet.getInt(1), "flyway_schema_history 应有 8 条成功记录(V8 注释刷新)");
+            assertEquals(9, resultSet.getInt(1), "flyway_schema_history 应有 9 条成功记录(V8 注释刷新 + V9 轮换双 key)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -113,13 +114,21 @@ class FlywayMigrationSmokeIT {
         assertEquals("character varying", columnType("ia_tool_grant", "conversation_id"),
                 "ia_tool_grant.conversation_id 应为 VARCHAR(会话 UUID 语义)");
 
-        // 种子数据:默认应用 / 状态清理策略单例 / 工作区配置单例
+        // V9:签名公钥轮换双 key 列就位(P2-key;存量/种子行保持 NULL = 未轮换语义)
+        assertTrue(columnExists("ia_app", "previous_sign_public_key"),
+                "ia_app.previous_sign_public_key 应存在(V9 轮换宽限期)");
+        assertTrue(columnExists("ia_app", "sign_key_rotated_at"),
+                "ia_app.sign_key_rotated_at 应存在(V9 宽限期起点)");
+        assertEquals("timestamp without time zone", columnType("ia_app", "sign_key_rotated_at"),
+                "ia_app.sign_key_rotated_at 应为 TIMESTAMP(无时区,V9)");
         try (Connection connection = openConnection();
              PreparedStatement appStatement = connection.prepareStatement(
-                     "SELECT app_key FROM ia_app WHERE id = 1");
+                     "SELECT app_key, previous_sign_public_key, sign_key_rotated_at FROM ia_app WHERE id = 1");
              ResultSet appResultSet = appStatement.executeQuery()) {
             assertTrue(appResultSet.next(), "应预置 id=1 的默认应用(app_id 列 DEFAULT 1 指向它)");
             assertEquals("default", appResultSet.getString(1));
+            assertTrue(appResultSet.getObject(2) == null && appResultSet.getObject(3) == null,
+                    "种子默认应用未轮换:previous_sign_public_key/sign_key_rotated_at 应为 NULL(V9)");
         }
         try (Connection connection = openConnection();
              PreparedStatement policyStatement = connection.prepareStatement(

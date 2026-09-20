@@ -25,11 +25,7 @@ import AssistantTimeline from '../assistant/AssistantTimeline.vue'
 import AssistantConversationNav from '../assistant/AssistantConversationNav.vue'
 import AssistantMessageList from '../assistant/AssistantMessageList.vue'
 
-// [adapt] IaDialog 不 teleport (Shadow DOM 内就地渲染) → 直接 wrapper.find
-function q(wrapper: { find: (selector: string) => { element: Element } }, selector: string): Element | null {
-  const found = wrapper.find(selector)
-  return found ? found.element : null
-}
+// [adapt] IaDialog 不 teleport (Shadow DOM 内就地渲染) → 断言直接用 wrapper.find
 
 describe('AssistantToolConfirmBar (批量审批条)', () => {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()

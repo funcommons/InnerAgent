@@ -11,8 +11,14 @@ defineOptions({ name: 'InnerAgentChat' })
  *   宿主样式不会污染组件, 组件样式不会泄漏到宿主。
  * - remixicon 图标样式经 <style src="./styles/remixicon-ce.css"> 注入
  *   (woff2-only 生成子集, 见该文件头), 使 <i class="ri-*"> 在 Shadow DOM 内可用。
+ * - [new] P2-scope 任务 #15:确认等待(USER_CONFIRMATION_REQUIRED)到达 store 时
+ *   向宿主 dispatch CustomEvent('SCOPE_RESOLVED')(bubbles+composed, 穿透
+ *   Shadow 边界, 宿主元素 addEventListener 可收), detail 携带该批待确认工具的
+ *   约束范围标记(PRD §6.1.4「InnerAgent 传递与呈现 scope」; scope 语义与兼容
+ *   矩阵见 @inneragent/sdk-core 的 ToolCallScope/normalizeToolCallScope)。
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useAssistantStore, normalizeToolCallScope } from '@inneragent/sdk-core'
 import AssistantChatWindow from './assistant/AssistantChatWindow.vue'
 import { useI18n } from './i18n'
 
@@ -25,6 +31,9 @@ const props = withDefaults(defineProps<{
 })
 
 const { t } = useI18n()
+const store = useAssistantStore()
+
+const rootRef = ref<HTMLElement | null>(null)
 
 const projectIdNumber = computed<number | null>(() => {
   const parsed = Number(props.projectId)
@@ -32,10 +41,47 @@ const projectIdNumber = computed<number | null>(() => {
 })
 
 const isPlaceholderView = computed(() => props.view !== 'chat')
+
+// ---- SCOPE_RESOLVED 派发(确认等待事件的约束范围可检视时机) ----
+
+const pendingConfirmation = computed(() => {
+  const conversationId = store.selectedConversationId
+  const runtime = conversationId
+    ? store.conversationStates[conversationId]
+    : undefined
+  return runtime?.pipeline.pendingConfirmation ?? null
+})
+
+/** 同一确认批(runId:replyId)只派发一次;断线重连重放不重复打扰宿主。 */
+let lastDispatchedConfirmationKey = ''
+
+watch(pendingConfirmation, (pending) => {
+  if (!pending) return
+  const conversationId = store.selectedConversationId
+  const root = rootRef.value
+  if (!conversationId || !root) return
+  const confirmationKey = `${pending.runId}:${pending.replyId}`
+  if (confirmationKey === lastDispatchedConfirmationKey) return
+  lastDispatchedConfirmationKey = confirmationKey
+  root.dispatchEvent(new CustomEvent('SCOPE_RESOLVED', {
+    bubbles: true,
+    composed: true,
+    detail: {
+      conversationId,
+      runId: pending.runId,
+      replyId: pending.replyId,
+      tools: (pending.toolCalls ?? []).map((toolCall) => ({
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        scope: normalizeToolCallScope(toolCall.scope),
+      })),
+    },
+  }))
+})
 </script>
 
 <template>
-  <div class="ia-chat-root">
+  <div ref="rootRef" class="ia-chat-root">
     <div v-if="isPlaceholderView" class="ia-chat-root__placeholder" data-testid="ia-view-placeholder">
       <p>{{ t('assistant.title') }} · view="{{ view }}"</p>
       <p class="ia-chat-root__placeholder-desc">

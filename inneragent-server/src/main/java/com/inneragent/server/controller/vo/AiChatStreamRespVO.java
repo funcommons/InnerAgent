@@ -119,6 +119,30 @@ public class AiChatStreamRespVO {
         private String toolCallId;
         private String toolName;
         private String argumentsPreview;
+
+        /**
+         * [adapt] P2-scope 任务 #15:约束范围可检视(PRD §6.1.4「InnerAgent 传递与呈现
+         * scope」)。可选字段 —— 旧持久化事件没有该键,反序列化为 null,前端按降级处理。
+         */
+        private ScopeVO scope;
+    }
+
+    /**
+     * [adapt] P2-scope 任务 #15:确认等待事件的约束范围标记。
+     * <p>v1 不变式 {@code degraded == !resolved}:resolved=本次运行持有约束范围
+     * 上下文(宿主实现 resolve_scope);degraded=PRD §6.1.4 降级(无上下文提示 +
+     * 写操作一律确认)。summary 可选(平台未留存运行级 scope 载荷时缺省)。
+     */
+    @Data
+    @Accessors(chain = true)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class ScopeVO {
+        /** 本次运行是否持有约束范围上下文(安全侧缺省 false)。 */
+        private boolean resolved;
+        /** 是否按 PRD §6.1.4 降级(无上下文提示、写操作一律逐次确认)。 */
+        private boolean degraded;
+        /** 约束范围人读摘要(可选;平台当前仅降级时给出稳定原因)。 */
+        private String summary;
     }
 
     @Data

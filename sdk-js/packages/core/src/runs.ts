@@ -146,6 +146,7 @@ export interface BaseAiChatStreamEvent {
       summary: string
       changes: Array<{ field: string; before: string; after: string }>
     }
+    scope?: ToolCallScope
   }>
   decisions?: ToolConfirmationDecision[]
   expiresAt?: string
@@ -163,11 +164,29 @@ export interface PendingToolCallPlan {
   changes: PendingToolCallPlanFieldChange[]
 }
 
+/**
+ * [adapt] P2-scope 任务 #15:确认等待事件的约束范围标记(PRD §6.1.4「InnerAgent
+ * 传递与呈现 scope」)。
+ *
+ * - `resolved`:本次运行持有约束范围上下文(宿主实现 resolve_scope 反查);
+ * - `degraded`:PRD §6.1.4 降级 —— 无上下文提示 + 写操作一律逐次确认;
+ * - `summary`:可选人读摘要(降级时服务端携带稳定原因,resolved 形态可缺省)。
+ *
+ * 兼容:字段可选 —— 旧服务端事件无 `scope`,消费侧经 `normalizeToolCallScope`
+ * 归一化为 degraded(fail-closed)+ UI 弱提示,不视为协议错误。
+ */
+export interface ToolCallScope {
+  resolved: boolean
+  degraded: boolean
+  summary?: string
+}
+
 export interface PendingToolCallInfo {
   toolCallId: string
   toolName: string
   argumentsPreview: string
   plan?: PendingToolCallPlan
+  scope?: ToolCallScope
 }
 
 /** 来自 durable run journal 的严格标识事件 */

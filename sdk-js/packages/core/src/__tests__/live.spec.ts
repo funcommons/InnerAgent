@@ -28,6 +28,7 @@ import {
   ApiError,
   aiModelApi,
   cancelRun,
+  confirmRunTools,
   getBaseURL,
   getRunStatus,
   http,
@@ -304,6 +305,62 @@ describe_live('SDK core 活体测试(P1 出口 · demo-host 全流程 = PRD M0)'
     expect(failure, '不存在的 run 必须报错').toBeInstanceOf(ApiError)
     expect((failure as ApiError).status).toBe(404)
   }, 30_000)
+
+  it('P2-scope:ALWAYS_ASK 确认等待事件 pendingToolCalls 携带 scope 字段(降级或解析),批准后 DONE', async () => {
+    const collected = collectStream((callbacks) =>
+      startRunStream({
+        message: '现在几点了?',
+        agentType: 'demo',
+        toolExecutionMode: 'ALWAYS_ASK', // 所有工具逐次确认 → 触发确认等待事件
+        enabledSkills: [] as string[],
+        context: { page: { id: 'live-scope-check' }, object: { type: 'doc' } },
+      }, callbacks))
+
+    // 等待确认等待事件到达(确认流真机贯通的前置,U1 修复后可用)
+    let confirmation: AiChatStreamEvent | undefined
+    const confirmationDeadline = Date.now() + 45_000
+    while (Date.now() < confirmationDeadline) {
+      confirmation = collected.events.find(
+        (event) => event.outputType === 'USER_CONFIRMATION_REQUIRED')
+      if (confirmation) break
+      if ((await Promise.race([collected.end.then(() => true), sleep(50).then(() => false)]))) break
+      await sleep(50)
+    }
+    const pending = confirmation?.pendingToolCalls
+    expect(pending, 'ALWAYS_ASK 运行应收到 USER_CONFIRMATION_REQUIRED').toBeTruthy()
+    expect(pending!.length, '确认等待事件应携带待确认工具集').toBeGreaterThan(0)
+    expect(confirmation!.replyId).toBeTruthy()
+    expect(confirmation!.expiresAt).toBeTruthy()
+
+    // scope 契约(任务 #15):每项含 scope{resolved,degraded[,summary]};
+    // 宿主(demo-spring-host)是否实现 resolve_scope 决定 degraded/resolved 形态
+    for (const toolCall of pending!) {
+      const scope = toolCall.scope
+      expect(scope, `pendingToolCall ${toolCall.toolCallId} 应携带 scope 字段`).toBeTruthy()
+      expect(typeof scope!.resolved, 'scope.resolved 必须是 boolean').toBe('boolean')
+      expect(typeof scope!.degraded, 'scope.degraded 必须是 boolean').toBe('boolean')
+      if (scope!.summary !== undefined) {
+        expect(typeof scope!.summary, 'scope.summary 可选但必须是 string').toBe('string')
+      }
+    }
+
+    // 全量批准 → 运行续跑至根终态 DONE(确认链 + scope 字段同流验证)
+    await confirmRunTools({
+      runId: confirmation!.runId,
+      replyId: confirmation!.replyId!,
+      decisions: pending!.map((toolCall) => ({
+        toolCallId: toolCall.toolCallId,
+        approved: true,
+      })),
+    })
+    const end = await waitForEnd(collected, 60_000)
+    expect(end.kind, `批准后流应正常完成: ${JSON.stringify(end)}`).toBe('complete')
+    expect(
+      collected.events.some((event) =>
+        !event.parentToolCallId && !event.agentName && event.outputType === 'DONE'),
+      '批准后应收到根终态 DONE',
+    ).toBe(true)
+  }, 120_000)
 
   it('POST /attachments:mock 模型 base64 上传返回 resourceUrl(core uploadAttachment)', async () => {
     const models = await aiModelApi.listByType(1)

@@ -51,6 +51,7 @@ export {
   type ToolExecutionMode,
   type PendingToolCallPlan,
   type PendingToolCallInfo,
+  type ToolCallScope,
   type RunStatus,
   type RunStatusResponse,
   type RunningRun,
@@ -128,6 +129,14 @@ export {
 
 // ---- 事件钩子注入 ----
 export { setAssistantEventHooks, type AssistantEventHooks } from './store/assistantEvents'
+
+// ---- 约束范围([new] P2-scope 任务 #15:确认等待事件 scope 解析/提取) ----
+export {
+  normalizeToolCallScope,
+  pendingScopeDigest,
+  DEGRADED_SCOPE,
+  type NormalizedToolCallScope,
+} from './scope'
 
 // ---- 助手 store (pinia) ----
 export {

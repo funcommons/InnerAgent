@@ -18,7 +18,12 @@ defineOptions({ name: 'AssistantMessageList' })
 import { computed, getCurrentScope, onScopeDispose, ref, watch } from 'vue'
 import { useI18n } from '../i18n'
 import { useAssistantStore } from '@inneragent/sdk-core'
-import { statusIsRunning, messagesToTimeline, type TimelineItem } from '@inneragent/sdk-core'
+import {
+  statusIsRunning,
+  messagesToTimeline,
+  pendingScopeDigest,
+  type TimelineItem,
+} from '@inneragent/sdk-core'
 import IaButton from '../ui/IaButton.vue'
 import IaEmpty from '../ui/IaEmpty.vue'
 import AssistantTimeline, { type AssistantToolConfirmation } from './AssistantTimeline.vue'
@@ -91,6 +96,12 @@ const batchConfirmation = computed(() =>
 
 const showBatchApprovalBar = computed(() => !!batchConfirmation.value
   && runtime.value?.pipeline.status !== 'cancelling')
+
+// [new] P2-scope 任务 #15:批量确认条约束范围摘要(任一 degraded → 整批降级弱提示)
+const batchScopeDigest = computed(() =>
+  batchConfirmation.value
+    ? pendingScopeDigest(batchConfirmation.value.toolCalls)
+    : undefined)
 
 const confirmationBinding = computed<AssistantToolConfirmation | undefined>(() => {
   const pending = pendingConfirmation.value
@@ -237,6 +248,7 @@ function hasContent(): boolean {
         :submitting="batchConfirmation.submitting"
         :show-actions="runtime.pipeline.status !== 'cancelling'"
         :expires-at="batchConfirmation.expiresAt"
+        :scope-digest="batchScopeDigest"
         @decision="(approved: boolean) => void store.respondToAllToolConfirmations(approved)"
       />
     </div>

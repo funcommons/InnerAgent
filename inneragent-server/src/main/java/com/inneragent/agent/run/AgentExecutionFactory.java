@@ -15,6 +15,7 @@ import com.inneragent.agent.kernel.AgentScopeToolAdapter;
 import com.inneragent.agent.context.AgentRunContext;
 import com.inneragent.agent.context.AgentScopeRuntimeContextFactory;
 import com.inneragent.agent.context.AgentScopeRuntimeContextRequest;
+import com.inneragent.agent.context.ToolPermissionContext;
 import com.inneragent.agent.kernel.AgentKernelSpec;
 import com.inneragent.agent.kernel.AgentKernelSpecFactory;
 import com.inneragent.agent.kernel.AgentScopeHarnessInvoker;
@@ -113,7 +114,8 @@ public final class AgentExecutionFactory {
                     harnessInvoker.streamEvents(spec, List.copyOf(messages), runtimeContext)
                             .map(event -> mapConfirmationCandidate(
                                     event, run.deadline(),
-                                    runtimeRequest.authenticatedUser().userId()))
+                                    runtimeRequest.authenticatedUser().userId(),
+                                    runtimeRequest.toolPermission()))
                             .map(event -> childIdentity(event, run)),
                     ignored -> Mono.empty(),
                     () -> { });
@@ -121,13 +123,14 @@ public final class AgentExecutionFactory {
     }
 
     private AgentEventEnvelope mapConfirmationCandidate(
-            AgentEvent event, Instant deadline, long userId) {
+            AgentEvent event, Instant deadline, long userId,
+            ToolPermissionContext toolPermission) {
         AgentEventEnvelope mapped = eventMapper.map(event);
         if (!(event instanceof RequireUserConfirmEvent confirmation)) {
             return mapped;
         }
         PendingConfirmation candidate = confirmationCandidate(
-                confirmation, mapped.payload(), userId);
+                confirmation, mapped.payload(), userId, toolPermission);
         ObjectNode payload = mapped.payload().deepCopy();
         ObjectNode candidatePayload = JsonNodeFactory.instance.objectNode()
                 .put("replyId", candidate.replyId())
@@ -152,8 +155,9 @@ public final class AgentExecutionFactory {
                 mapped.createdAt());
     }
 
-    private PendingConfirmation confirmationCandidate(
-            RequireUserConfirmEvent event, JsonNode sanitizedPayload, long userId) {
+    PendingConfirmation confirmationCandidate(
+            RequireUserConfirmEvent event, JsonNode sanitizedPayload, long userId,
+            ToolPermissionContext toolPermission) {
         if (event.getReplyId() == null || event.getReplyId().isBlank()
                 || event.getToolCalls().isEmpty()) {
             throw new IllegalStateException(
@@ -166,6 +170,7 @@ public final class AgentExecutionFactory {
             throw new IllegalStateException(
                     "Sanitized AgentScope confirmation calls do not match the source event");
         }
+        JsonNode scope = scopeNode(toolPermission);
         Set<String> decisionIds = new LinkedHashSet<>();
         for (int index = 0; index < event.getToolCalls().size(); index++) {
             ToolUseBlock toolCall = event.getToolCalls().get(index);
@@ -188,6 +193,10 @@ public final class AgentExecutionFactory {
                     .put("toolCallId", toolCall.getId())
                     .put("toolName", toolCall.getName())
                     .put("argumentsPreview", argumentsPreview);
+            // [adapt] P2-scope 任务 #15:约束范围可检视(PRD §6.1.4)——每项挂 run 级
+            // scope 标记,随候选持久化并向 USER_CONFIRMATION_REQUIRED/过期重发/决策
+            // 事件 verbatim 透传;平台当前 scope 为会话级,批内各项取值一致
+            preview.set("scope", scope.deepCopy());
             // [adapt] ToolModificationPlanService 依赖 Project/Storyboard 业务域,未移植;
             // 确认预览中的 "plan" 节点(工具改动计划摘要)随域裁剪,其余确认语义不变
             previews.add(preview);
@@ -198,6 +207,31 @@ public final class AgentExecutionFactory {
                 writeJson(previews),
                 writeJson(suspendedToolCalls(event.getToolCalls())),
                 Instant.now().plus(confirmationTimeout));
+    }
+
+    /**
+     * [adapt] P2-scope 任务 #15:run 级约束范围标记(PRD §6.1.4)。
+     *
+     * <p>来源是该 run 的 {@code ToolPermissionContext.scopeDegraded}(目录聚合判定:
+     * 宿主未实现 resolve_scope 反查 → 降级)。安全侧缺省:权限上下文取不到
+     * (null/装配缺失)时按降级处理 —— 无上下文提示 + 写操作一律逐次确认。
+     * 平台当前未留存运行级已解析 scope 载荷,{@code summary} 仅在降级时携带
+     * 稳定原因文案;resolved 形态省略 summary(字段可选,前端不依赖)。
+     */
+    static JsonNode scopeNode(ToolPermissionContext toolPermission) {
+        ObjectNode scope = JsonNodeFactory.instance.objectNode();
+        if (toolPermission == null) {
+            // 安全侧缺省:拿不到权限上下文 → degraded=true(写操作强制逐次确认)
+            return scope.put("resolved", false).put("degraded", true);
+        }
+        if (toolPermission.scopeDegraded()) {
+            return scope
+                    .put("resolved", false)
+                    .put("degraded", true)
+                    .put("summary",
+                            "宿主未实现约束范围反查(resolve_scope),本次运行无约束范围上下文");
+        }
+        return scope.put("resolved", true).put("degraded", false);
     }
 
     private ArrayNode suspendedToolCalls(List<ToolUseBlock> toolCalls) {

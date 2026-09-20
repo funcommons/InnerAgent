@@ -31,7 +31,8 @@ vi.mock('../client', async (importOriginal) => {
 import { init, resetSdkConfig } from '../config'
 import { setRunContext, clearRunContext } from '../pageContext'
 import { resetTokenRefreshSingleFlight } from '../client'
-import { resetRunningListCache } from '../runs'
+import { resetRunningListCache, type PendingToolCallInfo } from '../runs'
+import { normalizeToolCallScope, pendingScopeDigest } from '../scope'
 import { useAssistantStore } from '../store/assistant'
 import type { AgentConversation } from '../conversations'
 
@@ -503,6 +504,69 @@ describe('store/assistant (工具确认: 单个/批量/过期 + reconnect 续流
     await store.expireToolConfirmation()
     expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-1/confirm/expire', {
       replyId: 'reply-1',
+    })
+  })
+
+  // [new] P2-scope 任务 #15:确认等待事件 scope 字段 —— 事件→store→提取全链
+  it('USER_CONFIRMATION_REQUIRED 的 scope 字段进 store;normalize/pendingScopeDigest 可提取(旧事件缺字段归一 degraded)', async () => {
+    const stream = manualStream()
+    fetchMock.mockResolvedValue(stream.response)
+    const store = useAssistantStore()
+    store.initializeForUser(1)
+    await tick(0)
+    store.setOpen(true)
+    await store.sendMessage('带约束范围的确认', null, null)
+    await tick(0)
+    const conversationId = store.selectedConversationId!
+    stream.push(sseBlock(1, {
+      outputType: 'TOOL_CALL', replyId: 'reply-1',
+      toolCalls: [
+        { id: 'tc-1', name: 'save_script_episode', arguments: '{}' },
+        { id: 'tc-2', name: 'query_contact', arguments: '{}' },
+      ],
+    }))
+    stream.push(sseBlock(2, {
+      outputType: 'USER_CONFIRMATION_REQUIRED', replyId: 'reply-1',
+      expiresAt: '2030-01-01T00:00:00Z',
+      pendingToolCalls: [
+        {
+          toolCallId: 'tc-1', toolName: 'save_script_episode', argumentsPreview: '{}',
+          scope: { resolved: false, degraded: true, summary: '宿主未实现约束范围反查' },
+        },
+        {
+          toolCallId: 'tc-2', toolName: 'query_contact', argumentsPreview: '{}',
+          scope: { resolved: true, degraded: false },
+        },
+      ],
+    }))
+    await tick(32)
+
+    const runtime = store.conversationStates[conversationId]
+    const pending = runtime?.pipeline.pendingConfirmation
+    expect(pending?.toolCalls?.[0]?.scope).toEqual({ resolved: false, degraded: true, summary: '宿主未实现约束范围反查' })
+    expect(pending?.toolCalls?.[1]?.scope).toEqual({ resolved: true, degraded: false })
+    // 提取层:任一 degraded → 整批 degraded(fail-closed),degraded 摘要优先
+    expect(pendingScopeDigest(pending?.toolCalls)).toEqual({
+      resolved: false, degraded: true, summary: '宿主未实现约束范围反查',
+    })
+    // 旧事件兼容:无 scope 字段 → 归一化为 degraded(弱提示,不抛协议错)
+    const legacyToolCalls: PendingToolCallInfo[] = [
+      { toolCallId: 'tc-1', toolName: 'legacy', argumentsPreview: '{}' },
+    ]
+    expect(normalizeToolCallScope(legacyToolCalls[0]?.scope)).toEqual({
+      resolved: false, degraded: true,
+    })
+
+    // 决策提交链不受 scope 字段影响(decisions 仅 toolCallId/approved)
+    mocks.httpPost.mockResolvedValue(undefined)
+    await store.respondToAllToolConfirmations(true)
+    await tick(0)
+    expect(mocks.httpPost).toHaveBeenCalledWith('/ia/api/v1/runs/run-1/confirm', {
+      replyId: 'reply-1',
+      decisions: [
+        { toolCallId: 'tc-1', approved: true },
+        { toolCallId: 'tc-2', approved: true },
+      ],
     })
   })
 })

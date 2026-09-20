@@ -80,6 +80,51 @@ describe('AssistantToolConfirmBar (批量审批条)', () => {
     expect(wrapper.find('[data-testid="assistant-batch-approval"]').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  // ---- [new] P2-scope 任务 #15:约束范围摘要 / 降级标记渲染 ----
+
+  it('scopeDigest 降级态 → 渲染降级弱提示 chip(旧事件缺字段归一后的形态)', () => {
+    const wrapper = mount(AssistantToolConfirmBar, {
+      props: {
+        ...baseProps,
+        scopeDigest: { resolved: false, degraded: true, summary: '宿主未实现约束范围反查' },
+      },
+    })
+    const chip = wrapper.find('[data-testid="assistant-confirm-scope"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.classes()).toContain('is-degraded')
+    expect(chip.text()).toContain('约束范围降级')
+    // 摘要经 title 提示(弱提示, 不阻塞确认流)
+    expect(chip.attributes('title')).toBe('宿主未实现约束范围反查')
+    wrapper.unmount()
+  })
+
+  it('scopeDigest resolved + summary → 渲染约束范围摘要', () => {
+    const wrapper = mount(AssistantToolConfirmBar, {
+      props: {
+        ...baseProps,
+        scopeDigest: { resolved: true, degraded: false, summary: '可写:商品简介;禁止:删除' },
+      },
+    })
+    const chip = wrapper.find('[data-testid="assistant-confirm-scope"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.classes()).not.toContain('is-degraded')
+    expect(chip.text()).toContain('约束范围：可写:商品简介;禁止:删除')
+    wrapper.unmount()
+  })
+
+  it('scopeDigest resolved 无 summary → 渲染已注入标记;缺省 prop → 不渲染 scope 行', () => {
+    const resolvedNoSummary = mount(AssistantToolConfirmBar, {
+      props: { ...baseProps, scopeDigest: { resolved: true, degraded: false } },
+    })
+    expect(resolvedNoSummary.find('[data-testid="assistant-confirm-scope"]').text())
+      .toContain('约束范围已注入本次运行')
+    resolvedNoSummary.unmount()
+
+    const noScope = mount(AssistantToolConfirmBar, { props: baseProps })
+    expect(noScope.find('[data-testid="assistant-confirm-scope"]').exists()).toBe(false)
+    noScope.unmount()
+  })
 })
 
 describe('AssistantTimeline (timeline + 单工具行内确认)', () => {
@@ -362,8 +407,54 @@ describe('AssistantMessageList (消息流 + 确认接线)', () => {
     const wrapper = mountList()
     const bar = wrapper.find('[data-testid="assistant-batch-approval"]')
     expect(bar.exists()).toBe(true)
+    // [new] P2-scope:旧事件形态(无 scope 字段)经 pendingScopeDigest → 整批降级弱提示
+    const chip = wrapper.find('[data-testid="assistant-confirm-scope"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.classes()).toContain('is-degraded')
     await wrapper.find('[data-testid="assistant-approve-all"]').trigger('click')
     expect(fake.respondToAllToolConfirmations).toHaveBeenCalledWith(true)
+    wrapper.unmount()
+  })
+
+  it('[P2-scope] 双工具确认批带 resolved scope → 批量审批条渲染约束范围摘要', () => {
+    const pending = {
+      runId: 'run-1', replyId: 'reply-1',
+      toolCalls: [
+        {
+          toolCallId: 'tc-1', toolName: 'save_script_episode', argumentsPreview: '{}',
+          scope: { resolved: true, degraded: false, summary: '可写:剧本简介' },
+        },
+        {
+          toolCallId: 'tc-2', toolName: 'save_script_episode', argumentsPreview: '{}',
+          scope: { resolved: true, degraded: false, summary: '可写:剧本简介' },
+        },
+      ],
+      expiresAt,
+      decisions: {} as Record<string, boolean>,
+      submitting: false,
+    }
+    fake.conversationStates = {
+      'conv-1': {
+        conversation: makeConversation({ status: 'WAITING_CONFIRMATION' }),
+        status: 'WAITING_CONFIRMATION',
+        statusConfirmed: true,
+        unread: false,
+        draft: '',
+        toolExecutionMode: 'DEFAULT',
+        messages: [],
+        messagesLoaded: true,
+        messagesLoading: false,
+        pipeline: {
+          status: 'running', reasoningText: '', timeline: [], lastSequence: 2,
+          runId: 'run-1', pendingConfirmation: pending,
+        },
+      },
+    }
+    const wrapper = mountList()
+    const chip = wrapper.find('[data-testid="assistant-confirm-scope"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.classes()).not.toContain('is-degraded')
+    expect(chip.text()).toContain('约束范围：可写:剧本简介')
     wrapper.unmount()
   })
 

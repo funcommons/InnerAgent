@@ -21,7 +21,12 @@ import type { AiModel, MultimodalInputType, AiMultimodalInput, AiMultimodalInput
 import { resolveMediaUrl, uploadAttachment } from '@inneragent/sdk-core'
 
 const MAX_INPUT_COUNT = 8
-const MAX_BASE64_FILE_SIZE = 10 * 1024 * 1024
+
+/**
+ * base64 传输单文件上限(10MB)。[P2 #15] 导出:附件 >10MB 且模型具备 url 传输时
+ * transport 静默回退 url —— UI 据此在 chip 上给「大文件将以 URL 引用传输」小字提示。
+ */
+export const MAX_BASE64_FILE_SIZE = 10 * 1024 * 1024
 const MAX_TOTAL_BASE64_SIZE = 20 * 1024 * 1024
 const MAX_URL_FILE_SIZE = 100 * 1024 * 1024
 
@@ -304,4 +309,17 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+/**
+ * [P2 #15] 附件 url 传输回退提示(99-优化建议.md #15, 证据 L9-08「>10MB 且模型
+ * 支持 url 传输时静默回退,UI 无任何说明」):>10MB 且 transport 回退为 url →
+ * composer chip 小字「大文件将以 URL 引用传输」;其余(base64 限内 / ≤10MB url)无提示。
+ */
+export function attachmentUrlFallbackHint(
+  attachment: Pick<AssistantAttachment, 'transport' | 'size'>,
+): AssistantLocalizedMessage | null {
+  return attachment.transport === 'url' && attachment.size > MAX_BASE64_FILE_SIZE
+    ? { key: 'assistant.attachment-url-fallback', params: {} }
+    : null
 }

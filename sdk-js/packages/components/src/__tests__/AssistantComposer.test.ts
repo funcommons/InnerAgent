@@ -385,3 +385,34 @@ describe('AssistantComposer — 会话切换重置', () => {
 
 // [adapt] 模型设置入口用例移除: vue-router + user store admin 门控属融光业务,
 // SDK 不携带 (管理面由 inneragent-web 承担)。
+
+describe('AssistantComposer — 附件 url 传输回退提示 (P2 #15/#8)', () => {
+  it('>10MB 回退 url 传输 → chip 小字「大文件将以 URL 引用传输」;小文件无提示', async () => {
+    uploads.uploadAttachment.mockResolvedValue('/attachments/big-1')
+    const wrapper = await mountComposer()
+    const input = wrapper.find('[data-testid="assistant-attachment-input"]')
+    // 模型 image 能力 ['base64','url']:15MB 超出 base64 单文件上限 → 回退 url
+    const big = new File(['x'], 'big.png', { type: 'image/png' })
+    Object.defineProperty(big, 'size', { value: 15 * 1024 * 1024 })
+    Object.defineProperty(input.element, 'files', { value: [big], configurable: true })
+    await input.trigger('change')
+    await waitForAttachments(wrapper)
+
+    const chip = wrapper.find('[data-testid="assistant-attachments"] .assistant-attachment-chip')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toContain('big.png')
+    const hint = wrapper.find('[data-testid="assistant-attachment-url-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('大文件将以 URL 引用传输')
+
+    // 小文件(base64 限内)→ 无提示
+    uploads.uploadAttachment.mockResolvedValue('/attachments/small-1')
+    const small = new File(['x'], 'small.png', { type: 'image/png' })
+    Object.defineProperty(small, 'size', { value: 1024 })
+    Object.defineProperty(input.element, 'files', { value: [small], configurable: true })
+    await input.trigger('change')
+    await waitFor(() => wrapper.findAll('[data-testid="assistant-attachments"] .assistant-attachment-chip').length >= 2)
+    expect(wrapper.findAll('[data-testid="assistant-attachment-url-hint"]')).toHaveLength(1)
+    wrapper.unmount()
+  })
+})

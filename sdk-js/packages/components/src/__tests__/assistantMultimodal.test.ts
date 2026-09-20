@@ -13,6 +13,8 @@ import {
   AssistantAttachmentError,
   prepareAssistantAttachments,
   attachmentCompatibilityError,
+  attachmentUrlFallbackHint,
+  MAX_BASE64_FILE_SIZE,
   multimodalCapabilitySummary,
   attachmentAccept,
   formatFileSize,
@@ -248,5 +250,31 @@ describe('formatFileSize (附件尺寸文案)', () => {
     expect(formatFileSize(2049)).toBe('3 KB')
     expect(formatFileSize(1024 * 1024)).toBe('1.0 MB')
     expect(formatFileSize(1536 * 1024)).toBe('1.5 MB')
+  })
+})
+
+// ---- [new] P2 优化建议 #15(#8):>10MB 回退 url 传输 → chip 小字提示 ----
+
+describe('attachmentUrlFallbackHint (url 传输回退提示)', () => {
+  it('url 传输且 >10MB(base64 单文件上限)→ 提示;恰好 10MB 不提示', () => {
+    const urlBig: AssistantAttachment = {
+      id: 'a1', name: 'big.mp4', inputType: 'video', mimeType: 'video/mp4',
+      transport: 'url', resourceUrl: '/attachments/a1', size: 15 * 1024 * 1024,
+    }
+    expect(attachmentUrlFallbackHint(urlBig)).toEqual({ key: 'assistant.attachment-url-fallback', params: {} })
+    expect(MAX_BASE64_FILE_SIZE).toBe(10 * 1024 * 1024)
+
+    const urlBoundary: AssistantAttachment = { ...urlBig, size: MAX_BASE64_FILE_SIZE }
+    expect(attachmentUrlFallbackHint(urlBoundary)).toBeNull()
+  })
+
+  it('base64 传输 / ≤10MB url 传输 → 无提示', () => {
+    const base64Big: AssistantAttachment = {
+      id: 'a2', name: 'b.png', inputType: 'image', mimeType: 'image/png',
+      transport: 'base64', size: 12 * 1024 * 1024,
+    }
+    expect(attachmentUrlFallbackHint(base64Big)).toBeNull()
+    const urlSmall: AssistantAttachment = { ...base64Big, transport: 'url', size: 1024 }
+    expect(attachmentUrlFallbackHint(urlSmall)).toBeNull()
   })
 })

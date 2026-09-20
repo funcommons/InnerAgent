@@ -119,6 +119,7 @@ export const zhCN: Record<string, string> = {
   'assistant.attachment-type-file': '文件',
   'assistant.attachment-remove': '移除附件',
   'assistant.attachment-model-required': '请先选择对话模型',
+  'assistant.attachment-url-fallback': '大文件将以 URL 引用传输',
 
   'notification.reasoning': '思考',
   'notification.reasoning-duration': '思考 ({s}s)',
@@ -251,6 +252,7 @@ export const enUS: Record<string, string> = {
   'assistant.attachment-type-file': 'file',
   'assistant.attachment-remove': 'Remove attachment',
   'assistant.attachment-model-required': 'Select a chat model first',
+  'assistant.attachment-url-fallback': 'Large file will be sent as a URL reference',
 
   'notification.reasoning': 'Thinking',
   'notification.reasoning-duration': 'Thinking ({s}s)',

@@ -59,6 +59,7 @@ import {
 import {
   prepareAssistantAttachments,
   attachmentCompatibilityError,
+  attachmentUrlFallbackHint,
   attachmentAccept,
   multimodalCapabilitySummary,
   AssistantAttachmentError,
@@ -475,6 +476,16 @@ function removeAttachment(id: string): void {
   attachments.value = attachments.value.filter((item) => item.id !== id)
 }
 
+// [P2 #15] >10MB 且回退 url 传输 → chip 小字提示(「大文件将以 URL 引用传输」)
+const urlFallbackHints = computed<Record<string, string>>(() => {
+  const hints: Record<string, string> = {}
+  for (const attachment of attachments.value) {
+    const hint = attachmentUrlFallbackHint(attachment)
+    if (hint) hints[attachment.id] = t(hint.key, hint.params)
+  }
+  return hints
+})
+
 function clearAttachments(): void {
   attachments.value = []
 }
@@ -716,6 +727,7 @@ onMounted(() => {
         :attachment="attachment"
         :removable="true"
         :remove-disabled="submitting || running"
+        :hint="urlFallbackHints[attachment.id]"
         @remove="removeAttachment(attachment.id)"
       />
     </div>

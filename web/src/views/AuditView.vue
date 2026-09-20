@@ -1,13 +1,14 @@
 <script setup lang="ts">
 /**
- * [new] 审计查询视图(视图清单 #4)。
+ * [new] 审计查询视图(视图清单 #4;查询/字典端点已落地 AdminAuditController,W5)。
  * ia_audit_log 列表:列形对齐真实列(decision/decision_source/tool_fqn/run_id/
- * params_masked_json/error_text/duration_ms/create_time);过滤项为 mock 形
- * (服务端查询端点未实现,P2 后续)。decision_source 是「高危 100% 确认」的
- * 日志证明锚点(PRD §6.9);确认等待超时(run 终态 CANCELLED,
- * confirmation-expired)服务端未单独落审计决策,以 decision=denied 表意。
+ * params_masked_json/error_text/duration_ms/create_time)。
+ * 时间筛选(#7):value-format 无时区后缀(对齐服务端 ISO.DATE_TIME LocalDateTime),
+ * 输入合法即触发查询(@change),已应用范围回显为可清除 chip。
+ * decision_source 是「高危 100% 确认」的日志证明锚点(PRD §6.9);确认等待超时
+ * (run 终态 CANCELLED,decision_source=expired)服务端落 denied+expired 审计。
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { useAuditStore, DECISION_SOURCES, AUDIT_DECISIONS } from '@/stores/audit'
 import type { IaAuditLog } from '@/api/types'
@@ -21,12 +22,23 @@ const decisionMeta = (v: string) => AUDIT_DECISIONS.find(d => d.value === v)
 const RISK_TAGS: Record<string, 'info' | 'warning' | 'danger'> = { low: 'info', medium: 'warning', high: 'danger' }
 const RISK_LABELS: Record<string, string> = { low: '低危', medium: '中危', high: '高危' }
 
+/** 已应用时间范围(#7):from/to 任一生效即回显 chip */
+const appliedRange = computed(() =>
+  [store.filters.from, store.filters.to].filter(Boolean).join(' ~ '))
+
 onMounted(() => {
   void store.load()
 })
 
 function search() {
   void store.search()
+}
+
+/** 清除已应用时间范围并立即重查(#7 chip 出口) */
+function clearRange() {
+  store.filters.from = ''
+  store.filters.to = ''
+  search()
 }
 
 function openDetail(row: IaAuditLog) {
@@ -57,24 +69,31 @@ function prettyParams(json: string | null): string {
         <el-select v-model="store.filters.decision" class="f-select-sm" placeholder="裁决" clearable @change="search">
           <el-option v-for="d in AUDIT_DECISIONS" :key="d.value" :label="d.label" :value="d.value" />
         </el-select>
+        <!-- #7:value-format 去时区后缀 Z(对齐服务端 LocalDateTime ISO.DATE_TIME,
+             字面 Z 曾致手输值解析失败即输即查不可用);@change 合法输入即查询 -->
         <el-date-picker
           v-model="store.filters.from"
           type="datetime"
           class="f-date"
           placeholder="起始时间"
-          value-format="YYYY-MM-DDTHH:mm:ss[Z]"
+          value-format="YYYY-MM-DDTHH:mm:ss"
+          @change="search"
         />
         <el-date-picker
           v-model="store.filters.to"
           type="datetime"
           class="f-date"
           placeholder="结束时间"
-          value-format="YYYY-MM-DDTHH:mm:ss[Z]"
+          value-format="YYYY-MM-DDTHH:mm:ss"
+          @change="search"
         />
         <el-button type="primary" :icon="Search" @click="search">查询</el-button>
         <el-button :icon="Refresh" @click="store.load()">刷新</el-button>
       </div>
       <div class="filter-hints">
+        <el-tag v-if="appliedRange" closable size="small" type="primary" class="range-chip" @close="clearRange">
+          已应用时间范围:{{ appliedRange }}
+        </el-tag>
         <span v-for="s in DECISION_SOURCES" :key="s.value" class="hint-chip">{{ s.label }} = {{ s.desc }}</span>
       </div>
     </el-card>
@@ -153,8 +172,9 @@ function prettyParams(json: string | null): string {
 .f-select { width: 200px; }
 .f-select-sm { width: 130px; }
 .f-date { width: 180px; }
-.filter-hints { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.filter-hints { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
 .hint-chip { color: #909399; font-size: 12px; }
+.range-chip { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .pager { margin-top: 12px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 .dim { color: #909399; font-size: 12px; }

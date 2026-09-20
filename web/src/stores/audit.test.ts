@@ -38,6 +38,18 @@ describe('audit store', () => {
     expect(store.total).toBe(5)
   })
 
+  it('#7 时间筛选无时区后缀形(YYYY-MM-DDTHH:mm:ss)过滤生效(即输即查落点)', async () => {
+    // 视图层 value-format 已去 Z(对齐服务端 LocalDateTime ISO.DATE_TIME);
+    // 该形经查询链路(含 mock 词典比较)须与带 Z 形等价命中
+    const store = useAuditStore()
+    store.filters.from = '2026-09-19T00:00:00'
+    store.filters.to = '2026-09-20T23:59:59'
+    await store.load()
+    expect(store.total).toBe(5)
+    expect(store.list.every(l => (l.createTime ?? '').slice(0, 19) >= store.filters.from)).toBe(true)
+    expect(store.list.every(l => (l.createTime ?? '').slice(0, 19) <= store.filters.to)).toBe(true)
+  })
+
   it('decision 过滤与分页', async () => {
     const store = useAuditStore()
     store.filters.decision = 'denied'

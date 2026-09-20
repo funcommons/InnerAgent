@@ -9,6 +9,7 @@ import AdminLayout from '@/views/AdminLayout.vue'
 import AppsView from '@/views/AppsView.vue'
 import ToolsView from '@/views/ToolsView.vue'
 import AuditView from '@/views/AuditView.vue'
+import ModelsView from '@/views/ModelsView.vue'
 
 describe('视图挂载冒烟', () => {
   it('LoginView:渲染登录表单并可输入', async () => {
@@ -53,6 +54,14 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('mcp__demo_host__reset_password')
     expect(wrapper.text()).toContain('模式默认')
     expect(wrapper.text()).toContain('2026-09-20T07:59:00Z')
+    wrapper.unmount()
+  })
+
+  it('ModelsView:渲染配置列表且密钥仅掩码', async () => {
+    const wrapper = await mountView(ModelsView, '/models')
+    expect(wrapper.text()).toContain('DeepSeek 生产')
+    expect(wrapper.text()).toContain('sk-d1••••7a9f')
+    expect(wrapper.text()).toContain('阿里 DashScope')
     wrapper.unmount()
   })
 })

@@ -10,6 +10,8 @@ import AppsView from '@/views/AppsView.vue'
 import ToolsView from '@/views/ToolsView.vue'
 import AuditView from '@/views/AuditView.vue'
 import ModelsView from '@/views/ModelsView.vue'
+import CircuitView from '@/views/CircuitView.vue'
+import WebhooksView from '@/views/WebhooksView.vue'
 
 describe('视图挂载冒烟', () => {
   it('LoginView:渲染登录表单并可输入', async () => {
@@ -62,6 +64,27 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('DeepSeek 生产')
     expect(wrapper.text()).toContain('sk-d1••••7a9f')
     expect(wrapper.text()).toContain('阿里 DashScope')
+    wrapper.unmount()
+  })
+
+  it('CircuitView:渲染总开关状态、上限表单与事件流', async () => {
+    const wrapper = await mountView(CircuitView, '/circuit')
+    expect(wrapper.text()).toContain('应用级 Agent 总开关')
+    expect(wrapper.text()).toContain('32')
+    expect(wrapper.text()).toContain('上限触发')
+    wrapper.unmount()
+  })
+
+  it('WebhooksView:渲染配置(URL 进 input value)与投递记录', async () => {
+    const wrapper = await mountView(WebhooksView, '/webhooks')
+    // 回调地址在 input value 中(非文本节点)
+    const inputs = wrapper.findAll('input').map(i => (i.element as HTMLInputElement).value)
+    expect(inputs.some(v => v.includes('demo.example.com/ia/callback'))).toBe(true)
+    // 密钥掩码出现在 placeholder
+    const placeholders = wrapper.findAll('input').map(i => i.attributes('placeholder') ?? '')
+    expect(placeholders.some(p => p.includes('whsec-••••9f2e'))).toBe(true)
+    // 投递记录表
+    expect(wrapper.text()).toContain('run-2041')
     wrapper.unmount()
   })
 })

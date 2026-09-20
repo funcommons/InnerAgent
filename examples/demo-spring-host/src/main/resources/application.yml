@@ -1,0 +1,28 @@
+server:
+  port: 18091
+
+spring:
+  application:
+    name: demo-spring-host
+
+# InnerAgent 宿主桥配置(唯一必需的接入配置;P1-T2b starter 自动装配)
+inneragent:
+  bridge:
+    # InnerAgent 主服务地址(JWKS 拉取基址 /.well-known/jwks.json)
+    server-base: ${IA_SERVER_BASE:http://localhost:18090}
+    # 工具类所在包(非 bean 形态;扫描后注册进 stateless /ia-mcp)
+    tool-packages:
+      - com.inneragent.demo.host.tool
+    act:
+      # 【配置对齐,勿用默认占位 ia-mcp】期望 aud 必须含「注册到主服务的
+      # endpoint_url」——即 ia_tool_registry.endpoint_url = http://localhost:18091/ia-mcp。
+      # 主服务 McpClientToolInvoker 按 endpoint_url 签发 act token aud,
+      # 宿主验签(Findings §2.3)audience 精确匹配,不匹配 → 401。
+      audiences:
+        - ${IA_BRIDGE_AUDIENCE:http://localhost:18091/ia-mcp}
+
+logging:
+  level:
+    root: INFO
+    com.inneragent: INFO
+    com.inneragent.demo: INFO

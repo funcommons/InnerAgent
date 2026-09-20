@@ -185,8 +185,12 @@ class PlatformSubAgentRunServiceIT {
                 childCommand(parent, "tool-cancel", "researcher")));
         await(service.cancelChildren(parent.runId()));
 
+        // [adapt] 子运行 owner 即本实例(child-node),cancelChildren 在返回前
+        // 内联 acknowledge + finalize,读到的状态可能是 CANCEL_REQUESTED,
+        // 也可能已推进到 CANCELLED;持久化契约是"绝不停留在 RUNNING"。
         assertThat(run(child.childRunId()).getStatus())
-                .isEqualTo(AgentRunStatus.CANCEL_REQUESTED.name());
+                .isIn(AgentRunStatus.CANCEL_REQUESTED.name(),
+                        AgentRunStatus.CANCELLED.name());
         assertThat(run(parent.runId()).getStatus())
                 .isEqualTo(AgentRunStatus.RUNNING.name());
     }

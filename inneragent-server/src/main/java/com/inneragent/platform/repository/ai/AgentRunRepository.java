@@ -7,6 +7,7 @@ import com.inneragent.agent.mapper.AgentConversationMapper;
 import com.inneragent.agent.mapper.AgentMessageMapper;
 import com.inneragent.agent.mapper.AgentRunMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
@@ -75,8 +76,39 @@ public class AgentRunRepository {
     }
 
     public void insert(AgentRun run) {
+        // [adapt] PostgreSQL 同事务唯一键冲突预检查( P1 遗留台账③ / 25P02 ):
+        // 原实现直接 INSERT,命中唯一约束(子运行幂等键 uk_ia_agent_run_parent_tool)
+        // 后当前事务进入 aborted 状态,调用方 startChildTransaction 的幂等 catch
+        // 分支紧接的 lockChild / findInitialMessageOrder 查询全部报
+        // 25P02(current transaction is aborted),幂等重试路径不可用。
+        // 改为 INSERT 前预检查唯一键并主动抛 DuplicateKeyException:
+        //   * 调用方 catch 语义不变(仍按"子运行已存在"走幂等复用),只是事务
+        //     未被污染,回查可正常执行;
+        //   * 子运行键预检查复用 FOR UPDATE 查询,配合 startChild 先行持有的
+        //     父运行行锁,同父子身份的并发准入天然串行,预检查无 TOCTOU 窗口;
+        //   * 根运行准入的 run_id 冲突路径 catch 后直接抛 409,无回查,不受影响。
+        requireNoExistingUniqueIdentity(run);
         if (runMapper.insert(run) != 1) {
             throw new IllegalStateException("Agent run insert did not affect exactly one row");
+        }
+    }
+
+    /**
+     * [adapt] 预检查 ia_agent_run 的两个现实唯一键:run_id 与子运行幂等键
+     * (parent_run_id, parent_tool_call_id);冲突即抛 Spring DuplicateKeyException,
+     * 与数据库约束违反被事务管理器翻译出的异常类型保持一致。
+     */
+    private void requireNoExistingUniqueIdentity(AgentRun run) {
+        if (runMapper.selectByRunId(run.getRunId()) != null) {
+            throw new DuplicateKeyException(
+                    "Agent run already exists: " + run.getRunId());
+        }
+        if (run.getParentRunId() != null && run.getParentToolCallId() != null
+                && runMapper.selectByParentAndToolCallForUpdate(
+                        run.getParentRunId(), run.getParentToolCallId()) != null) {
+            throw new DuplicateKeyException(
+                    "Agent child run already exists for tool call: "
+                            + run.getParentRunId() + ":" + run.getParentToolCallId());
         }
     }
 

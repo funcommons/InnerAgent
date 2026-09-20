@@ -1,6 +1,6 @@
 /**
- * [new] 审计 store 测试:过滤组合(字段名对齐 ia_audit_log 真实列)、时间倒序、分页。
- * 查询端点服务端未实现(P2 后续),行形已对齐真实列。
+ * [new] 审计 store 测试:过滤组合(字段名对齐 ia_audit_log 真实列)、时间倒序、分页、
+ * 字典端点值域(#12,含 V8 expired)。
  */
 import { describe, expect, it, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
@@ -70,11 +70,27 @@ describe('audit store', () => {
     expect(store.filters.pageNo).toBe(1)
   })
 
-  it('decision_source 与 decision 字典完备(真实码值)', () => {
-    expect(DECISION_SOURCES.map(d => d.value)).toEqual(['mode-default', 'user-grant', 'forced-policy', 'live-confirm', 'full-access'])
+  it('decision_source 与 decision 字典完备(真实码值,含 V8 expired)', () => {
+    expect(DECISION_SOURCES.map(d => d.value)).toEqual(['mode-default', 'user-grant', 'forced-policy', 'live-confirm', 'expired', 'full-access'])
     expect(AUDIT_DECISIONS.map(d => d.value)).toEqual([
       'allowed', 'denied', 'granted', 'revoked', 'invalidated',
       'risk_upgraded', 'tool_disabled', 'schema_compatible', 'schema_breaking',
     ])
+  })
+
+  it('#12 字典端点驱动下拉值域(含 expired;失败回退共享常量)', async () => {
+    const store = useAuditStore()
+    await store.loadDictionary()
+    // msw 字典含 6 档(V8 expired),且映射保留中文标签
+    expect(store.sourceOptions.map(o => o.value)).toEqual(['mode-default', 'user-grant', 'forced-policy', 'live-confirm', 'expired', 'full-access'])
+    expect(store.sourceOptions.find(o => o.value === 'expired')!.label).toBe('确认超时')
+  })
+
+  it('#12 expired 过滤:确认等待超时审计可检索', async () => {
+    const store = useAuditStore()
+    store.filters.decisionSource = 'expired'
+    await store.load()
+    expect(store.total).toBe(1)
+    expect(store.list[0]!.errorText).toContain('confirmation-expired')
   })
 })

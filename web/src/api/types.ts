@@ -291,8 +291,27 @@ export interface ToolGrantListQuery {
 
 // ==================== 审计(ia_audit_log;查询端点服务端未实现,域保持 mock) ====================
 
-/** 决策来源(V22 真实码值;「高危 100% 确认」的日志证明锚点) */
-export type DecisionSource = 'mode-default' | 'user-grant' | 'forced-policy' | 'live-confirm' | 'full-access'
+/** 决策来源(V22 真实码值 + V8 增补 expired;「高危 100% 确认」的日志证明锚点。
+ *  下拉值域以 GET /audit-logs/dictionary 字典端点为准(#12),常量仅作兜底) */
+export type DecisionSource =
+  | 'mode-default'
+  | 'user-grant'
+  | 'forced-policy'
+  | 'live-confirm'
+  | 'expired'
+  | 'full-access'
+
+/** 审计字典项(AdminAuditController.DictionaryVO/ToolAuditQueryService.DictionaryEntry) */
+export interface AuditDictionaryEntry {
+  code: string
+  description: string
+}
+
+/** 审计字典(decision_source/decision 实际值域 + 中文说明) */
+export interface AuditDictionary {
+  decisionSources: AuditDictionaryEntry[]
+  decisions: AuditDictionaryEntry[]
+}
 
 /**
  * 裁决结果(ia_audit_log.decision 真实码值):

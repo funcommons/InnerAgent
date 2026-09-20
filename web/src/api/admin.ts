@@ -15,6 +15,7 @@
 import { http } from './request'
 import type { IsoDateTime, PageResult } from './common'
 import type {
+  AuditDictionary,
   AuditLogQuery,
   CircuitBreakerEvent,
   CircuitBreakerState,
@@ -120,11 +121,13 @@ export const toolGrantAdminApi = {
     http.delete<boolean>(`${BASE}/grants/${id}`, { data }),
 }
 
-// ==================== 审计查询(mock 域:服务端查询端点未实现,P2 后续) ====================
+// ==================== 审计查询(AdminAuditController,W5) ====================
 
 export const auditAdminApi = {
   page: (params: AuditLogQuery = {}) =>
     http.get<PageResult<IaAuditLog>>(`${BASE}/audit-logs${buildQuery({ ...params })}`),
+  /** 审计字典(#12):decision_source/decision 实际值域,下拉选项以此为准 */
+  dictionary: () => http.get<AuditDictionary>(`${BASE}/audit-logs/dictionary`),
 }
 
 // ==================== 模型配置(依赖并行任务:联调时核对字段形) ====================

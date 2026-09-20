@@ -563,9 +563,35 @@ const grantHandlers = [
   }),
 ]
 
-// ==================== 审计查询(mock 域:服务端未实现;行形已对齐 ia_audit_log) ====================
+// ==================== 审计查询(镜像 AdminAuditController,W5) ====================
 
 const auditHandlers = [
+  // 字典端点(#12):decision_source/decision 实际值域(含 V8 增补 expired)
+  http.get('/ia/api/v1/admin/audit-logs/dictionary', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    return ok({
+      decisionSources: [
+        { code: 'mode-default', description: '模式默认路径(只读放行/写确认)' },
+        { code: 'user-grant', description: '用户「总是允许」授权' },
+        { code: 'forced-policy', description: '管理员强制策略' },
+        { code: 'live-confirm', description: '确认流实弹批准' },
+        { code: 'expired', description: '确认超时系统裁决(过期=denied)' },
+        { code: 'full-access', description: 'FULL_ACCESS 全开放' },
+      ],
+      decisions: [
+        { code: 'allowed', description: '工具调用放行' },
+        { code: 'denied', description: '工具调用拒绝' },
+        { code: 'granted', description: '授权授予' },
+        { code: 'revoked', description: '授权撤销' },
+        { code: 'invalidated', description: '授权自动失效' },
+        { code: 'schema_compatible', description: 'schema 纯增量变更自动接受' },
+        { code: 'schema_breaking', description: 'schema 安全相关差异强确认' },
+        { code: 'risk_upgraded', description: '风险级人工上调' },
+        { code: 'tool_disabled', description: '工具停用' },
+      ],
+    })
+  }),
   http.get('/ia/api/v1/admin/audit-logs', ({ request }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied

@@ -17,7 +17,11 @@ const store = useAuditStore()
 const detail = ref<IaAuditLog | null>(null)
 const detailVisible = ref(false)
 
-const sourceMeta = (v: string) => DECISION_SOURCES.find(s => s.value === v)
+/** 行内 decision_source 元信息:已知码值取中文标签,未知档位兜底 code 原样 */
+const sourceMeta = (v: string) =>
+  DECISION_SOURCES.find(s => s.value === v)
+  ?? store.sourceOptions.find(s => s.value === v)
+  ?? { value: v, label: v, desc: '' }
 const decisionMeta = (v: string) => AUDIT_DECISIONS.find(d => d.value === v)
 const RISK_TAGS: Record<string, 'info' | 'warning' | 'danger'> = { low: 'info', medium: 'warning', high: 'danger' }
 const RISK_LABELS: Record<string, string> = { low: '低危', medium: '中危', high: '高危' }
@@ -27,6 +31,7 @@ const appliedRange = computed(() =>
   [store.filters.from, store.filters.to].filter(Boolean).join(' ~ '))
 
 onMounted(() => {
+  void store.loadDictionary()
   void store.load()
 })
 
@@ -63,8 +68,9 @@ function prettyParams(json: string | null): string {
         <el-input v-model="store.filters.appId" class="f-input" placeholder="应用 ID" clearable @keyup.enter="search" />
         <el-input v-model="store.filters.userId" class="f-input" placeholder="用户 ID(数字)" clearable @keyup.enter="search" />
         <el-input v-model="store.filters.toolFqn" class="f-input" placeholder="工具 FQN(模糊)" clearable @keyup.enter="search" />
+        <!-- #12:下拉值域由字典端点驱动(含 V8 expired 档),常量仅兜底 -->
         <el-select v-model="store.filters.decisionSource" class="f-select" placeholder="decision_source" clearable @change="search">
-          <el-option v-for="s in DECISION_SOURCES" :key="s.value" :label="`${s.label}(${s.value})`" :value="s.value" />
+          <el-option v-for="s in store.sourceOptions" :key="s.value" :label="`${s.label}(${s.value})`" :value="s.value" />
         </el-select>
         <el-select v-model="store.filters.decision" class="f-select-sm" placeholder="裁决" clearable @change="search">
           <el-option v-for="d in AUDIT_DECISIONS" :key="d.value" :label="d.label" :value="d.value" />
@@ -94,7 +100,7 @@ function prettyParams(json: string | null): string {
         <el-tag v-if="appliedRange" closable size="small" type="primary" class="range-chip" @close="clearRange">
           已应用时间范围:{{ appliedRange }}
         </el-tag>
-        <span v-for="s in DECISION_SOURCES" :key="s.value" class="hint-chip">{{ s.label }} = {{ s.desc }}</span>
+        <span v-for="s in store.sourceOptions" :key="s.value" class="hint-chip">{{ s.label }} = {{ s.desc }}</span>
       </div>
     </el-card>
 

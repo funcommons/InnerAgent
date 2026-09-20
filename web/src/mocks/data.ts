@@ -160,8 +160,8 @@ export const seedAuditLogs: IaAuditLog[] = [
   audit({ id: 36, toolFqn: 'mcp__crm__search_customers', decisionSource: 'forced-policy', decision: 'allowed', riskLevel: 'medium', userId: 30077, resultSummary: '检索返回 8 条', createTime: '2026-09-18T11:00:00Z' }),
   audit({ id: 37, toolFqn: 'mcp__demo_host__list_login_records', decisionSource: 'mode-default', decision: 'allowed', riskLevel: 'low', userId: 20001, paramsMaskedJson: '{"userId":"20001","days":30}', createTime: '2026-09-18T10:30:00Z' }),
   audit({ id: 38, toolFqn: 'mcp__demo_host__refresh_cache', decisionSource: 'mode-default', decision: 'allowed', riskLevel: 'medium', createTime: '2026-09-17T09:00:00Z' }),
-  // 确认等待超时:run 终态 CANCELLED(confirmation-expired),服务端未单独落审计决策
-  audit({ id: 39, toolFqn: 'mcp__demo_host__delete_flow', decisionSource: 'forced-policy', decision: 'denied', riskLevel: 'high', errorText: '确认等待超时(24h)自动拒绝(confirmation-expired)', durationMs: null, createTime: '2026-09-16T08:00:00Z' }),
+  // 确认等待超时:decision_source=expired(V8 档;run 终态 CANCELLED 自动拒绝)
+  audit({ id: 39, toolFqn: 'mcp__demo_host__delete_flow', decisionSource: 'expired', decision: 'denied', riskLevel: 'high', errorText: '确认等待超时(24h)自动拒绝(confirmation-expired)', durationMs: null, createTime: '2026-09-16T08:00:00Z' }),
   audit({ id: 40, toolFqn: 'mcp__demo_host__update_user', decisionSource: 'full-access', decision: 'allowed', riskLevel: 'high', userId: 20001, resultSummary: 'FULL_ACCESS 一次性确认已审计', createTime: '2026-09-15T13:00:00Z' }),
   audit({ id: 41, toolFqn: 'mcp__crm__update_customer_note', decisionSource: 'live-confirm', decision: 'denied', riskLevel: 'high', userId: 30077, errorText: '用户拒绝:备注未写入', durationMs: null, createTime: '2026-09-14T10:00:00Z' }),
   audit({ id: 42, toolFqn: 'mcp__demo_host__reset_password', decisionSource: 'user-grant', decision: 'denied', riskLevel: 'high', errorText: '授权已失效(risk_upgrade)', durationMs: null, createTime: '2026-09-13T08:00:00Z' }),

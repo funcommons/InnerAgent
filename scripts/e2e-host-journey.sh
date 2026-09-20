@@ -274,8 +274,10 @@ try:
     print(len(d), all(t['endpointUrl']=='http://localhost:18091/ia-mcp' and t['enabled'] for t in d))
 except Exception:
     print(0, False)")"
-[[ "$REG_COUNT" == "2" && "$AUD_OK" == "True" ]] \
-  && pass "ia_tool_registry 两行均 enabled 且 endpointUrl=http://localhost:18091/ia-mcp" \
+# [M1] 18c 后同一 serverKey 扩至六工具(新增 U2/U3/U5 四个);断言放宽为 ≥2 且全量对齐
+[[ -z "$REG_COUNT" ]] && REG_COUNT=0
+[[ "$REG_COUNT" -ge 2 && "$AUD_OK" == "True" ]] \
+  && pass "ia_tool_registry ${REG_COUNT} 行均 enabled 且 endpointUrl=http://localhost:18091/ia-mcp" \
   || fail "注册表断言失败 count=$REG_COUNT aud_ok=$AUD_OK"
 
 # =============================================================================

@@ -224,7 +224,7 @@ class AgentScopePipelineRunServiceTests {
                 .deadlineAt(LocalDateTime.now().plusMinutes(5))
                 .build();
 
-        when(queries.resolveAuthorizedTarget(isNull(), eq("conversation-1"), eq(42L)))
+        when(queries.requireAuthorizedRun("failed-run", 42L))
                 .thenReturn(Mono.just(previous));
         when(executionFactory.resolve(any(AgentKernelSnapshot.class))).thenReturn(Mono.just(spec));
         when(persistedMessages.listByConversation("conversation-1")).thenReturn(List.of());
@@ -271,7 +271,7 @@ class AgentScopePipelineRunServiceTests {
                 skillRegistry,
                 userSkillService);
 
-        StepVerifier.create(service.startContinuation("conversation-1", 42L))
+        StepVerifier.create(service.startContinuation("failed-run", 42L))
                 .assertNext(started -> assertThat(started.conversationId())
                         .isEqualTo("conversation-1"))
                 .verifyComplete();
@@ -311,7 +311,7 @@ class AgentScopePipelineRunServiceTests {
                 .status(AgentRunStatus.COMPLETED.name())
                 .deadlineAt(LocalDateTime.now().plusMinutes(5))
                 .build();
-        when(queries.resolveAuthorizedTarget(isNull(), eq("conversation-1"), eq(42L)))
+        when(queries.requireAuthorizedRun("completed-run", 42L))
                 .thenReturn(Mono.just(previous));
 
         AgentScopePipelineRunService service = new AgentScopePipelineRunService(
@@ -335,7 +335,7 @@ class AgentScopePipelineRunServiceTests {
                 mock(AgentScopeSkillRegistry.class),
                 mock(AgentUserSkillService.class));
 
-        StepVerifier.create(service.startContinuation("conversation-1", 42L))
+        StepVerifier.create(service.startContinuation("completed-run", 42L))
                 .expectErrorSatisfies(error -> assertThat(error)
                         .hasMessage("只有失败或已取消的 Pipeline 可以继续执行"))
                 .verify();

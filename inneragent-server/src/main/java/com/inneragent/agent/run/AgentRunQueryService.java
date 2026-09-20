@@ -149,10 +149,17 @@ public final class AgentRunQueryService {
                         .defaultIfEmpty(status(run, null)));
     }
 
+    /**
+     * [adapt] P1-T3b:GET /ia/api/v1/runs/running 支持可选 conversationId 过滤
+     * (契约偏差裁决:SDK 当前以客户端侧过滤消费全量列表,服务端补齐等价过滤,
+     * 不发送该参数时行为不变)。
+     */
     public Mono<List<RunningPipelineRunRespVO>> listRunning(
-            long currentUserId) {
+            String conversationId, long currentUserId) {
         requireUserId(currentUserId);
-        return journal(() -> runningNow(currentUserId));
+        String safeConversationId = optionalIdentifier(
+                conversationId, "conversationId");
+        return journal(() -> runningNow(currentUserId, safeConversationId));
     }
 
     public Mono<AiChatStreamRespVO> project(
@@ -198,8 +205,13 @@ public final class AgentRunQueryService {
                 terminalEvent);
     }
 
-    private List<RunningPipelineRunRespVO> runningNow(long currentUserId) {
-        List<AgentRun> runs = runMapper.selectAuthorizedRunningRoots(currentUserId);
+    private List<RunningPipelineRunRespVO> runningNow(
+            long currentUserId, String conversationId) {
+        List<AgentRun> runs = runMapper.selectAuthorizedRunningRoots(currentUserId)
+                .stream()
+                .filter(run -> conversationId == null
+                        || conversationId.equals(run.getConversationId()))
+                .toList();
         if (runs.isEmpty()) {
             return List.of();
         }

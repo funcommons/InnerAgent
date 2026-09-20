@@ -4,15 +4,10 @@ import com.inneragent.platform.common.CommonResult;
 import com.inneragent.platform.common.PageParam;
 import com.inneragent.platform.common.PageResult;
 import com.inneragent.platform.common.BusinessException;
-import com.inneragent.server.controller.vo.AssistantReferenceOptionsRespVO;
 import com.inneragent.agent.entity.AgentConversation;
 import com.inneragent.agent.entity.AgentMessage;
 import com.inneragent.agent.conversation.AgentConversationService;
 import com.inneragent.agent.conversation.AgentMessageService;
-import com.inneragent.agent.kernel.AgentKernelSpecFactory;
-import com.inneragent.agent.mcp.AgentScopeMcpRegistry;
-import com.inneragent.agent.skill.AgentScopeSkillRegistry;
-import com.inneragent.agent.skill.AgentUserSkillService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -20,59 +15,26 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Comparator;
 
 import static com.inneragent.platform.security.SecurityUtils.requireCurrentUserId;
 
 /**
- * AI 助手 Controller（对话管理 + 后续多轮 Chat）
- * <p>
- * Pipeline 相关接口已迁移至 {@link AiPipelineController}
+ * 对话历史 Controller(当前用户的会话与消息)。
+ *
+ * <p>[adapt] P1-T3b 契约收口(02-技术方案 §7.1 ADR-T4,一次性切换不留旧别名):
+ * 融光 {@code /api/ai/assistant/conversations*} → {@code /ia/api/v1/conversations*}。
+ * 可引用 Skill/MCP 目录(reference-options)按 SDK 契约迁至
+ * {@link MeController#getReferenceOptions()};流式端点由
+ * {@link AiPipelineController} 承载 —— 助手聊天与 Run 共用同一套 SSE 契约。
  */
-@Tag(name = "AI 助手")
+@Tag(name = "会话")
 @RestController
-@RequestMapping("/api/ai/assistant")
+@RequestMapping("/ia/api/v1")
 @RequiredArgsConstructor
 public class AiAssistantController {
 
     private final AgentConversationService conversationService;
     private final AgentMessageService messageService;
-    private final AgentScopeSkillRegistry skillRegistry;
-    private final AgentScopeMcpRegistry mcpRegistry;
-    private final AgentUserSkillService userSkillService;
-
-    // ========== 对话管理 ==========
-
-    @Operation(summary = "获取助手可主动引用的 Skill 与 MCP 工具")
-    @GetMapping("/reference-options")
-    public CommonResult<AssistantReferenceOptionsRespVO> referenceOptions() {
-        long userId = requireCurrentUserId();
-        Map<String, AssistantReferenceOptionsRespVO.SkillOption> skillOptions = new LinkedHashMap<>();
-        skillRegistry.catalog().forEach(skill -> skillOptions.put(skill.name(),
-                new AssistantReferenceOptionsRespVO.SkillOption(
-                        skill.id(), skill.name(), skill.displayName(),
-                        skill.description(), skill.source())));
-        userSkillService.catalog(userId).forEach(skill -> skillOptions.put(skill.name(),
-                new AssistantReferenceOptionsRespVO.SkillOption(
-                        skill.id(), skill.name(), skill.displayName(),
-                        skill.description(), skill.source())));
-        List<AssistantReferenceOptionsRespVO.SkillOption> skills = skillOptions.values().stream()
-                .sorted(Comparator.comparing(
-                        AssistantReferenceOptionsRespVO.SkillOption::displayName))
-                .toList();
-        List<AssistantReferenceOptionsRespVO.McpToolOption> mcpTools = mcpRegistry
-                .catalogForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY, userId)
-                .stream()
-                .map(tool -> new AssistantReferenceOptionsRespVO.McpToolOption(
-                        tool.serverName(),
-                        tool.toolName(),
-                        tool.description(),
-                        tool.readOnly()))
-                .toList();
-        return CommonResult.success(new AssistantReferenceOptionsRespVO(skills, mcpTools));
-    }
 
     @Operation(summary = "获取对话列表（当前用户）")
     @GetMapping("/conversations")
@@ -122,4 +84,3 @@ public class AiAssistantController {
                 .thenReturn(CommonResult.success(true));
     }
 }
-

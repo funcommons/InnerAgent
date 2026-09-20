@@ -47,9 +47,16 @@ import java.time.ZoneOffset;
 import static com.inneragent.platform.common.CommonResult.success;
 import static com.inneragent.platform.security.SecurityUtils.requireCurrentUserId;
 
+/**
+ * 智能体用户级配置 Controller(skills/mcp/workspace/state-cleanup)。
+ *
+ * <p>[adapt] P1-T3b 契约收口(02-技术方案 §7.1 ADR-T4,一次性切换不留旧别名):
+ * 融光 {@code /api/ai/agent-config/*} → {@code /ia/api/v1/me/*}(SDK 配置页域);
+ * 用户级模型/引用目录端点见 {@link MeController}。
+ */
 @Tag(name = "智能体配置")
 @RestController
-@RequestMapping("/api/ai/agent-config")
+@RequestMapping("/ia/api/v1/me")
 @RequiredArgsConstructor
 public class AgentConfigurationController {
 

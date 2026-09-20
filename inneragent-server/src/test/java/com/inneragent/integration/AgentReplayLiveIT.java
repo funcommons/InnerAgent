@@ -231,7 +231,7 @@ class AgentReplayLiveIT {
         assertThat(running.status()).isEqualTo("RUNNING");
         assertThat(running.lastSequence()).isEqualTo(1L);
         assertThat(running.terminalEvent()).isNull();
-        assertThat(await(queryService.listRunning(42L)))
+        assertThat(await(queryService.listRunning(null, 42L)))
                 .singleElement()
                 .satisfies(snapshot -> {
                     assertThat(snapshot.runId()).isEqualTo(run.runId());
@@ -239,6 +239,11 @@ class AgentReplayLiveIT {
                             .isEqualTo(run.conversationId());
                     assertThat(snapshot.lastSequence()).isEqualTo(1L);
                 });
+        // [adapt] P1-T3b:/runs/running 支持 conversationId 过滤
+        assertThat(await(queryService.listRunning(run.conversationId(), 42L)))
+                .singleElement()
+                .satisfies(snapshot -> assertThat(snapshot.runId()).isEqualTo(run.runId()));
+        assertThat(await(queryService.listRunning("conversation-absent", 42L))).isEmpty();
 
         CommittedAgentEvent terminal = await(terminals.terminateOwned(
                 completed(run), run.ownerInstanceId(), run.ownerEpoch()))
@@ -252,7 +257,7 @@ class AgentReplayLiveIT {
         assertThat(completed.terminalEvent().getSequence())
                 .isEqualTo(terminal.sequence());
         assertThat(completed.terminalEvent().getOutputType()).isEqualTo("DONE");
-        assertThat(await(queryService.listRunning(42L))).isEmpty();
+        assertThat(await(queryService.listRunning(null, 42L))).isEmpty();
     }
 
     private CommittedAgentEvent append(

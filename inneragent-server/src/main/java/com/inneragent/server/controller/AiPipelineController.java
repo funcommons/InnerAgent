@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -34,10 +35,27 @@ import java.util.List;
 
 import static com.inneragent.platform.security.SecurityUtils.requireCurrentUserId;
 
-/** Durable, user-authorized pipeline HTTP and SSE API. */
+/**
+ * Durable, user-authorized pipeline HTTP and SSE API.
+ *
+ * <p>[adapt] P1-T3b 契约收口(02-技术方案 §7.1 ADR-T4,一次性切换不留旧别名):
+ * 融光 {@code /api/ai/pipeline/*} 重映射为 {@code /ia/api/v1/runs*},SSE 事件协议
+ * (id = {@code runId:sequence}、outputType 全集)不变:
+ * <ul>
+ *   <li>POST /run|continue → POST {@code /runs}、{@code /runs/{runId}/continue}
+ *       (run 请求体含可选 {@code context{page,object}},并入运行上下文);</li>
+ *   <li>GET /reconnect → GET {@code /runs/{runId}/events}(Last-Event-ID 头语义不变,
+ *       仅发头即可,省略头时从头重放;afterSequence 查询参数可选,与头冲突时 400);</li>
+ *   <li>POST cancel|confirm|confirm/expire → POST {@code /runs/{runId}/cancel|confirm|confirm/expire};
+ *       乐观会话尚无 runId 时保留 {@code POST /runs/cancel?conversationId=…} 兜底
+ *       (SDK runs.cancelRun 契约;无活动 run 时 404);</li>
+ *   <li>GET status|running → GET {@code /runs/{runId}}、{@code /runs/running}
+ *       (running 支持可选 conversationId 过滤)。</li>
+ * </ul>
+ */
 @Tag(name = "AI Pipeline")
 @RestController
-@RequestMapping("/api/ai/pipeline")
+@RequestMapping("/ia/api/v1/runs")
 @RequiredArgsConstructor
 public class AiPipelineController {
 
@@ -49,8 +67,8 @@ public class AiPipelineController {
     private final AgentConfirmationService confirmations;
     private final AgentConfirmationExpiryCoordinator confirmationExpiry;
 
-    @Operation(summary = "启动 Pipeline（SSE 流式）")
-    @PostMapping(value = "/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "启动 Run（SSE 流式）")
+    @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<AiChatStreamRespVO>> run(
             @RequestBody AiChatReqVO request) {
         long currentUserId = requireCurrentUserId();
@@ -61,57 +79,65 @@ public class AiPipelineController {
                 .map(this::toSse);
     }
 
-    @Operation(summary = "继续失败或已取消的 Pipeline")
-    @PostMapping(value = "/continue", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<AiChatStreamRespVO>> continueFailed(
-            @RequestParam String conversationId) {
+    @Operation(summary = "继续失败或已取消的 Run（SSE 流式）")
+    @PostMapping(value = "/{runId}/continue", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<AiChatStreamRespVO>> continueRun(
+            @PathVariable String runId) {
         long currentUserId = requireCurrentUserId();
-        return pipelineRuns.streamContinuation(conversationId, currentUserId)
+        return pipelineRuns.streamContinuation(runId, currentUserId)
                 .map(this::toSse);
     }
 
-    @Operation(summary = "取消 Pipeline")
-    @PostMapping("/cancel")
+    @Operation(summary = "取消 Run")
+    @PostMapping("/{runId}/cancel")
     public Mono<CommonResult<Boolean>> cancel(
-            @RequestParam(required = false) String runId,
-            @RequestParam(required = false) String conversationId) {
-        long currentUserId = requireCurrentUserId();
-        return runQueries.resolveAuthorizedTarget(
-                runId, conversationId, currentUserId)
-                .flatMap(run -> cancellations.cancel(
-                        run.getRunId(), currentUserId))
-                .thenReturn(CommonResult.success(true));
+            @PathVariable String runId) {
+        return doCancel(runId, null);
+    }
+
+    /**
+     * [adapt] SDK 乐观会话兜底:仅持 conversationId 时按会话解析活动根运行取消。
+     * 字面量路径优先于 {@code /{runId}/cancel} 匹配,不会落入 runId 语义。
+     */
+    @Operation(summary = "按会话取消运行中的 Run")
+    @PostMapping("/cancel")
+    public Mono<CommonResult<Boolean>> cancelByConversation(
+            @RequestParam String conversationId) {
+        return doCancel(null, conversationId);
     }
 
     @Operation(summary = "批准或拒绝等待中的工具调用")
-    @PostMapping("/confirm")
+    @PostMapping("/{runId}/confirm")
     public Mono<CommonResult<Boolean>> confirm(
+            @PathVariable String runId,
             @RequestBody ToolConfirmationReqVO request) {
         long currentUserId = requireCurrentUserId();
+        // 路径参数是唯一 runId 来源(SDK 确认请求体仅携带 replyId/decisions)
+        request.setRunId(runId);
         return confirmations.respond(request, currentUserId)
                 .thenReturn(CommonResult.success(true));
     }
 
     @Operation(summary = "结束已超时的工具审批")
-    @PostMapping("/confirm/expire")
+    @PostMapping("/{runId}/confirm/expire")
     public Mono<CommonResult<Boolean>> expireConfirmation(
+            @PathVariable String runId,
             @RequestBody ToolConfirmationExpiryReqVO request) {
         long currentUserId = requireCurrentUserId();
+        request.setRunId(runId);
         return confirmationExpiry.expireAuthorized(
                         request.getRunId(), request.getReplyId(), currentUserId)
                 .map(CommonResult::success);
     }
 
-    @Operation(summary = "重连 Pipeline")
-    @GetMapping(value = "/reconnect", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<AiChatStreamRespVO>> reconnect(
-            @RequestParam(required = false) String runId,
-            @RequestParam(required = false) String conversationId,
+    @Operation(summary = "重连 Run 事件流（Last-Event-ID 断点续传）")
+    @GetMapping(value = "/{runId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<AiChatStreamRespVO>> events(
+            @PathVariable String runId,
             @RequestParam(required = false) Long afterSequence,
             @RequestHeader(name = "Last-Event-ID", required = false) String lastEventId) {
         long currentUserId = requireCurrentUserId();
-        return runQueries.resolveAuthorizedTarget(
-                runId, conversationId, currentUserId)
+        return runQueries.requireAuthorizedRun(runId, currentUserId)
                 .flatMapMany(run -> {
                     RunCursor cursor = cursorParser.parse(
                             run.getRunId(), afterSequence, lastEventId);
@@ -122,22 +148,30 @@ public class AiPipelineController {
                 });
     }
 
-    @Operation(summary = "查询 Pipeline 运行状态")
-    @GetMapping("/status")
+    @Operation(summary = "查询 Run 运行状态")
+    @GetMapping("/{runId}")
     public Mono<CommonResult<PipelineRunStatusRespVO>> getStatus(
-            @RequestParam(required = false) String runId,
-            @RequestParam(required = false) String conversationId) {
+            @PathVariable String runId) {
         long currentUserId = requireCurrentUserId();
-        return runQueries.status(runId, conversationId, currentUserId)
+        return runQueries.status(runId, null, currentUserId)
                 .map(CommonResult::success);
     }
 
-    @Operation(summary = "查询运行中的 Pipeline 列表")
+    @Operation(summary = "查询运行中的 Run 列表")
     @GetMapping("/running")
-    public Mono<CommonResult<List<RunningPipelineRunRespVO>>> listRunning() {
+    public Mono<CommonResult<List<RunningPipelineRunRespVO>>> listRunning(
+            @RequestParam(required = false) String conversationId) {
         long currentUserId = requireCurrentUserId();
-        return runQueries.listRunning(currentUserId)
+        return runQueries.listRunning(conversationId, currentUserId)
                 .map(CommonResult::success);
+    }
+
+    private Mono<CommonResult<Boolean>> doCancel(String runId, String conversationId) {
+        long currentUserId = requireCurrentUserId();
+        return runQueries.resolveAuthorizedTarget(runId, conversationId, currentUserId)
+                .flatMap(run -> cancellations.cancel(
+                        run.getRunId(), currentUserId))
+                .thenReturn(CommonResult.success(true));
     }
 
     private ServerSentEvent<AiChatStreamRespVO> toSse(

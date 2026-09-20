@@ -171,18 +171,23 @@ public final class AgentScopePipelineRunService {
                 .flatMap(this::launch);
     }
 
+    /**
+     * [adapt] P1-T3b 契约切换:续跑目标由融光按 conversationId 查询参数改为
+     * REST 路径参数 runId(POST /ia/api/v1/runs/{runId}/continue)。
+     * 可续跑判定(requireContinuableRoot:根运行 + 失败/已取消)不变。
+     */
     public Mono<StartedAgentRun> startContinuation(
-            String conversationId, long userId) {
+            String runId, long userId) {
         if (userId <= 0) {
             return Mono.error(new IllegalArgumentException("userId must be positive"));
         }
-        String safeConversationId = normalize(conversationId);
-        if (safeConversationId == null) {
+        String safeRunId = normalize(runId);
+        if (safeRunId == null) {
             return Mono.error(new IllegalArgumentException(
-                    "conversationId must not be blank"));
+                    "runId must not be blank"));
         }
 
-        return runQueries.resolveAuthorizedTarget(null, safeConversationId, userId)
+        return runQueries.requireAuthorizedRun(safeRunId, userId)
                 .flatMap(previous -> {
                     requireContinuableRoot(previous, userId);
                     AgentKernelSnapshot snapshot = persistedSnapshot(previous);

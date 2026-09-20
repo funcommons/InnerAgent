@@ -8,6 +8,7 @@ import com.inneragent.platform.common.GlobalExceptionHandler;
 import com.inneragent.server.controller.vo.AiChatReqVO;
 import com.inneragent.server.controller.vo.AiChatStreamRespVO;
 import com.inneragent.server.controller.vo.PipelineRunStatusRespVO;
+import com.inneragent.server.controller.vo.RunningPipelineRunRespVO;
 import com.inneragent.server.controller.vo.ToolConfirmationReqVO;
 import com.inneragent.agent.entity.AgentRun;
 import com.inneragent.platform.enums.ai.AgentRunStatus;
@@ -50,18 +51,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * [adapt] P1-T3b:断言 /ia/api/v1/runs* 契约(SDK runs.ts 已按该契约发请求)。
+ * P1 遗留台账①②:使用生产侧 GlobalExceptionHandler——events 收到跨 run/冲突的
+ * Last-Event-ID 时 PipelineCursorParser 抛 BusinessException(400) → HTTP 400。
+ */
 class AiPipelineSseControllerTests {
 
     private static final long CURRENT_USER_ID = 42L;
-
-    /**
-     * P1 遗留台账①②:原内联 TestExceptionAdvice 已删除,改用生产侧
-     * com.inneragent.platform.common.GlobalExceptionHandler(对齐融光测试
-     * .setControllerAdvice(new GlobalExceptionHandler()))。reconnect 收到
-     * 跨 run/冲突的 Last-Event-ID 时,PipelineCursorParser 抛
-     * BusinessException(400),经生产 advice 映射为 HTTP 400。
-     */
-
 
     private AgentScopePipelineRunService pipelineRuns;
     private AgentRunQueryService queries;
@@ -104,14 +101,15 @@ class AiPipelineSseControllerTests {
     }
 
     @Test
-    void expiresElapsedConfirmationForCurrentUser() throws Exception {
+    void expireTakesRunIdFromContractPath() throws Exception {
         when(confirmationExpiry.expireAuthorized(
                 "run-1", "reply-1", CURRENT_USER_ID))
                 .thenReturn(Mono.just(true));
 
-        MvcResult pending = mockMvc.perform(post("/api/ai/pipeline/confirm/expire")
+        MvcResult pending = mockMvc.perform(post("/ia/api/v1/runs/run-1/confirm/expire")
                         .contentType("application/json")
-                        .content("{\"runId\":\"run-1\",\"replyId\":\"reply-1\"}"))
+                        // SDK expireRunConfirmation 请求体仅携带 replyId
+                        .content("{\"replyId\":\"reply-1\"}"))
                 .andExpect(request().asyncStarted())
                 .andReturn();
         mockMvc.perform(asyncDispatch(pending))
@@ -123,20 +121,19 @@ class AiPipelineSseControllerTests {
     }
 
     @Test
-    void reconnectWritesStandardIdEventAndDataFrames() throws Exception {
+    void eventsReplayFromLastEventIdHeaderOnly() throws Exception {
         AgentRun run = run("run-1", "conversation-1", AgentRunStatus.RUNNING);
         CommittedAgentEvent committed = event("run-1", 8, "CONTENT", "hello");
         AiChatStreamRespVO projection = projection(
                 "run-1", 8, "CONTENT", "hello", false);
-        when(queries.resolveAuthorizedTarget(
-                "run-1", null, CURRENT_USER_ID)).thenReturn(Mono.just(run));
+        when(queries.requireAuthorizedRun("run-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
         when(replay.replayThenLive("run-1", 7)).thenReturn(Flux.just(committed));
         when(queries.project(run, committed)).thenReturn(Mono.just(projection));
 
+        // SDK reconnectRunStream 只发 Last-Event-ID 头,不带 afterSequence 查询参数
         MvcResult result = dispatch(mockMvc.perform(get(
-                        "/api/ai/pipeline/reconnect")
-                .param("runId", "run-1")
-                .param("afterSequence", "7")
+                        "/ia/api/v1/runs/run-1/events")
                 .header("Last-Event-ID", "run-1:7")));
 
         String wire = result.getResponse().getContentAsString();
@@ -152,13 +149,32 @@ class AiPipelineSseControllerTests {
     }
 
     @Test
-    void reconnectRejectsConflictingHeaderAndQueryCursor() throws Exception {
+    void eventsWithoutHeaderReplayFromSequenceZero() throws Exception {
         AgentRun run = run("run-1", "conversation-1", AgentRunStatus.RUNNING);
-        when(queries.resolveAuthorizedTarget(
-                "run-1", null, CURRENT_USER_ID)).thenReturn(Mono.just(run));
+        CommittedAgentEvent committed = event("run-1", 1, "CONTENT", "hi");
+        AiChatStreamRespVO projection = projection(
+                "run-1", 1, "CONTENT", "hi", false);
+        when(queries.requireAuthorizedRun("run-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
+        when(replay.replayThenLive("run-1", 0)).thenReturn(Flux.just(committed));
+        when(queries.project(run, committed)).thenReturn(Mono.just(projection));
 
-        MvcResult pending = mockMvc.perform(get("/api/ai/pipeline/reconnect")
-                        .param("runId", "run-1")
+        MvcResult result = dispatch(mockMvc.perform(get(
+                "/ia/api/v1/runs/run-1/events")));
+
+        assertThat(result.getResponse().getContentAsString())
+                .contains("id:run-1:1")
+                .contains("\"content\":\"hi\"");
+        verify(replay).replayThenLive("run-1", 0);
+    }
+
+    @Test
+    void eventsRejectConflictingHeaderAndQueryCursor() throws Exception {
+        AgentRun run = run("run-1", "conversation-1", AgentRunStatus.RUNNING);
+        when(queries.requireAuthorizedRun("run-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
+
+        MvcResult pending = mockMvc.perform(get("/ia/api/v1/runs/run-1/events")
                         .param("afterSequence", "7")
                         .header("Last-Event-ID", "run-1:8"))
                 .andExpect(request().asyncStarted())
@@ -170,13 +186,12 @@ class AiPipelineSseControllerTests {
     }
 
     @Test
-    void reconnectRejectsHeaderForAnotherRun() throws Exception {
+    void eventsRejectHeaderForAnotherRun() throws Exception {
         AgentRun run = run("run-1", "conversation-1", AgentRunStatus.RUNNING);
-        when(queries.resolveAuthorizedTarget(
-                "run-1", null, CURRENT_USER_ID)).thenReturn(Mono.just(run));
+        when(queries.requireAuthorizedRun("run-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
 
-        MvcResult pending = mockMvc.perform(get("/api/ai/pipeline/reconnect")
-                        .param("runId", "run-1")
+        MvcResult pending = mockMvc.perform(get("/ia/api/v1/runs/run-1/events")
                         .header("Last-Event-ID", "run-2:0"))
                 .andExpect(request().asyncStarted())
                 .andReturn();
@@ -188,13 +203,11 @@ class AiPipelineSseControllerTests {
 
     @Test
     void crossUserRunIsHiddenAsHttp404() throws Exception {
-        when(queries.resolveAuthorizedTarget(
-                "foreign-run", null, CURRENT_USER_ID))
+        when(queries.requireAuthorizedRun("foreign-run", CURRENT_USER_ID))
                 .thenReturn(Mono.error(new BusinessException(
                         404, "Agent run does not exist")));
 
-        MvcResult pending = mockMvc.perform(get("/api/ai/pipeline/reconnect")
-                        .param("runId", "foreign-run"))
+        MvcResult pending = mockMvc.perform(get("/ia/api/v1/runs/foreign-run/events"))
                 .andExpect(request().asyncStarted())
                 .andReturn();
         mockMvc.perform(asyncDispatch(pending))
@@ -210,15 +223,14 @@ class AiPipelineSseControllerTests {
                 "run-terminal", 3, "DONE", null);
         AiChatStreamRespVO projection = projection(
                 "run-terminal", 3, "DONE", null, true);
-        when(queries.resolveAuthorizedTarget(
-                "run-terminal", null, CURRENT_USER_ID)).thenReturn(Mono.just(run));
+        when(queries.requireAuthorizedRun("run-terminal", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
         when(replay.replayThenLive("run-terminal", 0))
                 .thenReturn(Flux.just(committed));
         when(queries.project(run, committed)).thenReturn(Mono.just(projection));
 
         MvcResult result = dispatch(mockMvc.perform(get(
-                        "/api/ai/pipeline/reconnect")
-                .param("runId", "run-terminal")));
+                "/ia/api/v1/runs/run-terminal/events")));
 
         assertThat(result.getResponse().getContentAsString())
                 .contains("id:run-terminal:3")
@@ -237,9 +249,11 @@ class AiPipelineSseControllerTests {
                 org.mockito.ArgumentMatchers.eq(CURRENT_USER_ID)))
                 .thenReturn(Flux.just(projection));
 
-        MvcResult result = dispatch(mockMvc.perform(post("/api/ai/pipeline/run")
+        MvcResult result = dispatch(mockMvc.perform(post("/ia/api/v1/runs")
                 .contentType("application/json")
-                .content("{\"conversationId\":\"conversation-start\",\"message\":\"hi\"}")));
+                // 契约字段:context{page,object} 由调用方注入,落运行上下文
+                .content("{\"conversationId\":\"conversation-start\",\"message\":\"hi\","
+                        + "\"context\":{\"page\":{\"id\":\"p-1\"},\"object\":{\"type\":\"doc\"}}}")));
 
         assertThat(result.getResponse().getContentAsString())
                 .contains("id:run-start:1")
@@ -249,53 +263,99 @@ class AiPipelineSseControllerTests {
     }
 
     @Test
-    void continueFailedStreamsFramesAndUsesCurrentUser() throws Exception {
+    void continueTakesRunIdFromContractPath() throws Exception {
         AiChatStreamRespVO projection = projection(
                 "run-continued", 1, "CONTENT", "continued", false);
         when(pipelineRuns.streamContinuation(
-                "conversation-failed", CURRENT_USER_ID))
+                "run-failed", CURRENT_USER_ID))
                 .thenReturn(Flux.just(projection));
 
         MvcResult result = dispatch(mockMvc.perform(post(
-                        "/api/ai/pipeline/continue")
-                .param("conversationId", "conversation-failed")));
+                        "/ia/api/v1/runs/run-failed/continue")));
 
         assertThat(result.getResponse().getContentAsString())
                 .contains("id:run-continued:1")
                 .contains("event:pipeline-event")
                 .contains("\"content\":\"continued\"");
         verify(pipelineRuns).streamContinuation(
-                "conversation-failed", CURRENT_USER_ID);
+                "run-failed", CURRENT_USER_ID);
     }
 
     @Test
-    void cancelAndStatusUseTheCurrentUserAuthorizedRun() {
+    void cancelByRunIdUsesTheCurrentUserAuthorizedRun() {
         AgentRun run = run("run-ops", "conversation-ops", AgentRunStatus.RUNNING);
         when(queries.resolveAuthorizedTarget(
                 "run-ops", null, CURRENT_USER_ID)).thenReturn(Mono.just(run));
         when(cancellations.cancel("run-ops", CURRENT_USER_ID))
                 .thenReturn(Mono.just(AgentRunStatus.CANCEL_REQUESTED));
+
+        StepVerifier.create(controller.cancel("run-ops"))
+                .assertNext(response -> assertThat(response.getData()).isTrue())
+                .verifyComplete();
+
+        verify(cancellations).cancel("run-ops", CURRENT_USER_ID);
+    }
+
+    @Test
+    void cancelFallsBackToConversationLookupForOptimisticSessions() {
+        AgentRun run = run("run-opt", "conversation-optimistic",
+                AgentRunStatus.RUNNING);
+        when(queries.resolveAuthorizedTarget(
+                null, "conversation-optimistic", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
+        when(cancellations.cancel("run-opt", CURRENT_USER_ID))
+                .thenReturn(Mono.just(AgentRunStatus.CANCEL_REQUESTED));
+
+        StepVerifier.create(controller.cancelByConversation("conversation-optimistic"))
+                .assertNext(response -> assertThat(response.getData()).isTrue())
+                .verifyComplete();
+
+        verify(cancellations).cancel("run-opt", CURRENT_USER_ID);
+    }
+
+    @Test
+    void statusByRunIdUsesTheCurrentUser() {
         PipelineRunStatusRespVO status = new PipelineRunStatusRespVO(
                 "run-ops", "CANCEL_REQUESTED", 4, null, null);
         when(queries.status("run-ops", null, CURRENT_USER_ID))
                 .thenReturn(Mono.just(status));
 
-        StepVerifier.create(controller.cancel("run-ops", null))
-                .assertNext(response -> assertThat(response.getData()).isTrue())
-                .verifyComplete();
-        StepVerifier.create(controller.getStatus("run-ops", null))
+        StepVerifier.create(controller.getStatus("run-ops"))
                 .assertNext(response -> assertThat(response.getData())
                         .isEqualTo(status))
                 .verifyComplete();
 
-        verify(cancellations).cancel("run-ops", CURRENT_USER_ID);
         verify(queries).status("run-ops", null, CURRENT_USER_ID);
     }
 
     @Test
-    void confirmationUsesCurrentUserAndResumesTheWaitingRun() {
+    void runningListSupportsOptionalConversationFilter() {
+        List<RunningPipelineRunRespVO> running = List.of(
+                new RunningPipelineRunRespVO(
+                        "run-1", "conversation-1", null, "标题", "assistant",
+                        "RUNNING", 3, null, Instant.parse("2026-07-21T12:00:00Z")));
+        when(queries.listRunning("conversation-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(running));
+
+        StepVerifier.create(controller.listRunning("conversation-1"))
+                .assertNext(response -> assertThat(response.getData())
+                        .singleElement()
+                        .satisfies(item -> {
+                            // SDK RunningRun 解析形状:runId/conversationId/status/lastSequence
+                            assertThat(item.runId()).isEqualTo("run-1");
+                            assertThat(item.conversationId()).isEqualTo("conversation-1");
+                            assertThat(item.status()).isEqualTo("RUNNING");
+                            assertThat(item.lastSequence()).isEqualTo(3);
+                        }))
+                .verifyComplete();
+
+        verify(queries).listRunning("conversation-1", CURRENT_USER_ID);
+    }
+
+    @Test
+    void confirmationUsesCurrentUserAndTakesRunIdFromPath() {
         ToolConfirmationReqVO request = new ToolConfirmationReqVO();
-        request.setRunId("run-confirm");
+        // SDK confirmRunTools 请求体仅携带 replyId + decisions
         request.setReplyId("reply-confirm");
         ToolConfirmationReqVO.DecisionVO decision = new ToolConfirmationReqVO.DecisionVO();
         decision.setToolCallId("call-1");
@@ -303,10 +363,11 @@ class AiPipelineSseControllerTests {
         request.setDecisions(List.of(decision));
         when(confirmations.respond(request, CURRENT_USER_ID)).thenReturn(Mono.empty());
 
-        StepVerifier.create(controller.confirm(request))
+        StepVerifier.create(controller.confirm("run-confirm", request))
                 .assertNext(response -> assertThat(response.getData()).isTrue())
                 .verifyComplete();
 
+        assertThat(request.getRunId()).isEqualTo("run-confirm");
         verify(confirmations).respond(request, CURRENT_USER_ID);
     }
 

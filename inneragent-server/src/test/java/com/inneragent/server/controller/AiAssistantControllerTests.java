@@ -6,9 +6,6 @@ import com.inneragent.agent.entity.AgentConversation;
 import com.inneragent.platform.security.SecurityUserDetails;
 import com.inneragent.agent.conversation.AgentConversationService;
 import com.inneragent.agent.conversation.AgentMessageService;
-import com.inneragent.agent.mcp.AgentScopeMcpRegistry;
-import com.inneragent.agent.skill.AgentScopeSkillRegistry;
-import com.inneragent.agent.skill.AgentUserSkillService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,16 +24,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * [adapt] P1-T3b:对话历史域收口到 /ia/api/v1/conversations*(契约路径由
+ * @RequestMapping 保证);reference-options 迁至 /me 域,断言见 MeControllerTests。
+ */
 class AiAssistantControllerTests {
 
     private final AgentConversationService conversationService = mock(AgentConversationService.class);
     private final AgentMessageService messageService = mock(AgentMessageService.class);
-    private final AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
-    private final AgentScopeMcpRegistry mcpRegistry = mock(AgentScopeMcpRegistry.class);
-    private final AgentUserSkillService userSkillService = mock(AgentUserSkillService.class);
     private final AiAssistantController controller =
-            new AiAssistantController(
-                    conversationService, messageService, skillRegistry, mcpRegistry, userSkillService);
+            new AiAssistantController(conversationService, messageService);
 
     @AfterEach
     void clearSecurityContext() {
@@ -88,28 +85,6 @@ class AiAssistantControllerTests {
 
         verify(conversationService).deleteConversationByConversationId(
                 "optimistic-conversation", 42L);
-    }
-
-    @Test
-    void referenceOptionsReturnConfiguredSkillAndMcpCatalogs() {
-        SecurityUserDetails user = new SecurityUserDetails(42L, "owner", "secret", 1, null, List.of());
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
-        when(skillRegistry.catalog()).thenReturn(List.of(
-                new AgentScopeSkillRegistry.SkillReference(
-                        "test-skill_bundled",
-                        "test-skill",
-                        "测试技能",
-                        "测试技能",
-                        "bundled")));
-        when(mcpRegistry.catalogForAgent("ai_assistant_agent")).thenReturn(List.of(
-                new AgentScopeMcpRegistry.McpToolReference(
-                        "assets", "search_assets", "搜索素材", true)));
-
-        CommonResult<?> result = controller.referenceOptions();
-
-        assertThat(result.getCode()).isZero();
-        assertThat(result.getData()).isNotNull();
     }
 
     @Test

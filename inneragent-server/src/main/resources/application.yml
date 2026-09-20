@@ -58,8 +58,15 @@ app:
 # P0 冒烟 mock 模型启用说明(无需任何开关):
 #   ia_model_api_config.platform='mock' 且 text_protocol='mock' 即命中
 #   MockAiProvider(V4__demo_seed.sql 已 seed 默认对话模型 mock-text)。
+#   P1-T3c 起冒烟走 /ia/api/v1 契约基路径(scripts/smoke-sse.sh)。
 #   风险:mock 回复为脚本固定文案,演示部署可能被当真模型;生产环境严禁保留
 #   platform='mock' 配置,详见 MockAiProvider 类注释。
+
+# 对话附件上传上限(P1-T3b /ia/api/v1/attachments;base64 传输对齐
+# AiModelMultimodalCapabilities 的单件 10MB 上限,url 传输放宽到 20MB)。
+spring.servlet.multipart:
+  max-file-size: 20MB
+  max-request-size: 25MB
 
 # AgentScope 内核运行时(前缀与 AgentScopeV2Properties 注解一致;[adapt] 自融光
 # fusion.agentscope.v2 段,state 表名换 ia_agent_state,确认超时按 PRD 决策 24h,
@@ -98,6 +105,8 @@ fusion:
         servers: {}
 
 springdoc:
+  # API 契约基路径 /ia/api/v1(02-技术方案 §7.1 ADR-T4,P1-T3b 收口):
+  # runs/conversations/me/attachments/tools 各域见 server/controller 包。
   api-docs:
     path: /ia/api-docs
   swagger-ui:

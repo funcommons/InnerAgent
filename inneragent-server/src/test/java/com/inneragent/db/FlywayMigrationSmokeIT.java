@@ -24,7 +24,8 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * Flyway 迁移链冒烟测试(P0-T4 建立;P1 台账④随 V5__storage_config.sql、
- * P1-T2a 随 V6 工具中枢增补、P1-T3b 随 V7__agent_attachment.sql 对话附件增补)。
+ * P1-T2a 随 V6 工具中枢增补、P1-T3b 随 V7__agent_attachment.sql 对话附件增补、
+ * P2-srv U1 随 V8 decision_source 注释刷新)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
  * 上执行 classpath:db/migration 全链迁移,断言 22 张 ia_ 业务表全部建成、种子数据落库,
@@ -88,7 +89,7 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(7, result.migrationsExecuted, "应依次执行 V1-V7 七个迁移");
+        assertEquals(8, result.migrationsExecuted, "应依次执行 V1-V8 八个迁移(V8 为 decision_source 注释刷新,无表变更)");
 
         List<String> actualTables = listIaTables();
         assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 22 张 ia_ 表");
@@ -99,7 +100,7 @@ class FlywayMigrationSmokeIT {
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(7, resultSet.getInt(1), "flyway_schema_history 应有 7 条成功记录");
+            assertEquals(8, resultSet.getInt(1), "flyway_schema_history 应有 8 条成功记录(V8 注释刷新)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)

@@ -464,6 +464,8 @@ class AgentKernelSpecFactoryTests {
         com.inneragent.platform.toolhub.ToolRegistryEntry entry =
                 new com.inneragent.platform.toolhub.ToolRegistryEntry();
         entry.setId(1L);
+        // P2-srv U1:目录 load 显式按 app_id 过滤,fixture 须归属缺省应用 1
+        entry.setAppId(1L);
         entry.setServerKey("crm");
         entry.setToolName("list_users");
         entry.setFqn("mcp__crm__list_users");

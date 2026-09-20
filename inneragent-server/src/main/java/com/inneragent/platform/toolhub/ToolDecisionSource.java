@@ -22,6 +22,13 @@ public enum ToolDecisionSource {
     /** 确认流实弹批准(live confirm)。 */
     LIVE_CONFIRM("live-confirm"),
 
+    /**
+     * 确认流超时系统裁决(P2-srv U1:审批超时未执行,过期=denied)。
+     * decision_source 取独立值 {@code expired},与用户/模式路径区分——
+     * 高危「100% 确认」审计可证明未发生用户实弹批准。
+     */
+    EXPIRED("expired"),
+
     /** FULL_ACCESS 全开放(平台管理员开启,审计一次性确认)。 */
     FULL_ACCESS("full-access");
 

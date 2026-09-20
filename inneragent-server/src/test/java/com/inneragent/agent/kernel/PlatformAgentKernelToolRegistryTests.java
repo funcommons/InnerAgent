@@ -106,6 +106,8 @@ class PlatformAgentKernelToolRegistryTests {
     private static ToolRegistryEntry registryEntry() {
         ToolRegistryEntry entry = new ToolRegistryEntry();
         entry.setId(1L);
+        // P2-srv U1:目录 load 显式按 app_id 过滤,fixture 须归属缺省应用 1
+        entry.setAppId(1L);
         entry.setServerKey("demo-spring-host");
         entry.setToolName("create_host_record");
         entry.setFqn("mcp__demo-spring-host__create_host_record");

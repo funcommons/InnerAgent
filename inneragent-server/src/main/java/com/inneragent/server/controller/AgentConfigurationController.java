@@ -6,26 +6,15 @@ import com.inneragent.server.controller.vo.AgentSkillSaveReqVO;
 import com.inneragent.server.controller.vo.AgentMcpServerRespVO;
 import com.inneragent.server.controller.vo.AgentMcpServerSaveReqVO;
 import com.inneragent.server.controller.vo.AgentMcpTestRespVO;
-import com.inneragent.server.controller.vo.AgentWorkspaceConfigRespVO;
-import com.inneragent.server.controller.vo.AgentWorkspaceMigrateReqVO;
-import com.inneragent.server.controller.vo.AgentStateCleanupPolicyRespVO;
-import com.inneragent.server.controller.vo.AgentStateCleanupPolicySaveReqVO;
-import com.inneragent.agent.entity.AgentWorkspaceConfig;
-import com.inneragent.agent.entity.AgentWorkspaceMigration;
 import com.inneragent.agent.entity.AgentMcpServer;
-import com.inneragent.agent.entity.AgentStateCleanupPolicy;
 import com.inneragent.agent.mcp.AgentMcpServerService;
 import com.inneragent.agent.mcp.AgentUserMcpRuntimeRegistry;
 import com.inneragent.agent.skill.AgentSkillImportService;
 import com.inneragent.agent.skill.AgentUserSkillService;
-import com.inneragent.agent.workspace.AgentWorkspaceConfigService;
-import com.inneragent.agent.workspace.AgentWorkspaceMigrationService;
-import com.inneragent.agent.state.AgentStateCleanupPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,19 +29,23 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.time.LocalDateTime;
-import java.time.Instant;
-import java.time.ZoneOffset;
 
 import static com.inneragent.platform.common.CommonResult.success;
 import static com.inneragent.platform.security.SecurityUtils.requireCurrentUserId;
 
 /**
- * 智能体用户级配置 Controller(skills/mcp/workspace/state-cleanup)。
+ * 智能体用户级配置 Controller(skills/mcp)。
  *
  * <p>[adapt] P1-T3b 契约收口(02-技术方案 §7.1 ADR-T4,一次性切换不留旧别名):
  * 融光 {@code /api/ai/agent-config/*} → {@code /ia/api/v1/me/*}(SDK 配置页域);
  * 用户级模型/引用目录端点见 {@link MeController}。
+ *
+ * <p>[adapt] P2-srv me 语义归位:workspace / state-cleanup 为<strong>应用级</strong>
+ * 配置,已迁 {@code /ia/api/v1/admin/workspace*} 与
+ * {@code /ia/api/v1/admin/state-cleanup}(X-IA-Admin-Key 守卫,旧 /me 路径删除);
+ * 本控制器仅保留按 {@code requireCurrentUserId()} 归属的用户级数据
+ * (skills/mcp)。SDK me.ts 消费的 {@code /me/models}、{@code /me/reference-options}
+ * 见 MeController,本控制器端点 SDK 暂未消费、契约路径不变。
  */
 @Tag(name = "智能体配置")
 @RestController
@@ -60,84 +53,10 @@ import static com.inneragent.platform.security.SecurityUtils.requireCurrentUserI
 @RequiredArgsConstructor
 public class AgentConfigurationController {
 
-    private final AgentWorkspaceConfigService workspaceConfigService;
-    private final AgentWorkspaceMigrationService migrationService;
     private final AgentUserSkillService userSkillService;
     private final AgentSkillImportService skillImportService;
     private final AgentMcpServerService mcpServerService;
     private final AgentUserMcpRuntimeRegistry userMcpRuntimeRegistry;
-    private final AgentStateCleanupPolicyService stateCleanupPolicyService;
-
-    @GetMapping("/state-cleanup")
-    @Operation(summary = "获取 AgentState 清理配置")
-    public CommonResult<AgentStateCleanupPolicyRespVO> stateCleanupPolicy() {
-        AgentStateCleanupPolicy policy = stateCleanupPolicyService.getCurrent();
-        return success(toStateCleanupResponse(policy));
-    }
-
-    @PutMapping("/state-cleanup")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "更新 AgentState 清理配置")
-    public CommonResult<AgentStateCleanupPolicyRespVO> updateStateCleanupPolicy(
-            @Valid @RequestBody AgentStateCleanupPolicySaveReqVO request) {
-        AgentStateCleanupPolicy policy = stateCleanupPolicyService.update(
-                request.cleanupIntervalDays(), request.retentionDays());
-        return success(toStateCleanupResponse(policy));
-    }
-
-    @GetMapping("/workspace")
-    @Operation(summary = "获取智能体工作空间配置")
-    public CommonResult<AgentWorkspaceConfigRespVO> workspace() {
-        AgentWorkspaceConfig config = workspaceConfigService.getCurrent();
-        AgentWorkspaceConfigService.WorkspaceUsage usage = workspaceConfigService.usage();
-        return success(new AgentWorkspaceConfigRespVO(
-                config.getBackendType(),
-                config.getStorageConfigId(),
-                config.getLocalPath(),
-                config.getMigrationStatus(),
-                config.getActiveMigrationId(),
-                usage.entryCount(),
-                usage.contentBytes(),
-                migrationService.latest()));
-    }
-
-    @PostMapping("/workspace/test")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "测试智能体工作空间目标存储")
-    public CommonResult<Boolean> testWorkspace(@Valid @RequestBody AgentWorkspaceMigrateReqVO request) {
-        migrationService.test(request.backendType(), request.storageConfigId(), request.localPath());
-        return success(true);
-    }
-
-    @PostMapping("/workspace/migrations")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "迁移并切换智能体工作空间存储")
-    public CommonResult<Long> migrateWorkspace(@Valid @RequestBody AgentWorkspaceMigrateReqVO request) {
-        return success(migrationService.start(
-                request.backendType(), request.storageConfigId(), request.localPath()));
-    }
-
-    @GetMapping("/workspace/migrations/{id}")
-    @Operation(summary = "获取智能体工作空间迁移进度")
-    public CommonResult<AgentWorkspaceMigration> migration(@PathVariable Long id) {
-        return success(migrationService.get(id));
-    }
-
-    @PostMapping("/workspace/migrations/{id}/rollback")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "回滚已完成的智能体工作空间迁移")
-    public CommonResult<Boolean> rollbackWorkspace(@PathVariable Long id) {
-        migrationService.rollback(id);
-        return success(true);
-    }
-
-    @PostMapping("/workspace/migrations/{id}/dismiss-failure")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "解除失败迁移对工作空间写入的锁定")
-    public CommonResult<Boolean> dismissWorkspaceMigrationFailure(@PathVariable Long id) {
-        migrationService.dismissFailure(id);
-        return success(true);
-    }
 
     @GetMapping("/skills")
     @Operation(summary = "获取当前用户的自定义 Skill")
@@ -225,18 +144,5 @@ public class AgentConfigurationController {
         AgentMcpTestRespVO result = userMcpRuntimeRegistry.test(server);
         mcpServerService.recordTest(userId, id, result.success(), result.message());
         return success(result);
-    }
-
-    private AgentStateCleanupPolicyRespVO toStateCleanupResponse(
-            AgentStateCleanupPolicy policy) {
-        return new AgentStateCleanupPolicyRespVO(
-                policy.getCleanupIntervalDays(),
-                policy.getRetentionDays(),
-                toInstant(policy.getNextCleanupAt()),
-                toInstant(policy.getLastCleanupAt()));
-    }
-
-    private Instant toInstant(LocalDateTime value) {
-        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 }

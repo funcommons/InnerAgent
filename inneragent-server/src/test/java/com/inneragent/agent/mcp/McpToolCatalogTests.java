@@ -5,6 +5,7 @@ import com.inneragent.platform.toolhub.ToolGrantService;
 import com.inneragent.platform.toolhub.ToolRegistryEntry;
 import com.inneragent.platform.toolhub.ToolRegistryService;
 import com.inneragent.platform.toolhub.mapper.ToolRegistryMapper;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,8 +22,21 @@ import static org.mockito.Mockito.when;
 /**
  * McpToolCatalog 测试(P1-T2a):注册表聚合、注解可信采信(V15)、
  * caffeine 缓存与注册变更失效、授权 granted 标注。
+ *
+ * <p>P2-srv U1 遗留修复:load 显式按 app_id 过滤(SQL eq + 内存兜底过滤),
+ * 不再单靠 AppTenantLineInnerInterceptor 行级注入——拦截器被绕过/直连 mapper
+ * 时目录也不串应用。
  */
 class McpToolCatalogTests {
+
+    @BeforeAll
+    static void initMybatisPlusTableInfo() {
+        // LambdaQueryWrapper 列名解析(sql segment)需要实体的 TableInfo 缓存
+        com.baomidou.mybatisplus.core.metadata.TableInfoHelper.initTableInfo(
+                new org.apache.ibatis.builder.MapperBuilderAssistant(
+                        new com.baomidou.mybatisplus.core.MybatisConfiguration(), ""),
+                ToolRegistryEntry.class);
+    }
 
     private ToolRegistryMapper registryMapper;
     private ToolGrantService grantService;
@@ -42,6 +56,7 @@ class McpToolCatalogTests {
     private static ToolRegistryEntry hostTool() {
         ToolRegistryEntry entry = new ToolRegistryEntry();
         entry.setId(1L);
+        entry.setAppId(1L);
         entry.setServerKey("crm");
         entry.setToolName("list_users");
         entry.setFqn("mcp__crm__list_users");
@@ -59,6 +74,7 @@ class McpToolCatalogTests {
     private static ToolRegistryEntry thirdPartyTool() {
         ToolRegistryEntry entry = new ToolRegistryEntry();
         entry.setId(2L);
+        entry.setAppId(1L);
         entry.setServerKey("third-crm");
         entry.setToolName("export_users");
         entry.setFqn("mcp__third-crm__export_users");
@@ -112,6 +128,7 @@ class McpToolCatalogTests {
 
         ToolRegistryEntry scopeTool = new ToolRegistryEntry();
         scopeTool.setId(3L);
+        scopeTool.setAppId(1L);
         scopeTool.setToolName("resolve_scope");
         scopeTool.setFqn("mcp__crm__resolve_scope");
         scopeTool.setSource(ToolRegistryService.SOURCE_HOST_APP);
@@ -133,5 +150,49 @@ class McpToolCatalogTests {
         assertThat(entries.stream()
                 .filter(entry -> entry.toolName().equals("export_users"))
                 .findFirst().orElseThrow().granted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("U1:load 查询显式携带 app_id 条件(不单靠行级拦截器)")
+    @SuppressWarnings("unchecked")
+    void loadQueryFiltersByAppIdExplicitly() {
+        catalog.catalog(1L);
+
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ToolRegistryEntry>>
+                wrapper = org.mockito.ArgumentCaptor.forClass(
+                com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class);
+        Mockito.verify(registryMapper).selectList(wrapper.capture());
+        // 显式 app_id 条件进入 SQL 段(单测经 TableInfo 缓存解析 lambda 列名)
+        assertThat(wrapper.getValue().getSqlSegment())
+                .containsPattern("(?i)(^|\\W)app_id\\s*=")
+                .containsPattern("(?i)(^|\\W)enabled\\s*=");
+        assertThat(wrapper.getValue().getParamNameValuePairs().values())
+                .contains(1L, Boolean.TRUE);
+    }
+
+    @Test
+    @DisplayName("U1:内存兜底过滤——他应用/无 app_id 行即使被 mapper 返回也进不了目录")
+    @SuppressWarnings("unchecked")
+    void loadDropsRowsOfOtherAppsEvenWhenMapperReturnsThem() {
+        ToolRegistryEntry foreign = thirdPartyTool();
+        foreign.setId(9L);
+        foreign.setAppId(2L); // 他应用同名 FQN 行
+        ToolRegistryEntry unscoped = hostTool();
+        unscoped.setId(8L);
+        unscoped.setAppId(null); // 异常无归属行(ia_tool_registry 唯一键 (app_id,fqn) 不应出现)
+        when(registryMapper.selectList(any())).thenReturn(List.of(hostTool(), foreign, unscoped));
+        catalog.invalidate(1L);
+
+        List<McpToolCatalogEntry> entries = catalog.catalog(1L);
+
+        assertThat(entries)
+                .extracting(McpToolCatalogEntry::toolName)
+                .containsExactly("list_users");
+        // 他应用目录视角仍只见他应用行
+        when(registryMapper.selectList(any())).thenReturn(List.of(hostTool(), foreign, unscoped));
+        catalog.invalidate(2L);
+        assertThat(catalog.catalog(2L))
+                .extracting(McpToolCatalogEntry::toolName)
+                .containsExactly("export_users");
     }
 }

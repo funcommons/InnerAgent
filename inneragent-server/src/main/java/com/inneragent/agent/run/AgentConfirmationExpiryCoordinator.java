@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.inneragent.platform.common.BusinessException;
+import org.springframework.beans.factory.ObjectProvider;
 import com.inneragent.agent.entity.AgentEvent;
 import com.inneragent.agent.entity.AgentRun;
 import com.inneragent.platform.enums.ai.AgentRunStatus;
@@ -28,12 +29,23 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Ends an expired confirmation when application code observes its deadline. */
+/**
+ * Ends an expired confirmation when application code observes its deadline.
+ *
+ * <p>[adapt] P2-srv U1 遗留补强:过期裁决写审计 —— 语义裁定
+ * <strong>过期 = denied,decision_source 独立值 {@code expired}</strong>
+ * ({@link com.inneragent.platform.toolhub.ToolDecisionSource#EXPIRED}),
+ * 与用户实弹确认(live-confirm)区分,高危「100% 确认」审计可证明超时
+ * 未发生用户批准。逐工具在终止决策前追加 {@code ia_audit_log},失败即业务失败
+ * (fail-closed,过期终止不生效,与确认流 U1/D3 同口径)。
+ */
 @Component
 public final class AgentConfirmationExpiryCoordinator {
 
     public static final String REASON = "CONFIRMATION_EXPIRED";
     public static final String MESSAGE = "审批时间已结束，相关操作未执行。";
+
+    private static final String DECISION_DENIED = "denied";
 
     private final AgentRunMapper runMapper;
     private final AgentEventMapper eventMapper;
@@ -42,6 +54,8 @@ public final class AgentConfirmationExpiryCoordinator {
     private final AgentMessageProjectionService projections;
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final AgentRuntimeSchedulers schedulers;
+    private final com.inneragent.platform.toolhub.ToolAuditService audits;
+    private final ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs;
 
     public AgentConfirmationExpiryCoordinator(
             AgentRunMapper runMapper,
@@ -50,7 +64,9 @@ public final class AgentConfirmationExpiryCoordinator {
             RunTerminalCoordinator terminals,
             AgentMessageProjectionService projections,
             AgentEventEnvelopeSanitizer sanitizer,
-            AgentRuntimeSchedulers schedulers) {
+            AgentRuntimeSchedulers schedulers,
+            com.inneragent.platform.toolhub.ToolAuditService audits,
+            ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs) {
         this.runMapper = Objects.requireNonNull(runMapper, "runMapper must not be null");
         this.eventMapper = Objects.requireNonNull(
                 eventMapper, "eventMapper must not be null");
@@ -62,6 +78,9 @@ public final class AgentConfirmationExpiryCoordinator {
         this.sanitizer = Objects.requireNonNull(sanitizer, "sanitizer must not be null");
         this.schedulers = Objects.requireNonNull(
                 schedulers, "schedulers must not be null");
+        this.audits = Objects.requireNonNull(audits, "audits must not be null");
+        this.toolCatalogs = Objects.requireNonNull(
+                toolCatalogs, "toolCatalogs must not be null");
     }
 
     public Mono<Boolean> expireAuthorized(
@@ -113,6 +132,7 @@ public final class AgentConfirmationExpiryCoordinator {
                         "Expired confirmation has no durable candidate");
             }
             ArrayNode pendingToolCalls = pendingToolCalls(candidate);
+            auditExpiredDecision(run, pendingToolCalls);
             ObjectNode payload = JsonNodeFactory.instance.objectNode()
                     .put("outputType", AgentTerminalOutputType.CANCELLED.name())
                     .put("cancellationReason", REASON)
@@ -166,6 +186,49 @@ public final class AgentConfirmationExpiryCoordinator {
             throw new IllegalStateException(
                     "Confirmation candidate pending tool calls are invalid", invalidJson);
         }
+    }
+
+    /**
+     * [adapt] P2-srv U1:过期裁决逐工具追加审计(终止决策前,fail-closed)。
+     * decision=denied;decision_source=expired(V8/ToolDecisionSource.EXPIRED);
+     * 入参快照取待审批载荷的 argumentsPreview(写入侧已做预览/打码);
+     * conversationId 取运行行。任何写入失败沿 journal 上抛,终止决策不生效。
+     */
+    private void auditExpiredDecision(AgentRun run, ArrayNode pendingToolCalls) {
+        long appId = com.inneragent.platform.context.AppContext.currentOrDefault();
+        for (JsonNode toolCall : pendingToolCalls) {
+            String toolName = toolCall.path("toolName").asText(null);
+            if (toolName == null || toolName.isBlank()) {
+                continue;
+            }
+            audits.append(new com.inneragent.platform.toolhub.ToolAuditService.ToolAuditEntry(
+                    appId,
+                    run.getTenantId(),
+                    run.getUserId(),
+                    run.getConversationId(),
+                    run.getRunId(),
+                    toolName,
+                    DECISION_DENIED,
+                    com.inneragent.platform.toolhub.ToolDecisionSource.EXPIRED.code(),
+                    catalogRiskLevel(toolName),
+                    toolCall.path("argumentsPreview").asText(null),
+                    REASON,
+                    null,
+                    null));
+        }
+    }
+
+    /** 工具风险等级:注册目录(ia_tool_registry)可查则落目录值,否则留空。 */
+    private String catalogRiskLevel(String toolNameOrFqn) {
+        com.inneragent.agent.mcp.McpToolCatalog catalog = toolCatalogs.getIfAvailable();
+        if (catalog == null) {
+            return null;
+        }
+        return catalog.find(
+                        com.inneragent.platform.context.AppContext.currentOrDefault(),
+                        toolNameOrFqn)
+                .map(com.inneragent.agent.mcp.McpToolCatalogEntry::riskLevel)
+                .orElse(null);
     }
 
     private boolean expired(AgentRun run) {

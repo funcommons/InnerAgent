@@ -7,9 +7,6 @@ import com.inneragent.agent.mcp.AgentMcpServerService;
 import com.inneragent.agent.mcp.AgentUserMcpRuntimeRegistry;
 import com.inneragent.agent.skill.AgentSkillImportService;
 import com.inneragent.agent.skill.AgentUserSkillService;
-import com.inneragent.agent.state.AgentStateCleanupPolicyService;
-import com.inneragent.agent.workspace.AgentWorkspaceConfigService;
-import com.inneragent.agent.workspace.AgentWorkspaceMigrationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -27,14 +24,13 @@ import static org.mockito.Mockito.when;
 class AgentConfigurationControllerSkillImportTests {
 
     private final AgentSkillImportService importService = mock(AgentSkillImportService.class);
+    // P2-srv me 语义归位:控制器仅剩用户级 skills/mcp 依赖(workspace/state-cleanup
+    // 迁 AdminWorkspaceController / AdminStateCleanupController)
     private final AgentConfigurationController controller = new AgentConfigurationController(
-            mock(AgentWorkspaceConfigService.class),
-            mock(AgentWorkspaceMigrationService.class),
             mock(AgentUserSkillService.class),
             importService,
             mock(AgentMcpServerService.class),
-            mock(AgentUserMcpRuntimeRegistry.class),
-            mock(AgentStateCleanupPolicyService.class));
+            mock(AgentUserMcpRuntimeRegistry.class));
 
     @AfterEach
     void clearSecurityContext() {

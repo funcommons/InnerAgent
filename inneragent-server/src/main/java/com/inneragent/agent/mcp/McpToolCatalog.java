@@ -139,11 +139,17 @@ public class McpToolCatalog implements ToolCatalogInvalidator {
     }
 
     private List<McpToolCatalogEntry> load(long appId) {
-        LambdaQueryWrapper<ToolRegistryEntry> query = new LambdaQueryWrapper<ToolRegistryEntry>()
-                .eq(ToolRegistryEntry::getEnabled, true)
-                .orderByAsc(ToolRegistryEntry::getFqn);
-        List<ToolRegistryEntry> rows = registryMapper.selectList(query);
+        // [adapt] P2-srv U1 遗留修复:显式按 app_id 过滤,不再单靠
+        // AppTenantLineInnerInterceptor 行级注入(SQL 条件 + 内存兜底双层),
+        // 拦截器被绕过/直连 mapper 时目录也不串应用;appId 由调用方按
+        // AppContext.currentOrDefault()(embed 认证写入)解析。
+        List<ToolRegistryEntry> rows = registryMapper.selectList(
+                new LambdaQueryWrapper<ToolRegistryEntry>()
+                        .eq(ToolRegistryEntry::getAppId, appId)
+                        .eq(ToolRegistryEntry::getEnabled, true)
+                        .orderByAsc(ToolRegistryEntry::getFqn));
         return rows.stream()
+                .filter(entry -> entry.getAppId() != null && entry.getAppId() == appId)
                 .map(entry -> McpToolCatalogEntry.of(
                         entry,
                         ToolAnnotations.parse(objectMapper, entry.getAnnotationsJson()),

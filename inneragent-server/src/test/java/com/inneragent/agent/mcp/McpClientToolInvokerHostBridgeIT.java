@@ -353,6 +353,8 @@ class McpClientToolInvokerHostBridgeIT {
     private static ToolRegistryEntry entry(String toolName, boolean readOnlyHint, int port) {
         ToolRegistryEntry entry = new ToolRegistryEntry();
         entry.setId(11L);
+        // P2-srv U1:目录 load 显式按 app_id 过滤,fixture 须归属缺省应用 1
+        entry.setAppId(1L);
         entry.setServerKey("host");
         entry.setToolName(toolName);
         entry.setFqn(ToolRegistryService.fqnOf("host", toolName));

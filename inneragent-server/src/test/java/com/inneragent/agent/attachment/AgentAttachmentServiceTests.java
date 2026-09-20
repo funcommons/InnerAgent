@@ -85,7 +85,10 @@ class AgentAttachmentServiceTests {
         String resourceUrl = service.store(
                 USER_ID, "photo.PNG", "image/png", new byte[]{1, 2, 3}, 7L, "base64");
 
-        assertThat(resourceUrl).isEqualTo("/ia/api/v1/attachments/91");
+        // P2-srv 最终约定:resourceUrl 为 API 根相对路径(/attachments/{id})。
+        // SDK resolveMediaUrl 对 / 开头路径拼接 `${getBaseURL()}${url}`(默认
+        // /ia/api/v1),拼出 /ia/api/v1/attachments/91;若服务端回完整前缀会双前缀。
+        assertThat(resourceUrl).isEqualTo("/attachments/91");
         ArgumentCaptor<AgentAttachment> row = ArgumentCaptor.forClass(AgentAttachment.class);
         verify(attachmentMapper).insert(row.capture());
         assertThat(row.getValue().getUserId()).isEqualTo(USER_ID);
@@ -94,6 +97,59 @@ class AgentAttachmentServiceTests {
         assertThat(row.getValue().getTransport()).isEqualTo("base64");
         assertThat(row.getValue().getSizeBytes()).isEqualTo(3L);
         assertThat(row.getValue().getPayload()).isEqualTo("aGVsbG8=");
+    }
+
+    @Test
+    void readsBackAttachmentBytesForOwningUser() {
+        when(attachmentMapper.selectById(91L)).thenReturn(attachment(91L, USER_ID));
+        when(payloadService.readBytes(any(AgentWorkspaceStoredPayload.class)))
+                .thenReturn(new byte[]{1, 2, 3});
+
+        AgentAttachmentService.ReadAttachment read = service.read(USER_ID, 91L);
+
+        assertThat(read.bytes()).containsExactly(1, 2, 3);
+        assertThat(read.mimeType()).isEqualTo("image/png");
+        assertThat(read.fileName()).isEqualTo("photo.png");
+        assertThat(read.sizeBytes()).isEqualTo(3L);
+        ArgumentCaptor<AgentWorkspaceStoredPayload> payload =
+                ArgumentCaptor.forClass(AgentWorkspaceStoredPayload.class);
+        verify(payloadService).readBytes(payload.capture());
+        assertThat(payload.getValue().backendType()).isEqualTo(AgentWorkspaceBackend.DATABASE);
+        assertThat(payload.getValue().databasePayload()).isEqualTo("aGVsbG8=");
+    }
+
+    @Test
+    void readReturns404ForMissingOrForeignAttachment() {
+        // 不存在 → 404
+        when(attachmentMapper.selectById(404L)).thenReturn(null);
+        assertThatThrownBy(() -> service.read(USER_ID, 404L))
+                .isInstanceOfSatisfying(BusinessException.class, error ->
+                        assertThat(error.getCode()).isEqualTo(404));
+
+        // 他人附件 → 同样 404(不泄露存在性)
+        when(attachmentMapper.selectById(91L)).thenReturn(attachment(91L, 999L));
+        assertThatThrownBy(() -> service.read(USER_ID, 91L))
+                .isInstanceOfSatisfying(BusinessException.class, error ->
+                        assertThat(error.getCode()).isEqualTo(404));
+
+        verify(payloadService, never()).readBytes(any());
+    }
+
+    private AgentAttachment attachment(Long id, long userId) {
+        return AgentAttachment.builder()
+                .id(id)
+                .userId(userId)
+                .modelId(7L)
+                .fileName("photo.png")
+                .mimeType("image/png")
+                .inputType("image")
+                .transport("base64")
+                .sizeBytes(3L)
+                .backendType(AgentWorkspaceBackend.DATABASE)
+                .contentRef(null)
+                .contentSha256("a".repeat(64))
+                .payload("aGVsbG8=")
+                .build();
     }
 
     @Test

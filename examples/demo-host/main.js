@@ -22,6 +22,9 @@ async function bootstrap() {
   sdk.init({
     appKey: 'demo-host',
     baseURL: '/ia/api/v1',
+    // [P2 #24] 声明 agentType: 缺省为 'ai_media'(融光工具链), 演示口径为
+    // InnerAgent 'demo'(工具链含 get_current_time 与 mock 写确认链路)。
+    agentType: 'demo',
     tokenGetter: async () => null, // 本地联调: 服务端匿名演示头兜底; 生产替换为宿主签发
     // theme: { '--ia-primary': '#0ea5e9' }, // 亦可用 init({ theme }) 全局注入令牌
   })

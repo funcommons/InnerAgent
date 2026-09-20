@@ -30,6 +30,9 @@ cd examples/demo-host && pnpm install && pnpm dev
    - 宿主按钮点击后仍为宿主样式 (无样式泄漏);
    - 「切换 --ia-primary 主题」按钮 → 组件主色实时切换;
    - 输入消息发送 → SSE 流式回复 (需服务端 T3b 就绪);
+   - `main.js` 已声明 `agentType: 'demo'` (SDK 默认 `ai_media`; 演示口径为
+     InnerAgent demo 工具链, 与服务端演示脚本的 `get_current_time`/写确认链路对齐) —
+     DevTools 网络面板确认 `POST /ia/api/v1/runs` 请求体 `agentType === "demo"`;
    - DevTools 中组件内容位于 `#shadow-root` 内。
 
 ## iframe 模式说明

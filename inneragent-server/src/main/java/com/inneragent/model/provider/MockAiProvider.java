@@ -40,6 +40,13 @@ import java.util.concurrent.atomic.AtomicLong;
  *       然后完成。</li>
  * </ol>
  *
+ * <p>[adapt] U1/D2:mock 脚本化——保留既有 get_current_time 行为(无脚本配置时
+ * 语义与 P0 冒烟完全一致),新增「脚本指定工具调用」能力:模型配置
+ * ({@code ia_ai_model.config} JSON,经 {@link AiProviderContext#getConfig()} 注入)
+ * 携带 {@code mockScript} 键即可覆盖首轮脚本,让宿主桥/写确认链路可在无真实
+ * 模型的环境下被脚本化驱动(见 {@link #parseScript} 支持形态;缺省形态为
+ * 「toolkit 第一个工具」)。
+ *
  * <p>启用方式(无需任何开关):{@code ia_model_api_config.platform='mock'} 且
  * {@code text_protocol='mock'},并挂接一条 {@code ia_ai_model} 记录(见
  * {@code V4__demo_seed.sql});模型请求协议解析为 {@code mock} 即命中本 Provider。
@@ -56,7 +63,20 @@ public class MockAiProvider implements AiProvider {
     /** 平台标识;与 ia_model_api_config.platform / text_protocol = 'mock' 对应。 */
     public static final String PLATFORM = "mock";
 
-    /** 脚本会主动调用的内置工具名。 */
+    /**
+     * [adapt] U1/D2:模型配置({@code ia_ai_model.config} JSON)中的 mock 脚本键。
+     * 支持形态见 {@link #parseScript}:字符串工具名、工具名数组(多轮)、
+     * {@code [{"tool":..,"args":{..}}]} 对象数组、{@code {"rounds":[...]}} 包装,
+     * 以及 {@code true}/空数组(=默认调用 toolkit 第一个工具)。缺省(无该键)
+     * 保持既有 get_current_time 脚本不变。
+     */
+    public static final String SCRIPT_CONFIG_KEY = "mockScript";
+
+    static final String SCRIPT_TOOL_FIELD = "tool";
+    static final String SCRIPT_ARGS_FIELD = "args";
+    static final String SCRIPT_ROUNDS_FIELD = "rounds";
+
+    /** 脚本会主动调用的内置工具名(legacy 形态;无脚本配置时保持 P0 行为)。 */
     private static final String TIME_TOOL = "get_current_time";
 
     /** 不可用 get_current_time 时的固定回复(按 P0 任务卡给定文案)。 */
@@ -109,7 +129,10 @@ public class MockAiProvider implements AiProvider {
 
     @Override
     public ChatModelBase createAgentScopeModel(AiProviderContext context) {
-        return new MockChatModelBase(resolveModelName(context));
+        return new MockChatModelBase(
+                resolveModelName(context),
+                parseScript(context == null ? null : context.getConfig()
+                        .get(SCRIPT_CONFIG_KEY)));
     }
 
     @Override
@@ -122,16 +145,100 @@ public class MockAiProvider implements AiProvider {
         return context.getModelName() != null ? context.getModelName() : "mock-text";
     }
 
+    // ------------------------------------------------------------------
+    // [adapt] U1/D2:脚本解析(模型配置 → 有序工具调用脚本)
+    // ------------------------------------------------------------------
+
     /**
-     * 确定性脚本化的 AgentScope 模型:首轮发起 {@code get_current_time} 工具调用,
-     * 看到工具结果后流式输出固定模板文案。无状态、线程安全、完全确定性。
+     * 解析 {@code mockScript} 配置为有序脚本(每轮一个工具调用):
+     * <ul>
+     *   <li>{@code null}/{@code false}/空白 → {@code null}(legacy:get_current_time 脚本);</li>
+     *   <li>{@code true} / 空数组 / 空对象 → 空脚本(默认:toolkit 第一个工具);</li>
+     *   <li>字符串 {@code "tool_a"} → 单轮调用 tool_a;</li>
+     *   <li>数组 → 多轮,元素可为工具名字符串或 {@code {"tool":..,"args":{..}}};</li>
+     *   <li>对象 {@code {"rounds":[...]}} → 同数组;含 {@code "tool"} 键 → 单轮。</li>
+     * </ul>
+     * 非法形态降级为 legacy(不阻断运行),并 WARN 提示。
+     */
+    List<ScriptedCall> parseScript(Object raw) {
+        if (raw == null || Boolean.FALSE.equals(raw)) {
+            return null;
+        }
+        if (Boolean.TRUE.equals(raw)) {
+            return List.of();
+        }
+        if (raw instanceof String name) {
+            return name.isBlank() ? null : List.of(ScriptedCall.of(name.trim()));
+        }
+        if (raw instanceof Map<?, ?> map) {
+            Object rounds = map.get(SCRIPT_ROUNDS_FIELD);
+            if (rounds != null) {
+                return parseScript(rounds);
+            }
+            Object tool = map.get(SCRIPT_TOOL_FIELD);
+            if (tool instanceof String name && !name.isBlank()) {
+                return List.of(ScriptedCall.of(name.trim(), argsOf(map.get(SCRIPT_ARGS_FIELD))));
+            }
+            return List.of();
+        }
+        if (raw instanceof List<?> items) {
+            List<ScriptedCall> calls = new ArrayList<>();
+            for (Object item : items) {
+                if (item instanceof String name && !name.isBlank()) {
+                    calls.add(ScriptedCall.of(name.trim()));
+                } else if (item instanceof Map<?, ?> call) {
+                    Object tool = call.get(SCRIPT_TOOL_FIELD);
+                    if (tool instanceof String name && !name.isBlank()) {
+                        calls.add(ScriptedCall.of(
+                                name.trim(), argsOf(call.get(SCRIPT_ARGS_FIELD))));
+                    }
+                }
+            }
+            return List.copyOf(calls);
+        }
+        log.warn("[mock] mockScript 配置形态无法解析,回退 legacy 脚本: {}", raw);
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> argsOf(Object raw) {
+        if (raw instanceof Map<?, ?> args) {
+            return (Map<String, Object>) args;
+        }
+        return Map.of();
+    }
+
+    /** 脚本中的一轮工具调用(工具名 + 确定性入参)。 */
+    record ScriptedCall(String toolName, Map<String, Object> args) {
+
+        ScriptedCall {
+            toolName = Objects.requireNonNull(toolName, "toolName must not be null");
+            args = args == null ? Map.of() : Map.copyOf(args);
+        }
+
+        static ScriptedCall of(String toolName) {
+            return new ScriptedCall(toolName, Map.of());
+        }
+
+        static ScriptedCall of(String toolName, Map<String, Object> args) {
+            return new ScriptedCall(toolName, args);
+        }
+    }
+
+    /**
+     * 确定性脚本化的 AgentScope 模型:按脚本发起工具调用,看到工具结果后流式输出
+     * 固定模板文案。无状态、线程安全、完全确定性。脚本为空(null)时保持
+     * legacy 形态:get_current_time 优先,结果回灌后按固定模板收尾。
      */
     private final class MockChatModelBase extends ChatModelBase {
 
         private final String modelName;
+        /** [adapt] U1/D2:脚本(可能为 null=legacy);工具名在 toolkit 缺失时按轮跳过。 */
+        private final List<ScriptedCall> script;
 
-        private MockChatModelBase(String modelName) {
+        private MockChatModelBase(String modelName, List<ScriptedCall> script) {
             this.modelName = Objects.requireNonNull(modelName, "modelName must not be null");
+            this.script = script;
         }
 
         @Override
@@ -143,25 +250,62 @@ public class MockAiProvider implements AiProvider {
         protected Flux<ChatResponse> doStream(
                 List<Msg> messages, List<ToolSchema> tools, GenerateOptions options) {
             return Flux.defer(() -> {
-                String toolResultText = firstToolResultText(messages);
-                if (toolResultText == null && hasTimeTool(tools)) {
-                    return Flux.just(toolCallResponse());
+                List<String> toolResults = toolResultTexts(messages);
+                String lastToolResult = toolResults.isEmpty() ? null : toolResults.getLast();
+                if (script == null) {
+                    // legacy:首轮 get_current_time;见过任何工具结果即收尾
+                    if (lastToolResult == null && hasTimeTool(tools)) {
+                        return Flux.just(toolCallResponse(TIME_TOOL, Map.of()));
+                    }
+                    return answerFlux(lastToolResult);
                 }
-                return answerFlux(toolResultText);
+                return scriptedFlux(toolResults, tools, lastToolResult);
             });
         }
 
-        private boolean hasTimeTool(List<ToolSchema> tools) {
-            return tools != null && tools.stream()
-                    .anyMatch(tool -> TIME_TOOL.equals(tool.getName()));
+        /** [adapt] U1/D2:脚本形态——第 N 轮(已见 N 个工具结果)调用脚本第 N 项。 */
+        private Flux<ChatResponse> scriptedFlux(
+                List<String> toolResults, List<ToolSchema> tools, String lastToolResult) {
+            int round = toolResults.size();
+            ScriptedCall call = round < script.size()
+                    ? script.get(round)
+                    : null;
+            if (call == null && script.isEmpty() && round == 0) {
+                // 缺省形态:toolkit 第一个工具
+                String first = firstToolkitTool(tools);
+                if (first != null) {
+                    call = ScriptedCall.of(first);
+                }
+            }
+            if (call != null) {
+                if (hasTool(tools, call.toolName())) {
+                    return Flux.just(toolCallResponse(call.toolName(), call.args()));
+                }
+                log.warn("[mock] 脚本第 {} 轮工具 {} 不在 toolkit,跳过工具调用直接作答",
+                        round + 1, call.toolName());
+            }
+            return answerFlux(lastToolResult);
         }
 
-        /** 首轮脚本:一次 get_current_time 工具调用。 */
-        private ChatResponse toolCallResponse() {
+        private boolean hasTimeTool(List<ToolSchema> tools) {
+            return hasTool(tools, TIME_TOOL);
+        }
+
+        private boolean hasTool(List<ToolSchema> tools, String toolName) {
+            return tools != null && tools.stream()
+                    .anyMatch(tool -> toolName.equals(tool.getName()));
+        }
+
+        private String firstToolkitTool(List<ToolSchema> tools) {
+            return tools == null || tools.isEmpty() ? null : tools.getFirst().getName();
+        }
+
+        /** 一轮脚本:发起指定工具调用(确定性入参)。 */
+        private ChatResponse toolCallResponse(String toolName, Map<String, Object> input) {
             ToolUseBlock toolCall = ToolUseBlock.builder()
                     .id("mock-call-" + responseSequence.incrementAndGet())
-                    .name(TIME_TOOL)
-                    .input(Map.of())
+                    .name(toolName)
+                    .input(input)
                     .build();
             return ChatResponse.builder()
                     .id("mock-resp-" + responseSequence.incrementAndGet())
@@ -171,7 +315,7 @@ public class MockAiProvider implements AiProvider {
                     .build();
         }
 
-        /** 次轮脚本:把工具结果嵌入固定模板,按 delta 流式输出后完成。 */
+        /** 收尾脚本:把最近一次工具结果嵌入固定模板,按 delta 流式输出后完成。 */
         private Flux<ChatResponse> answerFlux(String toolResultText) {
             List<String> deltas = toolResultText == null
                     ? FALLBACK_DELTAS
@@ -203,7 +347,7 @@ public class MockAiProvider implements AiProvider {
                 deltas.add(toolResult.getStr("time", "") + "(时区 " + toolResult.getStr("timezone", "") + ")");
                 deltas.add(",来自 " + TIME_TOOL + " 工具。");
             } else {
-                deltas.add(TIME_TOOL + " 工具返回异常: ");
+                deltas.add("工具执行返回: ");
                 deltas.add(abbreviate(toolResultText));
             }
             deltas.add("(本回复由 mock 模型脚本生成,仅用于 P0 冒烟与测试,生产禁用。)");
@@ -224,13 +368,15 @@ public class MockAiProvider implements AiProvider {
         }
 
         /**
-         * 扫描会话消息,返回第一个工具结果的文本;没有工具结果返回 null。
-         * mock 脚本以“是否已见过工具结果”作为轮次判据。
+         * 扫描会话消息,返回全部工具结果文本(按出现顺序);无工具结果返回空列表。
+         * legacy 形态以「是否已见过工具结果」为轮次判据;脚本形态以结果个数
+         * 定位下一轮。
          */
-        private String firstToolResultText(List<Msg> messages) {
+        private List<String> toolResultTexts(List<Msg> messages) {
             if (messages == null) {
-                return null;
+                return List.of();
             }
+            List<String> texts = new ArrayList<>();
             for (Msg message : messages) {
                 if (!message.hasContentBlocks(ToolResultBlock.class)) {
                     continue;
@@ -240,12 +386,12 @@ public class MockAiProvider implements AiProvider {
                         if (output instanceof TextBlock textBlock
                                 && textBlock.getText() != null
                                 && !textBlock.getText().isBlank()) {
-                            return textBlock.getText();
+                            texts.add(textBlock.getText());
                         }
                     }
                 }
             }
-            return null;
+            return List.copyOf(texts);
         }
     }
 }

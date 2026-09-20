@@ -49,6 +49,25 @@
 				<artifactId>swagger-annotations</artifactId>
 				<version>2.2.43</version>
 			</dependency>
+			<!-- okhttp/okio 混栈修复(P2 台账项,18a):agentscope-core 2.0.0 传递
+				okhttp-jvm 5.3.2(内部连接链 BufferedSocketKt 调 okio.Okio.socket,
+				返回多平台 okio.Socket 型,要求 okio-jvm 3.16.4),而 okhttp 4.12.0 /
+				dashscope-sdk-java 2.22.16 把 okio 邻近调解压到 3.6.0——该版 okio.Okio
+				facade 无 socket(Socket) 静态方法,真实 socket 连接即抛
+				NoSuchMethodError: okio.Okio.socket(openai_compatible 等 provider
+				拉远程模型 500)。全树统一钉 okio 3.16.4(okhttp-jvm 5.3.2 声明的版本;
+				okio 3.x 对 4.12.0 所用 buffer/sink/source API 向后兼容,双 okio 工件
+				okio/okio-jvm 同时钉,避免 route 器各取一版)。 -->
+			<dependency>
+				<groupId>com.squareup.okio</groupId>
+				<artifactId>okio</artifactId>
+				<version>3.16.4</version>
+			</dependency>
+			<dependency>
+				<groupId>com.squareup.okio</groupId>
+				<artifactId>okio-jvm</artifactId>
+				<version>3.16.4</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 

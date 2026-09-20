@@ -19,21 +19,33 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * embed token 验签矩阵单测(P1-T1,开发计划 §6 令牌矩阵):
- * 有效 / 过期 / 篡改签名 / 错 appKey / alg=none / 缺 sub。
+ * 有效 / 过期 / 篡改签名 / 错 appKey / alg=none / 缺 sub / 轮换宽限期双 key。
  * 内存认钥假实现,不依赖 DB。
  */
 class EmbedTokenVerifierTests {
 
     private static final String APP_KEY = "demo-app";
 
+    /** 轮换前的旧 keypair(P2-key 宽限期验签链用) */
+    private static final java.security.KeyPair PREVIOUS_KEY =
+            EmbedTokenTestSupport.generateKeyPair();
+
     private EmbedTokenVerifier verifier;
 
     @BeforeEach
     void setUp() {
-        // 内存 ia_app 假实现:仅注册 demo-app → 测试公钥
+        // 内存 ia_app 假实现:仅注册 demo-app → 测试公钥(未轮换,无 previous)
         verifier = new EmbedTokenVerifier(new InMemoryAppSigningKeys(Map.of(
                 APP_KEY, new AppSigningKeyProvider.AppSigningKey(
-                        42L, APP_KEY, EmbedTokenTestSupport.publicKey()))));
+                        42L, APP_KEY, EmbedTokenTestSupport.publicKey(), null))));
+    }
+
+    /** 组装带轮换宽限公钥的验证器(previous 供宽限期内存量令牌验签) */
+    private EmbedTokenVerifier verifierWithPreviousKey() {
+        return new EmbedTokenVerifier(new InMemoryAppSigningKeys(Map.of(
+                APP_KEY, new AppSigningKeyProvider.AppSigningKey(
+                        42L, APP_KEY, EmbedTokenTestSupport.publicKey(),
+                        (RSAPublicKey) PREVIOUS_KEY.getPublic()))));
     }
 
     @Test
@@ -175,6 +187,46 @@ class EmbedTokenVerifierTests {
                 .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> verifier.verify("  "))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("轮换宽限期内:旧私钥签发的存量令牌经 previous key 验签通过")
+    void oldKeyTokenPassesWithinGrace() {
+        // 宿主轮换公钥前签发的存量 token(旧私钥),宽限期内 provider 仍暴露旧公钥
+        String legacyToken = EmbedTokenTestSupport.signWith(PREVIOUS_KEY, Map.of(
+                "iss", APP_KEY,
+                "sub", "10001",
+                "exp", new Date(System.currentTimeMillis() + 600_000)));
+
+        EmbedTokenVerifier.EmbedTokenClaims claims =
+                verifierWithPreviousKey().verify(legacyToken);
+
+        assertThat(claims.appId()).isEqualTo(42L);
+        assertThat(claims.appKey()).isEqualTo(APP_KEY);
+        assertThat(claims.userId()).isEqualTo(10001L);
+    }
+
+    @Test
+    @DisplayName("宽限期外(provider 不再暴露 previous):旧私钥存量令牌拒绝")
+    void oldKeyTokenRejectedBeyondGrace() {
+        String legacyToken = EmbedTokenTestSupport.signWith(PREVIOUS_KEY, Map.of(
+                "iss", APP_KEY,
+                "sub", "10001",
+                "exp", new Date(System.currentTimeMillis() + 600_000)));
+
+        // 未轮换/超宽限:previousPublicKey 为 null,只认当前公钥
+        assertThatThrownBy(() -> verifier.verify(legacyToken))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("签名不匹配");
+    }
+
+    @Test
+    @DisplayName("宽限链不放大伪造面:伪造签名在 current 与 previous 上均不匹配 → 拒绝")
+    void forgedTokenRejectedEvenWithPreviousKey() {
+        assertThatThrownBy(() -> verifierWithPreviousKey()
+                .verify(EmbedTokenTestSupport.tokenSignedWithForeignKey(APP_KEY, 10001L)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("签名不匹配");
     }
 
     /**

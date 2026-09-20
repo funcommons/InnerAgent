@@ -1,13 +1,14 @@
 package com.inneragent.server.auth;
 
 import com.inneragent.platform.common.BusinessException;
+import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
+import lombok.extern.slf4j.Slf4j;
 
-import java.security.PublicKey;
 import java.text.ParseException;
 import java.time.Instant;
 import java.util.Date;
@@ -24,7 +25,13 @@ import java.util.Date;
  *   <li>exp 必须存在且未过期(建议 12h)。</li>
  * </ul>
  * 任一不满足即拒绝(401 语义异常)。
+ *
+ * <p><strong>轮换宽限验签链(P2-key)</strong>:当前公钥验签失败时,若 provider
+ * 暴露了宽限期内的上一代公钥(ia_app.previous_sign_public_key,grace 默认 72h)
+ * 则以旧 key 兜底再验一次;命中即通过并以 INFO 登记(宿主在宽限窗口内完成
+ * 换签,存量用户不被轮换下线)。伪造签名在两把 key 上都不匹配,宽限链不放大伪造面。
  */
+@Slf4j
 public class EmbedTokenVerifier {
 
     private static final JWSAlgorithm REQUIRED_ALGORITHM = JWSAlgorithm.RS256;
@@ -72,20 +79,37 @@ public class EmbedTokenVerifier {
         } catch (BusinessException unknownApp) {
             throw unknownApp;
         }
-        boolean signatureValid;
-        try {
-            signatureValid = jwt.verify(new RSASSAVerifier(signingKey.publicKey()));
-        } catch (com.nimbusds.jose.JOSEException verifyFailure) {
-            throw new BusinessException(401, "embed token 验签失败");
+        boolean signatureValid = verifyWith(jwt, signingKey.publicKey());
+        boolean verifiedWithPreviousKey = false;
+        if (!signatureValid && signingKey.previousPublicKey() != null) {
+            // 轮换宽限期:当前 key 不匹配 → 旧 key 兜底(仅 provider 在宽限期内才暴露)
+            signatureValid = verifyWith(jwt, signingKey.previousPublicKey());
+            verifiedWithPreviousKey = signatureValid;
         }
         if (!signatureValid) {
             throw new BusinessException(401, "embed token 签名不匹配");
+        }
+        if (verifiedWithPreviousKey) {
+            log.info("embed token 以轮换宽限期内的旧公钥验签通过(旧 key 验签): "
+                            + "appId={}, appKey={}, sub={}",
+                    signingKey.appId(), signingKey.appKey(), claims.getSubject());
         }
         Long userId = requireUserId(claims);
         long tenantId = optionalTenantId(claims);
         requireNotExpired(claims);
         return new EmbedTokenClaims(
                 signingKey.appId(), signingKey.appKey(), userId, tenantId);
+    }
+
+    /**
+     * 单把公钥验签(JOSE 异常按不匹配处理,交由验签链/上层统一 401)。
+     */
+    private static boolean verifyWith(SignedJWT jwt, java.security.interfaces.RSAPublicKey publicKey) {
+        try {
+            return jwt.verify(new RSASSAVerifier(publicKey));
+        } catch (JOSEException verifyFailure) {
+            return false;
+        }
     }
 
     private static Long requireUserId(JWTClaimsSet claims) {

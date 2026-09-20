@@ -25,6 +25,11 @@ import static com.inneragent.platform.common.CommonResult.success;
  * <p>路由 {@code /ia/api/v1/admin/apps};由 {@link AdminTokenFilter} 以
  * {@code X-IA-Admin-Key} 独立鉴权(env {@code IA_ADMIN_KEY}),不走 embed token
  * 与 @PreAuthorize 体系。webhook 两字段可空。
+ *
+ * <p>响应统一 {@link AdminAppService.AppView}(P2-key):webhookSecret 永不回显
+ * (write-only,仅 {@code webhookSecretMasked} 掩码;PUT 空/缺省 = 不修改);
+ * PUT signPublicKey 即轮换(旧 key 进入宽限期,响应回 signKeyFingerprint/
+ * signKeyRotatedAt)。不再直接序列化 AppRegistration 实体。
  */
 @Tag(name = "应用注册(管理面)")
 @RestController
@@ -52,8 +57,8 @@ public class AdminAppController {
     }
 
     @PostMapping
-    @Operation(summary = "注册应用(上传验签公钥)")
-    public CommonResult<AppRegistration> register(@Validated @RequestBody RegisterAppReqVO request) {
+    @Operation(summary = "注册应用(上传验签公钥;webhookSecret 只写)")
+    public CommonResult<AdminAppService.AppView> register(@Validated @RequestBody RegisterAppReqVO request) {
         return success(adminAppService.register(
                 request.appKey(),
                 request.name(),
@@ -63,20 +68,20 @@ public class AdminAppController {
     }
 
     @GetMapping
-    @Operation(summary = "应用列表")
-    public CommonResult<List<AppRegistration>> list() {
+    @Operation(summary = "应用列表(webhookSecret 仅掩码)")
+    public CommonResult<List<AdminAppService.AppView>> list() {
         return success(adminAppService.list());
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "应用详情")
-    public CommonResult<AppRegistration> get(@PathVariable long id) {
-        return success(adminAppService.getRequired(id));
+    @Operation(summary = "应用详情(webhookSecret 仅掩码)")
+    public CommonResult<AdminAppService.AppView> get(@PathVariable long id) {
+        return success(adminAppService.getRequiredView(id));
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "更新应用(公钥轮换/webhook/状态)")
-    public CommonResult<AppRegistration> update(
+    @Operation(summary = "更新应用(signPublicKey=轮换;webhookSecret 空/缺省不修改;响应含公钥指纹)")
+    public CommonResult<AdminAppService.AppView> update(
             @PathVariable long id, @Validated @RequestBody UpdateAppReqVO request) {
         return success(adminAppService.update(
                 id,

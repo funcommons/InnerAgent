@@ -135,6 +135,14 @@ inneragent:
       max-backoff: 5s
       # 单次 invoke 内「重连 + 重试」最多轮数;1 = 同实例 re-initialize 后重试一次
       max-attempts: 1
+  auth:
+    # embed token 验签公钥轮换宽限期(P2-key,V9):PUT signPublicKey 轮换后,
+    # ia_app.previous_sign_public_key 在 sign_key_rotated_at + 宽限期内仍参与
+    # 存量 token 验签(DbAppSigningKeyProvider 暴露 + EmbedTokenVerifier 兜底),
+    # 对齐 ActTokenKeyManager 的 72h 双 key 语义——宿主在窗口内完成换签,
+    # 存量用户不被轮换立即全量下线。支持 Duration 简单格式(72h/30m/7d);
+    # 配 0 或负值 = 关闭宽限(轮换即时全量生效)。
+    embed-key-grace: 72h
 
 logging:
   level:

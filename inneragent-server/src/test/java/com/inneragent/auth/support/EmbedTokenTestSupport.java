@@ -33,24 +33,39 @@ public final class EmbedTokenTestSupport {
 
     /** 测试应用公钥 PEM(注册进内存 ia_app 假实现) */
     public static String publicKeyPem() {
-        return "-----BEGIN PUBLIC KEY-----\n"
-                + Base64.getMimeEncoder(64, "\n".getBytes())
-                        .encodeToString(TEST_KEY.getPublic().getEncoded())
-                + "\n-----END PUBLIC KEY-----";
+        return toPem(TEST_KEY.getPublic());
     }
 
     public static RSAPublicKey publicKey() {
         return (RSAPublicKey) TEST_KEY.getPublic();
     }
 
+    /** 任意公钥 → PEM(X509/PKCS#8 SubjectPublicKeyInfo;轮换双 key 测试用) */
+    public static String toPem(java.security.PublicKey publicKey) {
+        return "-----BEGIN PUBLIC KEY-----\n"
+                + Base64.getMimeEncoder(64, "\n".getBytes())
+                        .encodeToString(publicKey.getEncoded())
+                + "\n-----END PUBLIC KEY-----";
+    }
+
+    /** 生成独立 RSA-2048 keypair(模拟轮换后的新公钥/旧公钥) */
+    public static KeyPair generateKeyPair() {
+        return generateRsa2048();
+    }
+
     /** 用测试私钥签 RS256 token:claims 按宿主签发语义 */
     public static String sign(Map<String, Object> claims) {
+        return signWith(TEST_KEY, claims);
+    }
+
+    /** 用任意 keypair 签 RS256 token(轮换宽限期:旧私钥签的存量令牌样本) */
+    public static String signWith(KeyPair keyPair, Map<String, Object> claims) {
         JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder();
         claims.forEach(builder::claim);
         SignedJWT jwt = new SignedJWT(
                 new JWSHeader.Builder(JWSAlgorithm.RS256).build(), builder.build());
         try {
-            jwt.sign(new RSASSASigner(TEST_KEY.getPrivate()));
+            jwt.sign(new RSASSASigner(keyPair.getPrivate()));
         } catch (JOSEException signingFailure) {
             throw new IllegalStateException("测试令牌签发失败", signingFailure);
         }

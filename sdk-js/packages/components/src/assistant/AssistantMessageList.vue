@@ -21,6 +21,7 @@ import { useAssistantStore } from '@inneragent/sdk-core'
 import {
   statusIsRunning,
   messagesToTimeline,
+  normalizeToolCallScope,
   pendingScopeDigest,
   type TimelineItem,
 } from '@inneragent/sdk-core'
@@ -107,6 +108,15 @@ const batchScopeDigest = computed(() =>
     ? pendingScopeDigest(batchConfirmation.value.toolCalls)
     : undefined)
 
+// [new] P2 #13:单工具批的约束范围摘要 → 行内确认卡 scope chip。
+// 沿用 normalizeToolCallScope 归一,旧事件(缺 scope 字段)degraded 兜底;
+// 批量(≥2)走 batchScopeDigest(批量条),单工具走此摘要(行内卡)。
+const singleToolScopeDigest = computed(() => {
+  const pending = pendingConfirmation.value
+  if (!pending || (pending.toolCalls?.length ?? 0) !== 1) return undefined
+  return normalizeToolCallScope(pending.toolCalls?.[0]?.scope)
+})
+
 const confirmationBinding = computed<AssistantToolConfirmation | undefined>(() => {
   const pending = pendingConfirmation.value
   if (!pending) return undefined
@@ -117,6 +127,7 @@ const confirmationBinding = computed<AssistantToolConfirmation | undefined>(() =
     submitting: pending.submitting,
     showActions: runtime.value?.pipeline.status !== 'cancelling',
     expiresAt: pending.expiresAt,
+    ...(singleToolScopeDigest.value ? { scope: singleToolScopeDigest.value } : {}),
   }
 })
 

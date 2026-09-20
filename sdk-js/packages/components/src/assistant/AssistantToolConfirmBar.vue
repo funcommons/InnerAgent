@@ -16,6 +16,7 @@ import { computed } from 'vue'
 import { useI18n } from '../i18n'
 import type { NormalizedToolCallScope } from '@inneragent/sdk-core'
 import IaButton from '../ui/IaButton.vue'
+import AssistantScopeChip from './AssistantScopeChip.vue'
 import {
   useToolConfirmationCountdown,
 } from './useAssistantCountdown'
@@ -74,21 +75,8 @@ const hint = computed(() => {
     <div class="assistant-confirm-bar__main">
       <p class="assistant-confirm-bar__title">{{ t('assistant.confirm-batch-title') }}</p>
       <p class="assistant-confirm-bar__hint">{{ hint }}</p>
-      <!-- [new] P2-scope 任务 #15:约束范围摘要 / 降级标记(可检视,PRD §6.1.4) -->
-      <p
-        v-if="scopeDigest"
-        class="assistant-confirm-bar__scope"
-        :class="{ 'is-degraded': scopeDigest.degraded }"
-        :title="scopeDigest.summary || undefined"
-        data-testid="assistant-confirm-scope"
-      >
-        <i :class="scopeDigest.degraded ? 'ri-shield-keyhole-line' : 'ri-guide-line'" />
-        <span>{{ scopeDigest.degraded
-          ? t('assistant.confirm-scope-degraded')
-          : scopeDigest.summary
-            ? t('assistant.confirm-scope-resolved', { summary: scopeDigest.summary })
-            : t('assistant.confirm-scope-resolved-default') }}</span>
-      </p>
+      <!-- [new] P2-scope 任务 #15 / P2 #13:约束范围 chip(与单工具行内确认卡同组件复用) -->
+      <AssistantScopeChip v-if="scopeDigest" :scope="scopeDigest" />
     </div>
     <div v-if="!expired" class="assistant-confirm-bar__actions">
       <IaButton
@@ -168,35 +156,6 @@ const hint = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.assistant-confirm-bar__scope {
-  margin-top: 4px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  > i {
-    flex-shrink: 0;
-    font-size: 12px;
-  }
-
-  /* resolved:信息性标记 */
-  color: var(--app-text-secondary);
-  background: var(--app-bg-muted, #f5f5f7);
-
-  /* degraded:弱警示(PRD §6.1.4 降级语义,不阻塞确认流) */
-  &.is-degraded {
-    color: var(--app-color-warning, var(--el-color-warning, #e6a23c));
-    background: var(--el-color-warning-light-9, #fdf6ec);
-  }
 }
 
 .assistant-confirm-bar__actions {

@@ -21,10 +21,11 @@ defineOptions({ name: 'AssistantTimeline' })
  */
 import { computed, ref } from 'vue'
 import { useI18n } from '../i18n'
-import { getToolDisplayName, type TimelineItem } from '@inneragent/sdk-core'
+import { getToolDisplayName, type NormalizedToolCallScope, type TimelineItem } from '@inneragent/sdk-core'
 import IaButton from '../ui/IaButton.vue'
 import AssistantMarkdown from './AssistantMarkdown.vue'
 import AssistantReasoning from './AssistantReasoning.vue'
+import AssistantScopeChip from './AssistantScopeChip.vue'
 import { parseTaskMediaLinks, type TaskMediaLinkInfo } from './taskMedia'
 import {
   useToolConfirmationCountdown,
@@ -37,6 +38,11 @@ export interface AssistantToolConfirmation {
   submitting: boolean
   showActions: boolean
   expiresAt: string
+  /**
+   * [new] P2 #13:单工具批的约束范围摘要(经 normalizeToolCallScope 归一,
+   * 旧事件缺字段 → degraded)。仅单工具批传递, 由行内确认卡渲染 scope chip。
+   */
+  scope?: NormalizedToolCallScope
 }
 
 const props = defineProps<{
@@ -143,6 +149,11 @@ function toolStatusKey(status: string): string {
           >
             {{ t('assistant.tool-awaiting', { time: countdown.label }) }}
           </span>
+          <!-- [new] P2 #13:单工具批约束范围 chip(与批量条同组件, 可检视后批准) -->
+          <AssistantScopeChip
+            v-if="isConfirmedTool(item.id, undefined) && item.status === 'awaiting_approval' && singleToolBatch?.scope"
+            :scope="singleToolBatch.scope"
+          />
           <div v-if="item.plan" class="assistant-timeline__plan">
             <p class="assistant-timeline__plan-summary">{{ item.plan.summary }}</p>
             <p v-for="(change, ci) in item.plan.changes" :key="ci" class="assistant-timeline__plan-change">
@@ -211,6 +222,11 @@ function toolStatusKey(status: string): string {
                 >
                   {{ t('assistant.tool-awaiting', { time: countdown.label }) }}
                 </span>
+                <!-- [new] P2 #13:子 Agent 单工具批同口径 scope chip -->
+                <AssistantScopeChip
+                  v-if="confirmation && isConfirmedTool(child.id, item.id) && child.status === 'awaiting_approval' && singleToolBatch?.scope"
+                  :scope="singleToolBatch.scope"
+                />
                 <div
                   v-if="confirmation && isConfirmedTool(child.id, item.id) && child.status === 'awaiting_approval' && confirmation.showActions && !countdown?.expired"
                   class="assistant-timeline__confirm"

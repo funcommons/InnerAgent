@@ -1,7 +1,6 @@
 package com.inneragent.integration;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.inneragent.agent.entity.AgentConversation;
 import com.inneragent.agent.mapper.AgentConversationMapper;
 import com.inneragent.agent.entity.AgentMessage;
@@ -61,9 +60,6 @@ class AgentMessageAllocatorIT {
 
     @Autowired
     private AgentConversationService conversationService;
-
-    @Autowired
-    private AgentConversationMapper conversationMapper;
 
     @Autowired
     private AgentMessageAllocator messageAllocator;
@@ -222,17 +218,13 @@ class AgentMessageAllocatorIT {
     void appendsInSystemModeStillStampConversationTenant() {
         // 复现生产路径：运行期 append 在系统模式（跳过租户注入）下执行，
         // 消息行必须带上会话的租户，且能被租户作用域查询读到。
-        // [adapt] 融光依赖 TenantLineInnerInterceptor 在 INSERT 时回填 tenant_id；
-        // 本项目行级租户隔离明确延后到 P1（见 MybatisPlusConfig 注释），此处
-        // 显式补写会话行租户，仅模拟拦截器的入库回填效果，被测对象
+        // [adapt 已撤] P1-T1 拦截器落地后 INSERT 即回填，无需再模拟
+        //（原适配模拟 TenantLineInnerInterceptor 回填）。被测对象
         // （AgentMessageAllocator 在系统模式下按会话租户落消息）不变。
         String conversationId = uniqueId("allocator-tenant");
         TenantContext.runInTenant(7L, () -> conversationService.createOrUpdate(
                 conversationId, 42L, 7L, "project", 7L,
                 "assistant", "系统模式租户归属", "chat"));
-        conversationMapper.update(null, new LambdaUpdateWrapper<AgentConversation>()
-                .eq(AgentConversation::getConversationId, conversationId)
-                .set(AgentConversation::getTenantId, 7L));
 
         TenantContext.runAsSystem(() -> messageAllocator.append(conversationId,
                 AgentMessage.builder()

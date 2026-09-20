@@ -24,6 +24,7 @@ import com.inneragent.agent.run.RunShutdownCancellationPort;
 import com.inneragent.agent.run.kernel.AgentKernelSnapshot;
 import com.inneragent.agent.run.kernel.AgentKernelSnapshotPayload;
 import com.inneragent.agent.run.kernel.CanonicalAgentKernelSnapshotBuilder;
+import com.inneragent.platform.tenant.TenantContext;
 import com.inneragent.agent.run.model.ChildRunIdentityConflictException;
 import com.inneragent.agent.run.model.AgentEventEnvelope;
 import com.inneragent.agent.run.model.RunTerminalRequest;
@@ -96,9 +97,6 @@ class PlatformSubAgentRunServiceIT {
 
     @Autowired
     private AgentConversationService conversationService;
-
-    @Autowired
-    private com.inneragent.agent.mapper.AgentConversationMapper conversationMapper;
 
     @Autowired
     private AgentRunMapper runMapper;
@@ -273,16 +271,12 @@ class PlatformSubAgentRunServiceIT {
         long userId = 42L;
         long projectId = 77L;
         String conversationId = unique("conversation");
-        conversationService.createOrUpdate(
+        // [adapt 已撤] P1-T1 拦截器落地后 INSERT 即回填，无需再模拟
+        //（原适配在无租户上下文下 INSERT 后显式补写会话行 tenant_id=7；
+        // 运行行经 AgentRunCoordinator 继承会话租户，语义不变）。
+        TenantContext.runInTenant(7L, () -> conversationService.createOrUpdate(
                 conversationId, userId, projectId, "project", projectId,
-                "assistant", "child test", "chat");
-        // [adapt] 融光依赖 TenantLineInnerInterceptor 在 INSERT 时回填 tenant_id;
-        // 本项目行级租户隔离延后到 P1(见 MybatisPlusConfig 注释),显式补写会话行
-        // 租户(运行行经 AgentRunCoordinator 继承会话租户),仅模拟拦截器的入库回填。
-        conversationMapper.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.inneragent.agent.entity.AgentConversation>()
-                        .eq(com.inneragent.agent.entity.AgentConversation::getConversationId, conversationId)
-                        .set(com.inneragent.agent.entity.AgentConversation::getTenantId, 7L));
+                "assistant", "child test", "chat"));
         AgentKernelSnapshot snapshot = new CanonicalAgentKernelSnapshotBuilder()
                 .build(new AgentKernelSnapshotPayload(
                         AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,

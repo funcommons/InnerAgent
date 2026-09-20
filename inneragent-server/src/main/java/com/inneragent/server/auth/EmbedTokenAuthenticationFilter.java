@@ -32,8 +32,18 @@ import java.util.List;
 public class EmbedTokenAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    /** 管理面前缀:该域 Bearer 是管理会话 token,由 AdminTokenFilter 独立守卫 */
+    private static final String ADMIN_PATH_PREFIX = "/ia/api/v1/admin/";
 
     private final EmbedTokenVerifier verifier;
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // 两套凭据域隔离(02-技术方案 §6.3,P2-admin 18a 真机联调修复):
+        // admin 路径上的 Bearer 是管理会话 token(HS256),不进入 embed 验签
+        // (RS256)——否则合法管理会话被误判 401「算法必须为 RS256」
+        return request.getRequestURI().startsWith(ADMIN_PATH_PREFIX);
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,

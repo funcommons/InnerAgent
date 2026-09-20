@@ -173,4 +173,28 @@ class AdminAuthApiTests {
         verify(adminAuthService).login(any(), any(), any());
         verify(adminAuthService, never()).logout(anyString());
     }
+
+    @Test
+    @DisplayName("双过滤器链回归(真机缺陷修复):admin 路径 Bearer 管理会话 token 不进入 embed 验签(否则 HS256 被 RS256 校验误杀 401)")
+    void adminBearerNeverEntersEmbedVerification() throws Exception {
+        // 真实会话 token 服务(测试密钥)+ 真实 embed 验签器(空 key 仓库)
+        AdminSessionTokenService realTokenService =
+                new AdminSessionTokenService("0123456789abcdef0123456789abcdef", 4);
+        AdminSessionTokenService.IssuedToken issued = realTokenService.issue("ops-admin");
+        com.inneragent.server.auth.EmbedTokenVerifier embedVerifier =
+                new com.inneragent.server.auth.EmbedTokenVerifier(
+                        Mockito.mock(com.inneragent.server.auth.DbAppSigningKeyProvider.class));
+        AdminAuthService realAuthService = Mockito.mock(AdminAuthService.class);
+        MockMvc chained = MockMvcBuilders.standaloneSetup(new AdminAuthController(realAuthService))
+                .addFilters(
+                        new AdminTokenFilter(ADMIN_KEY, realTokenService),
+                        new com.inneragent.server.auth.EmbedTokenAuthenticationFilter(embedVerifier))
+                .build();
+
+        // 若 embed 过滤器未跳过 admin 路径,HS256 会话 token 在此被 RS256 校验拒绝
+        chained.perform(post("/ia/api/v1/admin/auth/logout")
+                        .header("Authorization", "Bearer " + issued.token()))
+                .andExpect(status().isOk());
+        Mockito.verify(realAuthService).logout(issued.token());
+    }
 }

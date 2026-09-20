@@ -12,6 +12,7 @@ import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.spec.McpSchema;
+import io.modelcontextprotocol.spec.McpTransportException;
 import io.modelcontextprotocol.spec.McpTransportSessionNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 
@@ -412,7 +413,7 @@ public class McpClientToolInvoker implements McpToolInvoker {
                     "宿主鉴权失败(HTTP " + jsonStatus.group(1) + "): " + aggregated, failure);
         }
         if (message.contains("unauthorized") || message.contains("forbidden")) {
-            return new McpToolAuthException("宿主鉴权失败: " + failure.getMessage(), failure);
+            return new McpToolAuthException("宿主鉴权失败: " + aggregated, failure);
         }
         if (inChain(failure, java.util.concurrent.TimeoutException.class)
                 || inChain(failure, java.net.http.HttpTimeoutException.class)
@@ -432,7 +433,7 @@ public class McpClientToolInvoker implements McpToolInvoker {
                 || message.contains("connection reset")
                 || message.contains("closedchannelexception");
         if (sessionLost || connectionLost
-                || failure instanceof io.modelcontextprotocol.spec.McpTransportException
+                || failure instanceof McpTransportException
                 || message.contains("transport")) {
             return new McpToolTransportException("宿主传输失败: " + aggregated, failure);
         }
@@ -472,14 +473,6 @@ public class McpClientToolInvoker implements McpToolInvoker {
 
     private static String messageOf(Throwable failure) {
         return failure.getMessage() == null ? failure.getClass().getName() : failure.getMessage();
-    }
-
-    private static Throwable rootCause(Throwable failure) {
-        Throwable current = failure;
-        while (current.getCause() != null && current.getCause() != current) {
-            current = current.getCause();
-        }
-        return current;
     }
 
     private static void closeQuietly(McpSyncClient client, String key) {

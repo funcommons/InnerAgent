@@ -230,6 +230,20 @@
 			<version>2.31.23</version>
 		</dependency>
 
+		<!-- MCP 宿主桥客户端(P1-T2b:tools/call + X-IA-Act 身份透传)。版本钉在
+			0.17.0 = agentscope-core 2.0.0 的传递版本(显式声明仅将其提为直接依赖):
+			官方 mcp:2.0.1(spike 验证形态)会全工程升版,agentscope-core 的
+			McpClientWrapper/McpSchema 用法有跨大版本漂移风险;mcp 0.17.0 已含本任务
+			全部所需(HttpClientStreamableHttpTransport + httpRequestCustomizer/
+			transportContextProvider、servlet 传输、stateless 服务线、结构化往返),
+			且聚合包默认绑 mcp-json-jackson2,与服务端 Jackson 2 栈一致(spike R2
+			双 JSON 栈问题在此形态下天然消解)。 -->
+		<dependency>
+			<groupId>io.modelcontextprotocol.sdk</groupId>
+			<artifactId>mcp</artifactId>
+			<version>0.17.0</version>
+		</dependency>
+
 		<!-- test -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

@@ -10,6 +10,7 @@ import com.inneragent.platform.toolhub.ToolRegistryEntry;
 import com.inneragent.platform.toolhub.ToolRegistryService;
 import com.inneragent.platform.toolhub.ToolGrantService;
 import com.inneragent.platform.toolhub.mapper.ToolRegistryMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -39,6 +40,12 @@ public class McpToolCatalog implements ToolCatalogInvalidator {
     private final ToolRegistryMapper registryMapper;
     private final ToolGrantService grantService;
     private final ObjectMapper objectMapper;
+    /**
+     * [P1-T2b] 宿主桥客户端缓存失效委托(可选:McpClientToolInvoker Bean 未装配
+     * 时静默跳过)。注册表任何变更在失效目录快照的同时,关闭并清除对应应用的
+     * 懒连接 MCP 客户端(endpoint_url/serverKey 变更后下次调用按新端点重建)。
+     */
+    private final ObjectProvider<McpClientToolInvoker> clientInvokers;
 
     /** appId → 全量目录(enabled 项;granted 标注不缓存,查询时叠加)。 */
     private final Cache<Long, List<McpToolCatalogEntry>> catalogCache;
@@ -46,9 +53,17 @@ public class McpToolCatalog implements ToolCatalogInvalidator {
     public McpToolCatalog(ToolRegistryMapper registryMapper,
                           ToolGrantService grantService,
                           ObjectMapper objectMapper) {
+        this(registryMapper, grantService, objectMapper, null);
+    }
+
+    public McpToolCatalog(ToolRegistryMapper registryMapper,
+                          ToolGrantService grantService,
+                          ObjectMapper objectMapper,
+                          ObjectProvider<McpClientToolInvoker> clientInvokers) {
         this.registryMapper = Objects.requireNonNull(registryMapper, "registryMapper must not be null");
         this.grantService = Objects.requireNonNull(grantService, "grantService must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.clientInvokers = clientInvokers;
         this.catalogCache = Caffeine.newBuilder()
                 .expireAfterWrite(Duration.ofMinutes(10))
                 .maximumSize(64)
@@ -106,10 +121,18 @@ public class McpToolCatalog implements ToolCatalogInvalidator {
     @Override
     public void invalidate(long appId) {
         catalogCache.invalidate(appId);
+        McpClientToolInvoker invoker = clientInvokers == null ? null : clientInvokers.getIfAvailable();
+        if (invoker != null) {
+            invoker.invalidateApp(appId);
+        }
     }
 
     public void invalidateAll() {
         catalogCache.invalidateAll();
+        McpClientToolInvoker invoker = clientInvokers == null ? null : clientInvokers.getIfAvailable();
+        if (invoker != null) {
+            invoker.invalidateAll();
+        }
     }
 
     private List<McpToolCatalogEntry> load(long appId) {

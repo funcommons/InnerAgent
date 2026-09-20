@@ -112,6 +112,30 @@ springdoc:
   swagger-ui:
     path: /ia/swagger-ui.html
 
+# MCP 宿主桥调用端(P1-T2b;McpClientToolInvoker 接管 McpToolInvoker 端口):
+# 客户端按 (appId, endpointUrl) 懒建懒连——无可达宿主不阻断启动,按调用懒失败。
+# 超时默认对齐 02-技术方案 §4.7;重连编排对应 spike 风险 R1(SDK 无自动重连,
+# 会话失效后对同实例 re-initialize,单飞锁 + 指数退避;默认「重试一次」)。
+# 请求体上限说明(R6):所钉 mcp 0.17.0 客户端传输不设请求体上限(无 413 路径),
+# 故无大小旋钮;详见 McpInvokerProperties 类注释。
+inneragent:
+  mcp:
+    # false 时 McpClientToolInvoker 不装配,回退 T2a 缺省 UnavailableMcpToolInvoker
+    enabled: true
+    # 单次 tools/call 超时(§4.7 默认 30s)
+    call-timeout: 30s
+    # 宿主客户端缓存容量(按 (appId, endpointUrl) 计,LRU 淘汰并关闭)
+    max-clients: 32
+    # 客户端空闲过期(注册变更走显式失效,不依赖过期)
+    client-expire-after-access: 30m
+    reconnect:
+      # 首次重连前退避基数(指数:initial × 2^(attempt-1),封顶 max-backoff)
+      initial-backoff: 200ms
+      # 单次退避上限
+      max-backoff: 5s
+      # 单次 invoke 内「重连 + 重试」最多轮数;1 = 同实例 re-initialize 后重试一次
+      max-attempts: 1
+
 logging:
   level:
     com.inneragent: DEBUG

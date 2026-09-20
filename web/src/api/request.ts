@@ -14,6 +14,7 @@ import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse,
 import { v4 as uuidv4 } from 'uuid'
 import { ApiError, HTTP_STATUS } from '@/api/errorCodes'
 import type { ApiFieldError } from '@/api/errorCodes'
+import { reportReach } from '@/api/health'
 
 const TIMEOUT = 30000
 const TRACE_ID_STORAGE_KEY = 'ia:trace-id'
@@ -115,6 +116,11 @@ request.interceptors.response.use(
   (response: AxiosResponse) => {
     const { data, headers } = response
 
+    // [优化建议 #1] 环境状态灯:拿到 HTTP 响应即证明服务可达(业务码不论)
+    if (typeof response.config.url === 'string' && response.config.url.includes('/ia/api')) {
+      reportReach(true)
+    }
+
     // 无信封(裸数据/文件流)直接返回
     if (data === null || data === undefined || data.code === undefined) {
       captureTraceId(headers, null)
@@ -151,6 +157,9 @@ request.interceptors.response.use(
   },
   (error) => {
     const silent = isSilent(error.config)
+
+    // [优化建议 #1] 环境状态灯:有 response=服务在答话(可达);无 response=网络层失败
+    reportReach(Boolean(error.response))
 
     // 401/403:管理凭据失效 → 清登录态 + 跳登录(统一出口,不弹窗)。
     // P2 对齐:服务端 AdminTokenFilter 对凭据缺失/错误/未配置一律 403(缺省封闭)

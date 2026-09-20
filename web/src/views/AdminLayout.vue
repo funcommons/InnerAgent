@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Monitor, Coin, Document, Cpu, Lightning, Connection, SwitchButton } from '@element-plus/icons-vue'
+import IaEnvBadge from '@/components/IaEnvBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -46,7 +47,7 @@ async function handleLogout() {
       <el-header class="admin-header">
         <span class="admin-header__title">{{ route.meta.title }}</span>
         <div class="admin-header__actions">
-          <el-tag size="small" type="info" effect="plain">mock 后端</el-tag>
+          <IaEnvBadge />
           <el-button text :icon="SwitchButton" @click="handleLogout">退出登录</el-button>
         </div>
       </el-header>

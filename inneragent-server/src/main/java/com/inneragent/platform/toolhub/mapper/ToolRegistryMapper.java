@@ -5,6 +5,7 @@ import com.inneragent.platform.toolhub.ToolRegistryEntry;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * ia_tool_registry 读写 Mapper(工具注册管理 + McpToolCatalog 聚合)。
@@ -22,6 +23,21 @@ public interface ToolRegistryMapper extends BaseMapper<ToolRegistryEntry> {
             LIMIT 1
             """)
     ToolRegistryEntry selectByFqnIncludingDeleted(@Param("fqn") String fqn);
+
+    /**
+     * 复活逻辑删行(DEF-03):显式 SQL 置 deleted=FALSE。
+     *
+     * <p>必须绕过 MyBatis-Plus 逻辑删机制——实体 deleted 字段带 {@code @TableLogic},
+     * {@code updateById} 会被追加 {@code WHERE deleted = false},对逻辑删行更新
+     * 0 行静默失效(唯一键被死行永久占用)。复活后再走常规 {@code updateById}
+     * 完成字段更新。</p>
+     */
+    @Update("""
+            UPDATE ia_tool_registry
+            SET deleted = FALSE
+            WHERE id = #{id}
+            """)
+    int revive(@Param("id") long id);
 
     /** 应用内按工具名查找(未删除;工具名应用内唯一,冲突保护 PRD §6.2.1) */
     @Select("""

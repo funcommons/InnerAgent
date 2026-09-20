@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -180,6 +181,46 @@ class ToolRegistryServiceTests {
         assertThatThrownBy(() -> service.register(clash))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("重名");
+    }
+
+    @Test
+    @DisplayName("DEF-03:逻辑删行重注册 → 显式复活(可查询可刷新),复活事件留痕")
+    void reRegisterAfterLogicalDeleteRevivesRow() {
+        ToolRegistryEntry dead = persisted(command("list_users", SCHEMA_V1, ANNOTATIONS_RO, null));
+        // 模拟注销后的逻辑删行:含删查询可见、活跃查询不可见
+        dead.setDeleted(true);
+        Mockito.reset(registryMapper);
+        lenient().when(registryMapper.selectByFqnIncludingDeleted("mcp__crm__list_users"))
+                .thenReturn(dead);
+        lenient().when(registryMapper.selectActiveByToolName("list_users")).thenReturn(null);
+
+        ToolRegistryEntry revived = service.register(
+                command("list_users", SCHEMA_V1, ANNOTATIONS_RO, null));
+
+        // 复活必须先显式置 deleted=false 再常规更新(@TableLogic 会给 updateById 追加 WHERE deleted=false)
+        InOrder inOrder = Mockito.inOrder(registryMapper);
+        inOrder.verify(registryMapper).revive(dead.getId());
+        inOrder.verify(registryMapper).updateById(dead);
+        assertThat(revived.getDeleted()).isFalse();
+        assertThat(revived.getSchemaSha256())
+                .isEqualTo(ToolSchemaFingerprint.of(new ObjectMapper(), SCHEMA_V1));
+        // 复活事件留痕:schema 历史 detail=register_revived + 审计 tool_revived
+        ArgumentCaptor<ToolSchemaHistory> history = ArgumentCaptor.forClass(ToolSchemaHistory.class);
+        verify(historyMapper, Mockito.times(2)).insert(history.capture()); // 首次注册 + 复活重注册
+        assertThat(history.getAllValues().getLast().getDetail()).isEqualTo("register_revived");
+        ArgumentCaptor<ToolAuditService.ToolAuditEntry> audit =
+                ArgumentCaptor.forClass(ToolAuditService.ToolAuditEntry.class);
+        verify(auditService).append(audit.capture());
+        assertThat(audit.getValue().decision()).isEqualTo("tool_revived");
+
+        // 复活后分诊链路可用(可刷新):纯增量 compatible 照常生效
+        Mockito.reset(registryMapper);
+        lenient().when(registryMapper.selectById(dead.getId())).thenReturn(revived);
+        ToolRegistryService.SchemaTriageResult result =
+                service.refreshSchema(dead.getId(), SCHEMA_V2_OPTIONAL, ANNOTATIONS_RO, "v2");
+        assertThat(result.verdict()).isEqualTo("compatible");
+        assertThat(revived.getSchemaSha256())
+                .isEqualTo(ToolSchemaFingerprint.of(new ObjectMapper(), SCHEMA_V2_OPTIONAL));
     }
 
     @Test

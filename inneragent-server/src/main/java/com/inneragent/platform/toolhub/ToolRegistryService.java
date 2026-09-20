@@ -149,16 +149,30 @@ public class ToolRegistryService {
         entry.setPendingRefreshAt(null);
         entry.setEnabled(command.enabled() == null || command.enabled());
         entry.setDeleted(false);
-        if (existing != null) {
+        boolean revived = existing != null;
+        if (revived) {
+            // DEF-03:必须先显式复活逻辑删行——实体 deleted 带 @TableLogic,
+            // updateById 被追加 WHERE deleted=false,对死行更新 0 行静默失效,
+            // 唯一键 uk_ia_tool_registry_fqn 亦被死行永久占用
+            registryMapper.revive(existing.getId());
             registryMapper.updateById(entry);
         } else {
             registryMapper.insert(entry);
         }
 
-        recordHistory(entry, null, fingerprint, "unchanged", OUTCOME_APPLIED, "register");
+        recordHistory(entry, null, fingerprint, "unchanged", OUTCOME_APPLIED,
+                revived ? "register_revived" : "register");
+        if (revived) {
+            // 复活事件落审计(T2a 既有形态;decision 列宽 VARCHAR(32) 兼容)
+            auditService.append(new ToolAuditService.ToolAuditEntry(
+                    appId, null, null, null, null, fqn,
+                    "tool_revived", ToolDecisionSource.FORCED_POLICY.code(),
+                    risk.code(), null,
+                    "re-registered after logical delete; fqn=" + fqn, null, null));
+        }
         invalidateCatalog(appId);
-        log.info("工具注册: appId={}, fqn={}, risk={}, fingerprint={}",
-                appId, fqn, risk.code(), fingerprint);
+        log.info("工具注册{}: appId={}, fqn={}, risk={}, fingerprint={}",
+                revived ? "(复活逻辑删行)" : "", appId, fqn, risk.code(), fingerprint);
         return entry;
     }
 

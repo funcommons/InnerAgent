@@ -6,10 +6,11 @@
  * (销毁全部活动 socket + N 秒内拒绝新连接)。
  *
  * SDK 重连时序(store/assistant.ts): 流错误 → onError → scheduleEnsureRetry(5s)
- * → ensureContentConnection → 按 knownRunId + Last-Event-ID 重连 /runs/{id}/events。
- * 因此「续流中恢复」要求 run 存活期 > 断流时刻 + 5s:用 4 轮只读工具的 mockScript
- * 把 run 拉长到 ~8s;L8-06 则故意用长断流窗口覆盖 run 终态, 取证「断流期间运行
- * 完成 → UI 已完成但内容截断」缺陷(DEF-06)。
+ * → ensureContentConnection → 按 knownRunId + Last-Event-ID 重连 /runs/{id}/events;
+ * 轮询面若先感知完成(断流窗口覆盖终态), 修复后(DEF-06)不再放弃, 而是从本地游标
+ * 补偿回填 /events 至全文再终态化。因此「续流中恢复」要求 run 存活期 > 断流时刻
+ * + 5s:用 4 轮只读工具的 mockScript 把 run 拉长到 ~8s;L8-06 用长断流窗口覆盖
+ * run 终态, 回归「轮询判完成 → 补偿回填 → UI 全文收敛」(修复反转, 原为截断取证)。
  *
  * 证据: 断流前/中/后截图 + reconnect-host 日志([cut]/[reconn] Last-Event-ID)+
  * psql 事件 seq 连续性(UI 收到的 SSE id 与库内可见事件对齐)。
@@ -133,10 +134,12 @@ test.describe('L8 断流重连线', () => {
     await waitProxyRecovered()
 
     // SDK 两条收敛路径(A: ensure-retry 自动重连→Last-Event-ID 续流;
-    // B: 状态轮询先判完成→截断, 见 DEF-06)。两者终态均收敛「已完成」。
+    // B: 轮询先判完成→DEF-06 修复后转补偿回填)。两条路径终态都必须「全文+已完成」。
     const state = await waitTerminal(page, 120_000)
     expect(state, '断流后运行收敛到终态(未停留运行中/错误终态)').toBe('已完成')
     const uiText = await page.getByTestId('assistant-message-list').innerText()
+    // [R1 修复反转] DEF-06 修复后不再存在「截断收敛」路径: UI 必须续流/回填至全文
+    expect(uiText.includes(FOOTER), 'UI 恢复后回填/续流至全文(不允许截断终态)').toBe(true)
     const pathA = uiText.includes(FOOTER)
     await shot(page, pathA
       ? 'L8-04-路径A-自动重连续流至DONE(全文+已完成)'
@@ -194,7 +197,7 @@ test.describe('L8 断流重连线', () => {
       expect(replayIds[replayIds.length - 1], '重放直达 DONE 终态事件').toBe(terminalSeq)
       saveJson('L8-ui-sse-id与库对齐.json', { runId, reconnectCursor, replayIds, visibleSeqs })
     } else {
-      // 路径 B: 内容截断缺陷本体(确定性取证见 L8-06); 这里验证「刷新后历史回放全文」
+      // 路径 B(修复后不可达, 防御保留): 若截断收敛复现, 上方全文断言已先行失败
       await openSdkChat(page, RECONNECT_HOST)
       await expect(page.getByTestId('assistant-message-list')).toContainText(FOOTER, { timeout: 20_000 })
       await shot(page, 'L8-09-路径B-刷新后历史回放全文(UI最终一致)', testInfo)
@@ -206,31 +209,31 @@ test.describe('L8 断流重连线', () => {
     cleanupDemoUser(user)
   })
 
-  test('L8-06 DEF 取证: 长断流覆盖 run 终态 → UI 已完成但内容截断(DEF-06)', async ({ page }, testInfo) => {
+  test('L8-06 DEF-06 回归: 长断流覆盖 run 终态 → 轮询判完成后补偿回填, UI 全文收敛', async ({ page }, testInfo) => {
     const user = uniqueDemoUser()
     await injectDemoUser(page, user)
     await captureSse(page)
 
     await openSdkChat(page, RECONNECT_HOST)
-    await sendChat(page, 'E2E-L8 长断流取证')
-    // 等首个内容增量后, 用 8s 断流窗口覆盖 run 终态(mock legacy run 全程 ~6s);
-    // allow=running: 放行 /runs/running 轮询 → 轮询面感知「已完成」→ SDK 不再重连
-    // (ensureContentConnection 见非运行态即返回)→ 截断确定性成立
+    await sendChat(page, 'E2E-L8 长断流回填回归')
+    // [R1 修复反转] 原取证用例: 8s 断流(allow=running)覆盖 run 终态 → 轮询先判
+    // 「已完成」→ SDK 放弃重连 → UI 保留截断投影(uiMissingFooter=true)。
+    // 修复后: 轮询判终态且本地投影 seq 落后时, 先经 /runs/{id}/events 从本地
+    // 游标补偿回填, 回填交付根终态后再终态化 → UI 无需刷新即恢复全文。
     await page.locator('[data-testid^="assistant-content-"]').first().waitFor({ state: 'visible', timeout: 30_000 })
     await breakProxy(8, true)
     await page.waitForTimeout(3000)
     await shot(page, 'L8-07-长断流中-UI状态', testInfo)
     await waitProxyRecovered()
 
-    // SDK 不再重连(run 已终态)→ UI 直接落「已完成」;此时消息区内容为断流前缀
-    const state = await waitTerminal(page, 60_000)
+    const state = await waitTerminal(page, 120_000)
     const uiText = await page.getByTestId('assistant-message-list').innerText()
-    // 库层助手消息为全文(含收尾段), UI 仅断流前缀 → 不一致即缺陷本体
+    // 库层助手消息为全文(含收尾段); UI 必须不刷新即回填至全文(与持久层一致)
     const dbContent = psql(
       `select left(m.content, 200) from ia_agent_message m join ia_agent_conversation c on m.conversation_id=c.conversation_id
        where c.user_id=${user} and m.role='assistant' order by m.id desc limit 1`,
     )
-    saveText('L8-08-DEF06-取证.json', JSON.stringify({
+    saveText('L8-08-DEF06回归-取证.json', JSON.stringify({
       terminalState: state,
       uiContentTail: uiText.slice(-120),
       dbAssistantContent: dbContent,
@@ -239,12 +242,8 @@ test.describe('L8 断流重连线', () => {
     }, null, 2))
     expect(state, 'run 终态为已完成(状态收敛)').toBe('已完成')
     expect(dbContent, '库层助手消息含全文收尾段').toContain(FOOTER)
-    expect(uiText.includes(FOOTER), 'UI 未续播收尾段(内容截断, DEF-06 本体)').toBe(false)
-    await shot(page, 'L8-08-DEF06-已完成但内容截断', testInfo)
-    // 刷新后历史回放应恢复全文(服务端历史完整, 前端实时投影未回填)
-    await openSdkChat(page, RECONNECT_HOST)
-    await expect(page.getByTestId('assistant-message-list')).toContainText(FOOTER, { timeout: 20_000 })
-    await shot(page, 'L8-09-DEF06-刷新后历史回放全文', testInfo)
+    expect(uiText.includes(FOOTER), 'UI 未刷新即补偿回填至全文(修复后 uiMissingFooter=false)').toBe(true)
+    await shot(page, 'L8-08-DEF06回归-已完成且内容完整', testInfo)
 
     await page.close().catch(() => {})
     cleanupDemoUser(user)

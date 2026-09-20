@@ -2,9 +2,9 @@
  * e2e/helpers/support.ts — 测试公共设施(测试基建,不碰产品代码)。
  *
  * 提供:
- *  - test/adminPage:预置管理站会话的页面夹具(绕开 DEF-01 登录契约漂移,
- *    经 sessionStorage['ia:admin-key'] + 服务端 X-IA-Admin-Key 通道进入,
- *    通道本身是 AdminTokenFilter 的合法自动化凭据,非绕权);
+ *  - test/adminPage:预置管理站会话的页面夹具(DEF-01 修复后登录页可账号密码
+ *    直登;本夹具走 sessionStorage['ia:admin-key'] + X-IA-Admin-Key 引导通道,
+ *    为 AdminTokenFilter 合法自动化凭据,各业务线沿用以免逐用例登录);
  *  - api:直连 18090 的 APIRequestContext(X-IA-Admin-Key 注入);
  *  - shot():关键步截图 → test-report/2026-09-21-01/assets;
  *  - psql():docker exec psql 佐证/数据准备/清理;

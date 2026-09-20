@@ -62,8 +62,8 @@ test.describe('L7 SDK 对话链路', () => {
 
     // 4) 主题令牌穿透 Shadow 边界: 宿主元素覆写 --ia-primary → 组件内继承值实时变化
     //    (探针 = 组件内元素上的 CSS 自定义属性计算值: --ia-primary(:host 默认)与
-    //     --app-primary(组件映射)都应跟随宿主覆写; demo-host 处 DEF-05 态输入框禁用,
-    //     故用继承值而非聚焦边框做判据)
+    //     --app-primary(组件映射)都应跟随宿主覆写; DEF-05 修复前 demo-host 输入框
+    //     因模型 404 禁用, 当时改用继承值做判据 —— 现沿用该稳定判据)
     const themeBefore = await page.getByTestId('assistant-new-conversation').evaluate((el) => {
       const s = getComputedStyle(el)
       return { iaPrimary: s.getPropertyValue('--ia-primary').trim(), appPrimary: s.getPropertyValue('--app-primary').trim() }
@@ -264,25 +264,30 @@ test.describe('L7 SDK 对话链路', () => {
     await page.close().catch(() => {})
     cleanupDemoUser(user)
   })
-  test('L7-07 DEF-05 取证: 默认 baseURL 下 SDK http 层双重拼接 → 模型/会话全 404', async ({ page }, testInfo) => {
-    // demo-host 按 README 口径接入: baseURL='/ia/api/v1'(SDK 默认值)。
-    // SDK http.* 调用点(me/conversations/attachments/runs 查询端)自带
-    // `${getBaseURL()}${path}`, 与 client.ts request() 内部拼接叠加 → 双重前缀。
-    const notFound: Array<{ url: string; status: number }> = []
+  test('L7-07 DEF-05 回归: 默认 baseURL 下模型/会话单前缀可达, demo-host 全量直测', async ({ page }, testInfo) => {
+    // [R1 修复反转] 原取证用例: SDK http.* 调用点自带 `${getBaseURL()}${path}`,
+    // 与 client.ts request() 内部拼接叠加 → /ia/api/v1/ia/api/v1/* 全 404,
+    // 模型加载失败 + 发送禁用。修复后: 调用点交相对路径, baseURL 统一由
+    // request() 拼接(且对已带前缀路径幂等) → demo-host 按 README 默认接入可用。
+    const apiCalls: Array<{ url: string; status: number }> = []
     page.on('response', (resp) => {
-      if (resp.url().includes('/ia/')) notFound.push({ url: resp.url(), status: resp.status() })
+      if (resp.url().includes('/ia/')) apiCalls.push({ url: resp.url(), status: resp.status() })
     })
-    await openSdkChat(page, DEMO_HOST, { requireModels: false })
+    // requireModels=true: 模型下拉出现选项(GET /me/models 200 的 UI 佐证)
+    await openSdkChat(page, DEMO_HOST, { requireModels: true })
     await page.waitForTimeout(2500)
 
-    const doubled = notFound.filter((e) => e.url.includes('/ia/api/v1/ia/api/v1/'))
-    saveText('L7-07-DEF05-双重拼接404请求.json', JSON.stringify(notFound, null, 2))
-    expect(doubled.length, '存在双重前缀请求(/ia/api/v1/ia/api/v1/*)').toBeGreaterThan(0)
-    expect(doubled.every((e) => e.status === 404), '双重前缀请求全部 404').toBe(true)
-    // UI 后果: 模型列表加载失败 → 输入区错误提示 + 发送不可用
-    const alert = page.getByTestId('assistant-composer-alert')
-    await expect(alert).toContainText('请求的资源不存在', { timeout: 10_000 })
-    await expect(page.getByTestId('assistant-send')).toBeDisabled()
-    await shot(page, 'L7-07-DEF05-demo-host默认接入-模型404-发送禁用', testInfo)
+    const doubled = apiCalls.filter((e) => e.url.includes('/ia/api/v1/ia/api/v1/'))
+    const notFound = apiCalls.filter((e) => e.status === 404)
+    saveText('L7-07-DEF05回归-默认接入请求清单.json', JSON.stringify(apiCalls, null, 2))
+    expect(doubled.length, '不存在双重前缀请求(/ia/api/v1/ia/api/v1/*)').toBe(0)
+    expect(notFound.length, '默认接入下无 404(模型/会话单前缀可达)').toBe(0)
+    const modelsCall = apiCalls.find((e) => e.url.includes('/me/models'))
+    expect(modelsCall, 'GET /me/models 已发出且 200(分册回归口径)').toMatchObject({ status: 200 })
+    // UI 后果反转: 无输入区错误提示, 发送可用
+    await expect(page.getByTestId('assistant-composer-alert')).toHaveCount(0)
+    await page.getByTestId('assistant-input').fill('DEF-05 回归探测')
+    await expect(page.getByTestId('assistant-send')).toBeEnabled()
+    await shot(page, 'L7-07-DEF05回归-demo-host默认接入-模型200-发送可用', testInfo)
   })
 })

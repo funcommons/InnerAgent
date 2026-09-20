@@ -3,10 +3,12 @@
  *
  * 覆盖:登录成功/失败、连续 5 次失败锁定 423、锁定期正确密码拒绝、
  * 登出后 token 失效、登录审计落库(psql 佐证)、X-IA-Admin-Key 双轨矩阵、
- * UI 登录页契约漂移缺陷证据(DEF-01)与预置会话可用性(后续各线的进入方式)。
+ * UI 登录页账号密码契约回归(R1 DEF-01 修复反转:原为占位契约取证)
+ * 与预置会话可用性(后续各线的进入方式)。
  *
- * 说明:登录/锁定语义纯服务端行为,以 API + psql 为准;UI 只能证伪(DEF-01)。
- * 全部用例可复跑:beforeEach 复位 admin 账号锁定态(psql 写测试自身数据,非产品代码)。
+ * 说明:登录/锁定语义纯服务端行为,以 API + psql 为准;UI 侧以账号密码
+ * 真实登录回归(DEF-01 修复后)。全部用例可复跑:afterAll 复位 admin 账号
+ * 锁定态(psql 写测试自身数据,非产品代码)。
  */
 import {
   test, expect, ADMIN_KEY, ADMIN_PASSWORD, ADMIN_USER, SERVER, psql, saveJson, saveText, shot,
@@ -144,27 +146,46 @@ test('管理面鉴权矩阵:无凭据/错误 key 403,正确 key 200', async ({ p
   })
 })
 
-test('DEF-01:UI 登录页仍发 adminKey 占位契约,真服务模式登录必 400(证据)', async ({ adminPage }) => {
-  // 无预置会话的干净页面,走真实 UI 登录路径
+test('DEF-01 回归:UI 登录页账号密码契约,真服务模式可登录并进入管理站', async ({ adminPage }) => {
+  // [R1 修复反转] 原取证用例:UI 发 {adminKey} 占位契约必 400(仅管理 Key 单域)。
+  // 修复后:LoginView 为用户名/密码表单 + 高级引导折叠项,登录走真实 18a 契约。
   await adminPage.addInitScript(() => window.sessionStorage.clear())
   await adminPage.goto(`${GATEWAY}/login`)
   await expect(adminPage.getByText('InnerAgent 管理站')).toBeVisible()
-  await shot(adminPage, 'L1-08-登录页(仅管理Key输入框,无账号密码域)')
-  // 表单结构佐证:只有「管理 Key」一个输入域 —— 无法输入 username/password
-  await expect(adminPage.getByPlaceholder(/X-IA-Admin-Key/)).toBeVisible()
+  await shot(adminPage, 'L1-08-回归-登录页(账号+密码+高级引导折叠)')
+  // 表单结构:用户名/密码两域(主通道)+ X-IA-Admin-Key 引导折叠项(自动化通道保留)
+  await expect(adminPage.getByPlaceholder('管理员用户名')).toBeVisible()
+  await expect(adminPage.getByPlaceholder('管理员密码')).toBeVisible()
 
+  // 401 文案(凭据错误)与登录页滞留
+  const failResp = adminPage.waitForResponse((r) => r.url().includes('/admin/auth/login'))
+  await adminPage.getByPlaceholder('管理员用户名').fill(ADMIN_USER)
+  await adminPage.getByPlaceholder('管理员密码').fill('definitely-wrong-pass')
+  await adminPage.getByRole('button', { name: '登录' }).click()
+  const failed = await failResp
+  expect(failed.status()).toBe(401)
+  await expect(messageToast(adminPage, '用户名或密码错误')).toBeVisible()
+  await expect(adminPage).toHaveURL(/\/login/)
+  await shot(adminPage, 'L1-08-回归-密码错误401文案')
+
+  // 正确凭据登录:200 + Bearer 契约
   const loginResp = adminPage.waitForResponse((r) => r.url().includes('/admin/auth/login'))
-  await adminPage.getByPlaceholder(/X-IA-Admin-Key/).fill(ADMIN_KEY)
+  await adminPage.getByPlaceholder('管理员密码').fill(ADMIN_PASSWORD)
   await adminPage.getByRole('button', { name: '登录' }).click()
   const resp = await loginResp
-  // 观察值(缺陷):请求体 {adminKey},服务端要求 {username,password} → 400
-  expect(resp.status()).toBe(400)
+  expect(resp.status()).toBe(200)
   const body = await resp.json()
-  expect(body.code).toBe(400)
-  saveJson('L1-08-DEF01-UI登录-网络响应.json', { status: resp.status(), body })
-  await expect(messageToast(adminPage, '不能为空').or(messageToast(adminPage, '参数错误'))).toBeVisible()
-  await shot(adminPage, 'L1-09-DEF01-UI登录400错误态')
-  await expect(adminPage).toHaveURL(/\/login/)
+  expect(body.code).toBe(0)
+  expect(body.data.tokenType).toBe('Bearer')
+  expect(body.data.token.split('.').length).toBe(3)
+  expect(resp.request().headers()['x-ia-admin-key']).toBeUndefined()
+  saveJson('L1-08-DEF01回归-UI登录-网络响应.json', { status: resp.status(), body })
+
+  // 登录成功:token 持久化 localStorage,重定向离开 /login 进入管理站
+  const token = await adminPage.evaluate(() => window.localStorage.getItem('ia:admin-token'))
+  expect(token, 'Bearer token 已持久化 localStorage').toBeTruthy()
+  await expect(adminPage).toHaveURL(/\/apps/, '登录成功后进入管理站')
+  await shot(adminPage, 'L1-09-DEF01回归-登录成功进入管理站')
 })
 
 test('预置会话经 X-IA-Admin-Key 通道进入管理站(后续业务线的进入方式)', async ({ adminPage }) => {

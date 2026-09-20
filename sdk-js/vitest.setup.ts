@@ -34,3 +34,21 @@ for (const name of ['localStorage', 'sessionStorage'] as const) {
   }
 }
 
+// jsdom 未实现 matchMedia (useAssistantMessageScroll 的 prefers-reduced-motion 查询)
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string): MediaQueryList => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList,
+  })
+}
+

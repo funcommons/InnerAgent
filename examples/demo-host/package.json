@@ -1,0 +1,13 @@
+{
+  "name": "@inneragent/demo-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "InnerAgent SDK 宿主演示页: <inneragent-chat> Shadow DOM 隔离与主题令牌演示; 连本机 18090 服务端手工冒烟 (见 README)。",
+  "type": "module",
+  "scripts": {
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  }
+}

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InnerAgent SDK · demo-host</title>
+  <script type="module" src="./main.js"></script>
+  <!--
+    [new] 宿主样式隔离演示: 这里故意放"激进"的宿主全局样式 (红色段落 / 绿色按钮 /
+    剧毒边框), 用于验证 <inneragent-chat> 的 Shadow DOM 双向隔离 ——
+    宿主样式不得污染组件内部, 组件样式也不得泄漏到宿主。
+  -->
+  <style>
+    body {
+      margin: 0;
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #fffbe6;
+      color: #333;
+    }
+
+    .host-page {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    /* 宿主全局元素样式 (组件内不受影响) */
+    p { color: #cc0000; font-style: italic; }
+    button {
+      background: #2e7d32;
+      color: #ffff00;
+      border: 3px dashed #111;
+      font-family: 'Comic Sans MS', cursive;
+      letter-spacing: 2px;
+    }
+    textarea { border: 4px solid #ff00ff; }
+
+    .host-card {
+      border: 1px solid #e0d68a;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      background: #fffef2;
+    }
+
+    /* 宿主按钮 (应保持绿色虚线样式, 不受组件样式泄漏影响) */
+    .host-actions { display: flex; gap: 8px; align-items: center; }
+
+    /* 主题令牌覆写演示: WC 内 --ia-* 全部跟随 (紫色主题) */
+    .themable {
+      --ia-primary: #7c3aed;
+      --ia-primary-contrast: #ffffff;
+    }
+
+    inneragent-chat {
+      display: block;
+      height: 560px;
+      border: 2px solid #7c3aed;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="host-page">
+    <h1>InnerAgent SDK · demo-host</h1>
+
+    <div class="host-card">
+      <p>
+        下方 <code>&lt;inneragent-chat&gt;</code> 运行在 Shadow DOM 中:
+        本页红色段落 / 绿色虚线按钮等宿主样式不影响它; 组件样式也不会反向泄漏
+        (本页按钮应始终是绿色虚线样式)。
+      </p>
+      <div class="host-actions">
+        <button id="host-button" type="button">宿主按钮 (宿主样式)</button>
+        <button id="toggle-theme" type="button">切换 --ia-primary 主题</button>
+        <span id="theme-label">当前: 默认蓝</span>
+      </div>
+    </div>
+
+    <inneragent-chat id="chat" view="chat"></inneragent-chat>
+  </div>
+</body>
+</html>

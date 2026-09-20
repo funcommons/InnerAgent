@@ -41,3 +41,19 @@ export {
   setAssistantReferenceProjectsProvider,
   resetAssistantReferenceCaches,
 } from './assistant/assistantReferences'
+
+// ---- 契约入口 re-export (宿主单脚本接入: init + 页面上下文, 免装 core) ----
+export {
+  init,
+  resetSdkConfig,
+  applyTheme,
+  setRunContext,
+  clearRunContext,
+  setAssistantPageContext,
+  clearAssistantPageContext,
+  setAssistantToolDisplayNames,
+  setSubAgentToolNames,
+  setAssistantEventHooks,
+  IframeModeNotImplementedError,
+  IA_THEME_TOKENS,
+} from '@inneragent/sdk-core'

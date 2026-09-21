@@ -62,6 +62,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'router.ia-overview', icon: 'Compass' }
       },
       {
+        path: 'agents',
+        name: 'IaAgents',
+        component: () => import('@/views/ia/AgentsGallery.vue'),
+        meta: { title: 'router.ia-agents', icon: 'Grid' }
+      },
+      {
         path: 'embed',
         name: 'IaEmbed',
         component: () => import('@/views/ia/EmbedChat.vue'),

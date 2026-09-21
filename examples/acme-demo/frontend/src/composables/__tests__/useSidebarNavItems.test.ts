@@ -40,10 +40,10 @@ describe('useSidebarNavItems(控制台侧栏 nav)', () => {
     expect(NAV_DEFAULT_OPENEDS).toEqual([])
   })
 
-  it('包含 /ia 三入口、/dev 与 / 返回官网', () => {
+  it('包含 /ia 四入口、/dev 与 / 返回官网', () => {
     const { wrapper } = mountProbe()
     expect(items().map((i) => i.index)).toEqual([
-      '/ia/overview', '/ia/embed', '/ia/tools', '/dev', '/',
+      '/ia/overview', '/ia/agents', '/ia/embed', '/ia/tools', '/dev', '/',
     ])
     const back = items()[items().length - 1]!
     expect(back.index).toBe('/')

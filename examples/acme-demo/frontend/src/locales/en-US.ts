@@ -139,6 +139,7 @@ export default {
     'back-to-site': 'Back to site',
     'dev-index': 'Dev Examples',
     'ia-overview': 'Integration Overview',
+    'ia-agents': 'Scenario Gallery',
     'ia-embed': 'InnerAgent Embed',
     'ia-tools': 'Tool-call Demo',
     'dev-image-picker': 'Image Picker Demo',

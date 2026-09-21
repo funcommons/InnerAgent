@@ -1,12 +1,12 @@
 /**
  * useSidebarNavItems — 项目侧 nav 工厂 (基于 SDK 底座).
  *
- * DEMO 侧栏:"InnerAgent 接入" 三入口 + "开发者" 脚手架能力展示 + "返回官网".
+ * DEMO 侧栏:"InnerAgent 接入" 四入口(总览/场景画廊/嵌入/工具)+ "开发者" 脚手架能力展示 + "返回官网".
  */
 import { computed, type ComputedRef } from 'vue'
 import type { Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Compass, Film, House, Tools, VideoPlay } from '@element-plus/icons-vue'
+import { Compass, Film, Grid, House, Tools, VideoPlay } from '@element-plus/icons-vue'
 import type { NavItem } from '@/components/sdk'
 
 /** 默认展开的 sub-menu id 列表 (无 sub-menu 时为空数组) */
@@ -19,6 +19,11 @@ export function useSidebarNavItems(): ComputedRef<NavItem[]> {
       index: '/ia/overview',
       label: t('router.ia-overview'),
       icon: Compass as unknown as Component,
+    },
+    {
+      index: '/ia/agents',
+      label: t('router.ia-agents'),
+      icon: Grid as unknown as Component,
     },
     {
       index: '/ia/embed',

@@ -84,7 +84,8 @@ export function isDemoAgentType(value: unknown): value is DemoAgentType {
 
 /** 能力 × 场景矩阵:该场景的对话是否可感知此能力 */
 export function hasCapability(agentType: string, capability: DemoCapabilityId): boolean {
-  const agent = DEMO_AGENTS.find((a) => a.agentType === agentType)
+  // 显式宽化为接口类型:as const 字面量元组的联合调 .includes 会把参数收敛成 never
+  const agent: DemoAgentSpec | undefined = DEMO_AGENTS.find((a) => a.agentType === agentType)
   return agent?.capabilities.includes(capability) ?? false
 }
 

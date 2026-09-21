@@ -139,6 +139,7 @@ export default {
     'back-to-site': '返回官网',
     'dev-index': '开发示例',
     'ia-overview': '接入流程总览',
+    'ia-agents': '场景画廊',
     'ia-embed': 'InnerAgent 嵌入',
     'ia-tools': '工具调用演示',
     'dev-image-picker': '图片选择器示例',

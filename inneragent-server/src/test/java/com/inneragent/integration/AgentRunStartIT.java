@@ -34,6 +34,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -282,13 +283,16 @@ class AgentRunStartIT {
         assertThatThrownBy(() -> await(coordinator.startChild(identityConflict)))
                 .isInstanceOf(ChildRunIdentityConflictException.class);
 
+        // [adapt] P4-W14 子 Agent deadline 钳制:显式超出父截止时间的请求不再
+        // 拒绝,而是钳制到父 deadlineAt(WARN 留痕)——子运行生命周期恒不超过父。
         StartChildAgentRunCommand afterParentDeadline = childCommand(
                 uniqueId("late-child"), root.runId(), "tool-call-2",
                 root.ownerInstanceId(), root.ownerEpoch(), "Late child",
                 "asset_image_gen", childSnapshot, root.deadline().plusSeconds(1));
-        assertThatThrownBy(() -> await(coordinator.startChild(afterParentDeadline)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("must not exceed parent");
+        ChildRunAdmission clamped = await(coordinator.startChild(afterParentDeadline));
+        assertThat(clamped.created()).isTrue();
+        assertThat(run(afterParentDeadline.childRunId()).getDeadlineAt())
+                .isEqualTo(run(root.runId()).getDeadlineAt());
 
         StartChildAgentRunCommand staleOwner = childCommand(
                 uniqueId("stale-owner-child"), root.runId(), "tool-call-3",
@@ -308,6 +312,120 @@ class AgentRunStartIT {
         assertThatThrownBy(() -> await(coordinator.startChild(cancelledParent)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不接受子任务");
+    }
+
+    /**
+     * [adapt] P4-W14 deadline 钳制矩阵(03-开发计划 §7.3 验收 4「子 deadline ≤ 父」):
+     * 父剩 10s / 子请 60s → 钳到父截止;子请 5s(更短)→ 按请求原样生效。
+     */
+    @Test
+    void clampsChildDeadlineToParentDeadlineAndHonorsShorterRequests() {
+        String conversationId = createConversation(42L, 7L);
+        AgentKernelSnapshot snapshot = snapshot("root-agent", 1L);
+        Instant parentDeadline = Instant.now().plus(Duration.ofSeconds(10))
+                .truncatedTo(ChronoUnit.MILLIS);
+        StartedAgentRun parent = await(coordinator.start(rootCommand(
+                uniqueId("clamp-root"), conversationId, 42L, 7L,
+                snapshot, parentDeadline, null, null, null)));
+        Instant parentPersistedDeadline = run(parent.runId()).getDeadlineAt()
+                .toInstant(ZoneOffset.UTC);
+
+        StartChildAgentRunCommand beyondParent = childCommand(
+                uniqueId("clamp-child"), parent.runId(), "clamp-tool-1",
+                parent.ownerInstanceId(), parent.ownerEpoch(), "Clamped child",
+                "asset_image_gen", snapshot,
+                parentPersistedDeadline.plus(Duration.ofSeconds(60)));
+        ChildRunAdmission clamped = await(coordinator.startChild(beyondParent));
+        assertThat(clamped.created()).isTrue();
+        assertThat(run(beyondParent.childRunId()).getDeadlineAt()
+                .toInstant(ZoneOffset.UTC))
+                .isEqualTo(parentPersistedDeadline);
+
+        Instant shorter = Instant.now().plus(Duration.ofSeconds(5))
+                .truncatedTo(ChronoUnit.MILLIS);
+        StartChildAgentRunCommand shorterRequest = childCommand(
+                uniqueId("short-child"), parent.runId(), "clamp-tool-2",
+                parent.ownerInstanceId(), parent.ownerEpoch(), "Short child",
+                "asset_image_gen", snapshot, shorter);
+        ChildRunAdmission honored = await(coordinator.startChild(shorterRequest));
+        assertThat(honored.created()).isTrue();
+        assertThat(run(shorterRequest.childRunId()).getDeadlineAt()
+                .toInstant(ZoneOffset.UTC))
+                .isEqualTo(shorter);
+    }
+
+    /**
+     * [adapt] P4-W14 深度/扇出护栏(默认 maxSubAgentDepth=3、
+     * maxConcurrentSubAgents=5,可配):超限明确拒绝(429,文案回灌模型);
+     * 同一 parentToolCallId 的幂等重试不受扇出上限误伤。
+     */
+    @Test
+    void enforcesSubAgentDepthAndFanoutGuardrails() {
+        String conversationId = createConversation(42L, 7L);
+        AgentKernelSnapshot snapshot = snapshot("root-agent", 1L);
+        Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
+        StartedAgentRun root = await(coordinator.start(rootCommand(
+                uniqueId("guard-root"), conversationId, 42L, 7L,
+                snapshot, deadline, null, null, null)));
+
+        // 深度:根(1) → 子(2) → 孙(3) 放行;曾孙(4) 拒绝。
+        StartedAgentRun child = await(coordinator.startChild(childCommand(
+                uniqueId("depth-child"), root.runId(), "depth-tool-1",
+                root.ownerInstanceId(), root.ownerEpoch(), "Depth child",
+                "asset_image_gen", snapshot, deadline.minusSeconds(1)))).run();
+        StartedAgentRun grandchild = await(coordinator.startChild(childCommand(
+                uniqueId("depth-grandchild"), child.runId(), "depth-tool-2",
+                child.ownerInstanceId(), child.ownerEpoch(), "Depth grandchild",
+                "asset_image_gen", snapshot, deadline.minusSeconds(1)))).run();
+        assertThat(run(grandchild.runId()).getParentRunId()).isEqualTo(child.runId());
+
+        StartChildAgentRunCommand greatGrandchild = childCommand(
+                uniqueId("depth-great"), grandchild.runId(), "depth-tool-3",
+                grandchild.ownerInstanceId(), grandchild.ownerEpoch(),
+                "Depth great grandchild", "asset_image_gen", snapshot,
+                deadline.minusSeconds(1));
+        assertThatThrownBy(() -> await(coordinator.startChild(greatGrandchild)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(failure -> {
+                    assertThat(((BusinessException) failure).getCode()).isEqualTo(429);
+                    assertThat(failure.getMessage()).contains("深度");
+                });
+        assertThat(run(greatGrandchild.childRunId())).isNull();
+
+        // 扇出:同一父下 5 个活跃子运行放行,第 6 个拒绝;已有 toolCallId 幂等重试不误伤。
+        String fanoutConversation = createConversation(42L, 7L);
+        StartedAgentRun fanoutRoot = await(coordinator.start(rootCommand(
+                uniqueId("fanout-root"), fanoutConversation, 42L, 7L,
+                snapshot, deadline, null, null, null)));
+        for (int index = 1; index <= 5; index++) {
+            ChildRunAdmission admitted = await(coordinator.startChild(childCommand(
+                    uniqueId("fanout-child-" + index), fanoutRoot.runId(),
+                    "fanout-tool-" + index,
+                    fanoutRoot.ownerInstanceId(), fanoutRoot.ownerEpoch(),
+                    "Fanout child " + index, "asset_image_gen", snapshot,
+                    deadline.minusSeconds(1))));
+            assertThat(admitted.created()).isTrue();
+        }
+        StartChildAgentRunCommand sixth = childCommand(
+                uniqueId("fanout-child-6"), fanoutRoot.runId(), "fanout-tool-6",
+                fanoutRoot.ownerInstanceId(), fanoutRoot.ownerEpoch(),
+                "Fanout child 6", "asset_image_gen", snapshot,
+                deadline.minusSeconds(1));
+        assertThatThrownBy(() -> await(coordinator.startChild(sixth)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(failure -> {
+                    assertThat(((BusinessException) failure).getCode()).isEqualTo(429);
+                    assertThat(failure.getMessage()).contains("并发");
+                });
+        assertThat(run(sixth.childRunId())).isNull();
+
+        StartChildAgentRunCommand idempotentRetry = childCommand(
+                uniqueId("fanout-retry"), fanoutRoot.runId(), "fanout-tool-3",
+                fanoutRoot.ownerInstanceId(), fanoutRoot.ownerEpoch(),
+                "Fanout child 3", "asset_image_gen", snapshot,
+                deadline.minusSeconds(1));
+        ChildRunAdmission retry = await(coordinator.startChild(idempotentRetry));
+        assertThat(retry.created()).isFalse();
     }
 
     @Test

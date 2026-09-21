@@ -67,6 +67,32 @@ public class AgentRunRepository {
         return runMapper.selectActiveChildren(parentRunId);
     }
 
+    /**
+     * [adapt] P4-W14 子 Agent 深度护栏:统计运行在父子链上的代数(根=1)。
+     * 沿 parent_run_id 逐级上溯,步数以 maxSteps 封顶——封顶后计数仍 ≥ 真实
+     * 深度与上限的较小值,「parentDepth + 1 > maxDepth」判定不受截断影响。
+     * 断链(祖先行缺失)按叶子处理;环路由 visited 集合 fail-fast。
+     */
+    public int generationDepthOf(AgentRun run, int maxSteps) {
+        int depth = 1;
+        String parentRunId = run.getParentRunId();
+        Set<String> visited = new HashSet<>();
+        visited.add(run.getRunId());
+        while (parentRunId != null && depth < maxSteps) {
+            if (!visited.add(parentRunId)) {
+                throw new IllegalStateException(
+                        "Cycle detected in Agent child runs: " + parentRunId);
+            }
+            AgentRun ancestor = runMapper.selectByRunId(parentRunId);
+            if (ancestor == null) {
+                break;
+            }
+            depth++;
+            parentRunId = ancestor.getParentRunId();
+        }
+        return depth;
+    }
+
     public LocalDateTime databaseNow() {
         return runMapper.selectDatabaseNow();
     }

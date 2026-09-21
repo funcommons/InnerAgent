@@ -389,4 +389,20 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             LIMIT #{limit}
             """)
     List<AgentRun> selectOrphanedActiveChildren(@Param("limit") int limit);
+
+    /**
+     * [adapt] P4-W14 mini KB 引用溯源:运行组装命中的知识库分段清单落行
+     * (TEXT 列 V20;best-effort,终态 DONE 事件投影时回填引用展示)。
+     * 显式携带 app_id 条件(拦截器重复注入同值条件语义无害)。
+     */
+    @Update("""
+            UPDATE ia_agent_run
+            SET kb_citations_json = #{citationsJson}
+            WHERE run_id = #{runId}
+              AND app_id = #{appId}
+            """)
+    int updateKbCitations(
+            @Param("runId") String runId,
+            @Param("appId") long appId,
+            @Param("citationsJson") String citationsJson);
 }

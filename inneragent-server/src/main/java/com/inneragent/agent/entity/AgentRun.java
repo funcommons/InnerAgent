@@ -81,6 +81,13 @@ public class AgentRun {
 
     private LocalDateTime projectionCompletedAt;
 
+    /**
+     * [adapt] P4-W14 mini KB 引用溯源:运行组装命中的知识库分段清单
+     * (JSON 字符串,TEXT 列 V20;DEF-08 教训 service 层序列化)。
+     * 无命中为 NULL;终态 DONE 事件投影时回填 kbCitations(可选字段)。
+     */
+    private String kbCitationsJson;
+
     @TableField(
             value = "active_conversation_id",
             insertStrategy = FieldStrategy.NEVER,

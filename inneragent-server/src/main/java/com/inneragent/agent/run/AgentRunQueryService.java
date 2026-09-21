@@ -287,6 +287,7 @@ public final class AgentRunQueryService {
                 // 镜像进父事件流的子事件带 childRunId(payload 透传)。
                 .setParentRunId(run.getParentRunId())
                 .setChildRunId(firstText(payload, "childRunId"))
+                .setKbCitations(kbCitations(run, event.outputType(), payload))
                 .setAgentName(identity.agentName())
                 .setRawEventId(identity.rawEventId())
                 .setRawEventType(identity.rawEventType())
@@ -310,6 +311,64 @@ public final class AgentRunQueryService {
             response.setFinished(false);
         }
         return response;
+    }
+
+    /**
+     * [adapt] P4-W14 mini KB 引用溯源投影:事件载荷已携带 kbCitations 时
+     * 透传(载荷优先,与 childRunId 同范);否则仅终态 DONE(模型回复
+     * 完成事件)从运行行 kb_citations_json 回填。可选字段:无命中/旧运行
+     * 为 null,不破既有消费者。
+     */
+    private List<AiChatStreamRespVO.KbCitationVO> kbCitations(
+            AgentRun run, String outputType, JsonNode payload) {
+        JsonNode embedded = payload.get("kbCitations");
+        if (embedded != null && embedded.isArray()) {
+            return citations(embedded);
+        }
+        if (!"DONE".equals(outputType)
+                || run.getKbCitationsJson() == null
+                || run.getKbCitationsJson().isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode parsed = objectMapper.readTree(run.getKbCitationsJson());
+            return parsed == null || !parsed.isArray() ? null : citations(parsed);
+        } catch (JsonProcessingException invalidCitations) {
+            // 落痕损坏只放弃引用展示,不使投影失败
+            return null;
+        }
+    }
+
+    private List<AiChatStreamRespVO.KbCitationVO> citations(JsonNode array) {
+        List<AiChatStreamRespVO.KbCitationVO> citations = new ArrayList<>();
+        for (JsonNode item : array) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            AiChatStreamRespVO.KbCitationVO citation = new AiChatStreamRespVO.KbCitationVO();
+            JsonNode chunkId = item.get("chunkId");
+            if (chunkId != null && chunkId.canConvertToLong()) {
+                citation.setChunkId(chunkId.asLong());
+            }
+            JsonNode documentId = item.get("documentId");
+            if (documentId != null && documentId.canConvertToLong()) {
+                citation.setDocumentId(documentId.asLong());
+            }
+            JsonNode documentTitle = item.get("documentTitle");
+            if (documentTitle != null && documentTitle.isTextual()) {
+                citation.setDocumentTitle(documentTitle.textValue());
+            }
+            JsonNode anchor = item.get("anchor");
+            if (anchor != null && anchor.isTextual()) {
+                citation.setAnchor(anchor.textValue());
+            }
+            JsonNode seq = item.get("seq");
+            if (seq != null && seq.canConvertToLong()) {
+                citation.setSeq((int) seq.asLong());
+            }
+            citations.add(citation);
+        }
+        return citations.isEmpty() ? null : citations;
     }
 
     private void projectToolCallStart(

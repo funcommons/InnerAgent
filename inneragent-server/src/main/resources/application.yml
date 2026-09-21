@@ -224,6 +224,23 @@ inneragent:
     max-skill-content-bytes: 131072
     # PRD §6.4「激活:用户每轮可激活的 Skill 数量有上限(默认 8)」
     max-active-per-app: 8
+  kb:
+    # mini 知识库(P4-W14 PRD M5;无向量;/ia/api/v1/admin/kb/documents)。
+    # 缺省值:单文档 5MB(PRD)/单应用文档数 1000(PRD,超限提示拆库)/
+    # 分段 500 字 overlap 50/单文档分段 2000/检索 top-k 4/注入预算 8000
+    # 字符——全部可配(测试可缩小 max-documents-per-app 做上限边界)。
+    max-document-bytes: 5242880
+    max-documents-per-app: 1000
+    chunk-size: 500
+    chunk-overlap: 50
+    max-chunks-per-document: 2000
+    retrieval-top-k: 4
+    max-query-chars: 200
+    max-injected-chars: 8000
+    # tsvector 检索配置:缺省 simple(Q4:zhparser 存在时可配 'zhparser',
+    # 启动期运行探测 pg_ts_config/扩展,不可得自动降级 simple 并 WARN);
+    # 变更后须重建索引(POST /admin/kb/documents/{id}/rebuild-index)。
+    search-config: simple
 
 logging:
   level:

@@ -251,6 +251,87 @@ class AgentRunQueryServiceTests {
                 .verifyComplete();
     }
 
+    @Test
+    void doneEventCarriesKbCitationsFromRunLedger() {
+        // P4-W14 引用溯源:终态 DONE 事件投影回填运行行 kb_citations_json
+        // (chunk id/来源标题等最小字段集),供前端来源展示。
+        AgentRun run = runWithCitations("""
+                [{"chunkId":42,"documentId":7,"documentTitle":"员工手册.md",
+                  "anchor":"请假流程","seq":3}]""");
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("outputType", "DONE")
+                .put("finished", true);
+        CommittedAgentEvent event = committed(9, "DONE", "AGENT_END", null, payload);
+
+        StepVerifier.create(service.project(run, event))
+                .assertNext(projected -> {
+                    assertThat(projected.getOutputType()).isEqualTo("DONE");
+                    assertThat(projected.getKbCitations()).hasSize(1);
+                    assertThat(projected.getKbCitations().getFirst().getChunkId())
+                            .isEqualTo(42L);
+                    assertThat(projected.getKbCitations().getFirst().getDocumentId())
+                            .isEqualTo(7L);
+                    assertThat(projected.getKbCitations().getFirst().getDocumentTitle())
+                            .isEqualTo("员工手册.md");
+                    assertThat(projected.getKbCitations().getFirst().getAnchor())
+                            .isEqualTo("请假流程");
+                    assertThat(projected.getKbCitations().getFirst().getSeq()).isEqualTo(3);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void nonDoneEventsDoNotCarryKbCitations() {
+        // 引用只随终态 DONE 回填:CONTENT 等中间事件不携带(可选字段,null)
+        AgentRun run = runWithCitations("""
+                [{"chunkId":42,"documentId":7,"documentTitle":"员工手册.md",
+                  "anchor":null,"seq":3}]""");
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("delta", "hello");
+        CommittedAgentEvent event = committed(7, "CONTENT", "TEXT_BLOCK_DELTA", null, payload);
+
+        StepVerifier.create(service.project(run, event))
+                .assertNext(projected -> {
+                    assertThat(projected.getOutputType()).isEqualTo("CONTENT");
+                    assertThat(projected.getKbCitations()).isNull();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void doneEventWithoutKbLedgerStaysNullForBackwardCompatibility() {
+        // 旧运行/无命中运行:kb_citations_json 为 NULL → kbCitations 不出现
+        // (N-1 兼容,不破既有消费者)
+        AgentRun run = run();
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("outputType", "DONE")
+                .put("finished", true);
+        CommittedAgentEvent event = committed(9, "DONE", "AGENT_END", null, payload);
+
+        StepVerifier.create(service.project(run, event))
+                .assertNext(projected -> {
+                    assertThat(projected.getOutputType()).isEqualTo("DONE");
+                    assertThat(projected.getKbCitations()).isNull();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void corruptedKbLedgerDegradesToNullInsteadOfProjectionFailure() {
+        AgentRun run = runWithCitations("{\"chunkId\": not-json");
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("outputType", "DONE")
+                .put("finished", true);
+        CommittedAgentEvent event = committed(9, "DONE", "AGENT_END", null, payload);
+
+        StepVerifier.create(service.project(run, event))
+                .assertNext(projected -> {
+                    assertThat(projected.getOutputType()).isEqualTo("DONE");
+                    assertThat(projected.getKbCitations()).isNull();
+                })
+                .verifyComplete();
+    }
+
     private AgentRun run() {
         return AgentRun.builder()
                 .runId("run-1")
@@ -261,6 +342,12 @@ class AgentRunQueryServiceTests {
                 .deadlineAt(LocalDateTime.now().plusMinutes(5))
                 .startedAt(LocalDateTime.now())
                 .build();
+    }
+
+    private AgentRun runWithCitations(String citationsJson) {
+        AgentRun run = run();
+        run.setKbCitationsJson(citationsJson);
+        return run;
     }
 
     private CommittedAgentEvent committed(

@@ -41,7 +41,7 @@ class AgentKernelSpecFactoryTests {
     void setUp() {
         registry = new AiAgentRegistry();
         AiAgentService agents = new AiAgentService(registry);
-        AiToolConfigService tools = new AiToolConfigService(List.of(), registry);
+        AiToolConfigService tools = new AiToolConfigService(List.of(), agents);
         AgentScopeModelFactory models = mock(AgentScopeModelFactory.class);
         model = AiModel.builder()
                 .id(9L)
@@ -302,7 +302,7 @@ class AgentKernelSpecFactoryTests {
         when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
         AgentKernelSpecFactory toolFactory = new AgentKernelSpecFactory(
                 new AiAgentService(registry),
-                new AiToolConfigService(List.of(tool), registry),
+                new AiToolConfigService(List.of(tool), new AiAgentService(registry)),
                 models,
                 new AgentScopeV2Properties(),
                 new ObjectMapper(),
@@ -454,6 +454,111 @@ class AgentKernelSpecFactoryTests {
                 .toolWhitelist()).containsExactly("mcp__crm__list_users");
     }
 
+    // ------------------------------------------------------------------
+    // [adapt] P4 数据驱动内核:DB 定义驱动的工具面收敛与子引用解析
+    // ------------------------------------------------------------------
+
+    @Test
+    void dbDefinitionWhitelistConvergesTheRootToolFace() {
+        ToolExecutor whitelisted = executor("read_script", true);
+        ToolExecutor outsideFace = executor("delete_everything", false);
+        AiAgentRegistry registry = new AiAgentRegistry();
+        AiAgentDefinition dbDriven = AiAgentDefinition.builder()
+                .type("db-driven")
+                .name("数据驱动定义")
+                .systemPrompt("DB 人设")
+                .instructionTemplate("DB 指令 <project_id>{projectId}</project_id>")
+                .enableTools(1)
+                .toolNames(List.of("read_script"))
+                .subAgentTools(List.of())
+                .build();
+        AiAgentService agents = new AiAgentService(registry, (appId, agentKey) ->
+                "db-driven".equals(agentKey) ? dbDriven : null);
+        AgentKernelSpecFactory dbFactory = new AgentKernelSpecFactory(
+                agents,
+                new AiToolConfigService(List.of(whitelisted, outsideFace), agents),
+                modelsMock(),
+                new AgentScopeV2Properties(),
+                new ObjectMapper(),
+                mcp);
+
+        AgentKernelSpec spec = dbFactory.createRoot(
+                request().setAgentType("db-driven"), model, "ignored:定义人设优先组装");
+
+        // 白名单收敛:声明面内的工具进内核,声明面外的执行器不进
+        // (根人设/指令由 AgentScopePipelineRunService 按同源定义组装,IT 覆盖)
+        assertThat(spec.toolWhitelist()).containsExactly("read_script");
+    }
+
+    @Test
+    void dbSubAgentReferenceResolvesEvenWithoutCodeRegistryEntry() {
+        ToolExecutor tool = executor("read_script", true);
+        AiAgentRegistry registry = new AiAgentRegistry();
+        AiAgentDefinition dbParent = AiAgentDefinition.builder()
+                .type("db-parent")
+                .name("数据驱动父定义")
+                .systemPrompt("父人设")
+                .enableTools(1)
+                .toolNames(List.of("read_script"))
+                .subAgentTools(List.of(AiAgentDefinition.SubAgentToolDef.builder()
+                        .toolName("db_sub_tool")
+                        .description("调起 DB 子定义")
+                        .parametersSchema("{\"type\":\"object\"}")
+                        .refAgentType("db-child")
+                        .build()))
+                .build();
+        AiAgentDefinition dbChild = AiAgentDefinition.builder()
+                .type("db-child")
+                .name("数据驱动子定义")
+                .systemPrompt("子人设(DB 独有,代码注册表无此类型)")
+                .instructionTemplate("子指令")
+                .enableTools(1)
+                .toolNames(List.of("read_script"))
+                .subAgentTools(List.of())
+                .build();
+        AiAgentService agents = new AiAgentService(registry, (appId, agentKey) ->
+                "db-parent".equals(agentKey) ? dbParent
+                        : "db-child".equals(agentKey) ? dbChild
+                        : null);
+        AgentKernelSpecFactory dbFactory = new AgentKernelSpecFactory(
+                agents,
+                new AiToolConfigService(List.of(tool), agents),
+                modelsMock(),
+                new AgentScopeV2Properties(),
+                new ObjectMapper(),
+                mcp);
+
+        AgentKernelSpec parent = dbFactory.createRoot(
+                request().setAgentType("db-parent"), model, "ignored");
+        // 子工具面:sub 声明以工具形态进入父内核白名单(白名单为 Set,不保序)
+        assertThat(parent.toolWhitelist()).containsExactlyInAnyOrder("read_script", "db_sub_tool");
+
+        // 子引用解析:refAgentType 在代码注册表不存在,DB 定义命中即可组装
+        AgentKernelSpec child = dbFactory.createChild(
+                parent,
+                dbParent.getSubAgentTools().getFirst(),
+                new ProjectContext(7L),
+                Map.of("message", "开始"));
+        assertThat(child.systemPrompt()).contains("子人设(DB 独有");
+        assertThat(child.toolWhitelist()).containsExactly("read_script");
+    }
+
+    private ToolExecutor executor(String toolName, boolean readOnly) {
+        ToolExecutor tool = mock(ToolExecutor.class);
+        when(tool.getToolName()).thenReturn(toolName);
+        when(tool.getParametersSchema()).thenReturn("{\"type\":\"object\"}");
+        when(tool.isEnabled()).thenReturn(true);
+        when(tool.isReadOnly()).thenReturn(readOnly);
+        when(tool.isConcurrencySafe()).thenReturn(true);
+        return tool;
+    }
+
+    private AgentScopeModelFactory modelsMock() {
+        AgentScopeModelFactory models = mock(AgentScopeModelFactory.class);
+        when(models.modelConfigFingerprint(any(AiModel.class))).thenReturn("a".repeat(64));
+        return models;
+    }
+
     private AgentKernelSpecFactory factoryWithCatalog(
             com.inneragent.agent.mcp.McpToolCatalog catalog) {
         AgentScopeModelFactory models = mock(AgentScopeModelFactory.class);
@@ -462,7 +567,7 @@ class AgentKernelSpecFactoryTests {
         when(mcp.manifestsForAgent(anyString(), any())).thenReturn(List.of());
         return new AgentKernelSpecFactory(
                 new AiAgentService(registry),
-                new AiToolConfigService(List.of(), registry),
+                new AiToolConfigService(List.of(), new AiAgentService(registry)),
                 models,
                 new AgentScopeV2Properties(),
                 new ObjectMapper(),

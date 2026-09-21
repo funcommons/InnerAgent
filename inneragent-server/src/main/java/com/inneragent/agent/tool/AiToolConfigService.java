@@ -1,8 +1,8 @@
 package com.inneragent.agent.tool;
 
 import cn.hutool.core.collection.CollUtil;
+import com.inneragent.agent.definition.AiAgentService;
 import com.inneragent.platform.config.ai.AiAgentDefinition;
-import com.inneragent.platform.config.ai.AiAgentRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,13 +14,18 @@ import java.util.List;
  * <p>
  * 支持按 Agent 类型获取可用工具列表（白名单过滤），
  * 并支持运行时与前端 enabledTools 取交集。
+ * <p>
+ * [adapt] P4 数据驱动内核:定义解析统一走 {@link AiAgentService}
+ * (ia_agent_definition 优先、代码注册表回落)——DB 定义声明的工具白名单与
+ * 子 Agent 工具面在此进入内核组装,管理面改完即生效;直接读代码注册表会使
+ * 提示词(数据驱动)与工具面(代码)两侧口径分裂,故本服务不再直连注册表。
  */
 @Service
 @RequiredArgsConstructor
 public class AiToolConfigService {
 
     private final List<ToolExecutor> toolExecutors;
-    private final AiAgentRegistry agentRegistry;
+    private final AiAgentService agentService;
 
     /**
      * 获取所有已启用的工具执行器
@@ -44,7 +49,7 @@ public class AiToolConfigService {
             return getEnabledTools();
         }
 
-        AiAgentDefinition agentDef = agentRegistry.getByType(agentType);
+        AiAgentDefinition agentDef = agentService.getByType(agentType);
         if (agentDef == null) {
             return Collections.emptyList();
         }
@@ -71,7 +76,7 @@ public class AiToolConfigService {
         if (agentType == null) {
             return Collections.emptyList();
         }
-        AiAgentDefinition agentDef = agentRegistry.getByType(agentType);
+        AiAgentDefinition agentDef = agentService.getByType(agentType);
         if (agentDef == null || CollUtil.isEmpty(agentDef.getSubAgentTools())) {
             return Collections.emptyList();
         }

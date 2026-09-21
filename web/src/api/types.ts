@@ -240,8 +240,9 @@ export interface IaToolSchemaHistory {
   createTime: IsoDateTime | null
 }
 
-/** 工具列表过滤(服务端仅此两项;keyword/风险级无服务端参数,管理站客户端过滤) */
-export interface ToolListQuery {
+/** 工具列表过滤+分页位(服务端仅 serverKey/enabled 两项;keyword/风险级为管理站
+ *  客户端过滤。pageNo/pageSize 任一下发即 PageResult 兼容分页形,均缺省=数组) */
+export interface ToolListQuery extends PageQuery {
   serverKey?: string
   enabled?: boolean
 }
@@ -328,8 +329,9 @@ export interface ToolGrantRevokeReq {
   decisionNote?: string
 }
 
-/** 授权列表过滤(activeOnly 默认 true:仅未撤销未失效;P2-W5 起已下推 SQL) */
-export interface ToolGrantListQuery {
+/** 授权列表过滤+分页位(activeOnly 默认 true:仅未撤销未失效,P2-W5 起已下推
+ *  SQL。pageNo/pageSize 任一下发即 PageResult 兼容分页形,均缺省=数组) */
+export interface ToolGrantListQuery extends PageQuery {
   userId?: number
   toolName?: string
   scope?: GrantScope

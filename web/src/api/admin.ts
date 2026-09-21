@@ -103,7 +103,7 @@ export const toolAdminApi = {
    * 工具列表——数组兼容形(不传分页参数,镜像 AdminToolController.list 旧形:
    * 服务端返回全量数组;授权代授下拉等「需要全集」的场景用)。
    */
-  list: (query: ToolListQuery = {}) =>
+  list: (query: Omit<ToolListQuery, 'pageNo' | 'pageSize'> = {}) =>
     http.get<IaToolRegistry[]>(`${BASE}/tools${buildQuery({ ...query })}`),
   /**
    * 工具列表——服务端分页形(P2-W5:主动传 pageNo/pageSize 任一即 PageResult,
@@ -149,7 +149,7 @@ export const toolGrantAdminApi = {
    * 授权列表——数组兼容形(不传分页参数;镜像 AdminGrantController.list 旧形,
    * activeOnly 服务端默认 true)。
    */
-  list: (query: ToolGrantListQuery = {}) =>
+  list: (query: Omit<ToolGrantListQuery, 'pageNo' | 'pageSize'> = {}) =>
     http.get<IaToolGrant[]>(`${BASE}/grants${buildQuery({ ...query })}`),
   /**
    * 授权列表——服务端分页形(P2-W5:pageNo/pageSize 任一出现即 PageResult,

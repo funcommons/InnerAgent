@@ -1,0 +1,5 @@
+{
+  "chipVisible": true,
+  "composerAlert": "",
+  "note": "SDK assistantMultimodal: >10MB 且模型具备 url 传输 → transport=url 回退(≤20MB 可传);无 UI 错误属设计内"
+}

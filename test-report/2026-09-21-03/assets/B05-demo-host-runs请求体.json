@@ -1,0 +1,13 @@
+{
+  "agentType": "demo",
+  "keys": [
+    "message",
+    "conversationId",
+    "modelId",
+    "agentType",
+    "category",
+    "title",
+    "multimodalInputs",
+    "toolExecutionMode"
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "url": "http://localhost:5180/ia/api/v1/me/reference-options",
+    "status": 200
+  },
+  {
+    "url": "http://localhost:5180/ia/api/v1/conversations?pageNo=1&pageSize=20&category=assistant",
+    "status": 200
+  },
+  {
+    "url": "http://localhost:5180/ia/api/v1/me/models?type=1",
+    "status": 200
+  }
+]

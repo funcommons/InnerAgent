@@ -1,0 +1,12 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 9,
+    "type": "run-terminated",
+    "runId": "758501d81b2f41d3a1bafa820e988b57",
+    "reason": "R4 复测:管理员强制终止",
+    "operator": "admin",
+    "occurredAt": "2026-09-21T11:04:32.104064Z"
+  }
+}

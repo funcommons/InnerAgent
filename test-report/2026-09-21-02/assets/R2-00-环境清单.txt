@@ -1,0 +1,8 @@
+R2 复测轮环境(2026-09-21 05:43-05:51)
+- server jar: inneragent-server-0.1.0-SNAPSHOT.jar 重建于 05:34(含 DEF-02/03/04/07 服务端修复;旧 jar 00:37 因缺 V11/V13 迁移已被替换)
+- web dist: pnpm build 05:43(含 DEF-01 修复);gateway.mjs 18081
+- sdk-js WC dist: pnpm build 05:43(含 DEF-05/06/07 SDK 侧修复)
+- compose: 全新 volume(flyway V1..V13 全量应用;旧 volume 缺 V11__webhook_delivery,18b 合并后无法通过校验,down -v 重建)
+- demo-spring-host 18091(mvn spring-boot:run,JDK21)、demo-host vite 5180(/ia 反代)、reconnect-host 18085(纯透传,DEF-07 补偿已移除)
+- 六工具经 admin API 注册(endpointUrl=http://localhost:18091/ia-mcp,annotationsJson readOnlyHint 齐备),注册响应 200 ×6
+- mock-text 模型 V4 seed(platform=mock);管理账号引导 admin/Admin#12345(Argon2id);X-IA-Demo-User 匿名演示链路可用(/me/models?type=1 → 200)

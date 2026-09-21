@@ -1,0 +1,17 @@
+#0 [200] http://localhost:18085/ia/api/v1/me/models?type=1
+{"code":0,"msg":"success","data":[{"id":1,"name":"mock-text","code":"mock-text","description":"P0 冒烟 mock 文本模型(MockAiProvider,确定性脚本输出,生产禁用)","status":1,"defaultModel":true,"supportVision":true,"multimodalInputTypes":["image","file"],"multimodalInputTransports":{"file":["url","base64"],"image":["url","base64"]},"supportReasoning":false,"reasoningEffortLevels":[],"contextWindow":8192}]}
+
+#1 [200] http://localhost:18085/ia/api/v1/conversations?pageNo=1&pageSize=20&category=assistant
+{"code":0,"msg":"success","data":{"list":[],"total":0,"pageNo":null,"pageSize":null}}
+
+#2 [200] http://localhost:18085/ia/api/v1/me/reference-options
+{"code":0,"msg":"success","data":{"skills":[],"mcpTools":[]}}
+
+#3 [200] http://localhost:18085/ia/api/v1/runs
+(body unavailable)
+
+#4 [200] http://localhost:18085/ia/api/v1/conversations/131ab525-95e2-4495-90ce-2883a25ffd07/messages
+{"code":0,"msg":"success","data":[{"createTime":"2026-09-21T09:32:32.973457","updateTime":"2026-09-21T09:32:32.973464","deleted":false,"tenantId":0,"id":133,"conversationId":"131ab525-95e2-4495-90ce-2883a25ffd07","runId":"4b9b7cc0510c4db79dc22891f1a55c09","projectionKey":null,"role":"user","content":"现在几点了?","referencesJson":null,"toolName":null,"toolStatus":null,"toolCallId":null,"parentToolCallId":null,"reasoningContent":null,"reasoningDurationMs":null,"messageOrder":1}]}
+
+#5 [200] http://localhost:18085/ia/api/v1/runs/cancel?conversationId=131ab525-95e2-4495-90ce-2883a25ffd07
+{"code":0,"msg":"success","data":true}

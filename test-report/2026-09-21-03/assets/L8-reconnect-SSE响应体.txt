@@ -1,0 +1,20 @@
+id:e44162c9c1b044bea7fefc5e3184879b:13
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"e44162c9c1b044bea7fefc5e3184879b","sequence":13,"messageId":"181a9183028f43a288774524e8abb89e","conversationId":"612fda84-96f9-4f12-a733-b4f1e809c2db","outputType":"CONTENT","content":"当前时间是 ","finished":false,"replyId":"bb6615af1354454d8d47273792ced61b","blockId":"text","rawEventId":"181a9183028f43a288774524e8abb89e","rawEventType":"TEXT_BLOCK_DELTA","createdAt":"2026-09-21T02:04:29.234Z"}
+
+id:e44162c9c1b044bea7fefc5e3184879b:14
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"e44162c9c1b044bea7fefc5e3184879b","sequence":14,"messageId":"5036ef1aa5c04a60815cd1a7b47b186f","conversationId":"612fda84-96f9-4f12-a733-b4f1e809c2db","outputType":"CONTENT","content":"2026-09-21T10:04:27.627239+08:00(时区 Asia/Shanghai)","finished":false,"replyId":"bb6615af1354454d8d47273792ced61b","blockId":"text","rawEventId":"5036ef1aa5c04a60815cd1a7b47b186f","rawEventType":"TEXT_BLOCK_DELTA","createdAt":"2026-09-21T02:04:30.039Z"}
+
+id:e44162c9c1b044bea7fefc5e3184879b:15
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"e44162c9c1b044bea7fefc5e3184879b","sequence":15,"messageId":"9f1247c7e1094006b14999016025c6f8","conversationId":"612fda84-96f9-4f12-a733-b4f1e809c2db","outputType":"CONTENT","content":",来自 get_current_time 工具。","finished":false,"replyId":"bb6615af1354454d8d47273792ced61b","blockId":"text","rawEventId":"9f1247c7e1094006b14999016025c6f8","rawEventType":"TEXT_BLOCK_DELTA","createdAt":"2026-09-21T02:04:30.840Z"}
+
+id:e44162c9c1b044bea7fefc5e3184879b:16
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"e44162c9c1b044bea7fefc5e3184879b","sequence":16,"messageId":"9dc4c06cadbd45e3ae152a19dc00a450","conversationId":"612fda84-96f9-4f12-a733-b4f1e809c2db","outputType":"CONTENT","content":"(本回复由 mock 模型脚本生成,仅用于 P0 冒烟与测试,生产禁用。)","finished":false,"replyId":"bb6615af1354454d8d47273792ced61b","blockId":"text","rawEventId":"9dc4c06cadbd45e3ae152a19dc00a450","rawEventType":"TEXT_BLOCK_DELTA","createdAt":"2026-09-21T02:04:31.643Z"}
+
+id:e44162c9c1b044bea7fefc5e3184879b:21
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"e44162c9c1b044bea7fefc5e3184879b","sequence":21,"messageId":"terminal-abf515152298480682370418a224db5b","conversationId":"612fda84-96f9-4f12-a733-b4f1e809c2db","outputType":"DONE","finished":true,"source":"main","rawEventId":"terminal-abf515152298480682370418a224db5b","rawEventType":"RUN_TERMINAL","createdAt":"2026-09-21T02:04:31.664Z"}
+

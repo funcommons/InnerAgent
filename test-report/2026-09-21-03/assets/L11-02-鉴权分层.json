@@ -1,0 +1,10 @@
+{
+  "anonymous": {
+    "status": 403,
+    "body": "{\"code\":403,\"msg\":\"管理面凭据无效:请携带 X-IA-Admin-Key 请求头或 Authorization: Bearer 管理会话 token\",\"data\":null}"
+  },
+  "wrongKey": {
+    "status": 403,
+    "body": "{\"code\":403,\"msg\":\"管理面凭据无效:请携带 X-IA-Admin-Key 请求头或 Authorization: Bearer 管理会话 token\",\"data\":null}"
+  }
+}

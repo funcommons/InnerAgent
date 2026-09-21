@@ -1,0 +1,18 @@
+{
+  "createTime": "2026-09-21T10:03:35.258208",
+  "updateTime": "2026-09-21T10:03:35.258217",
+  "deleted": false,
+  "tenantId": 0,
+  "id": 57,
+  "appId": 1,
+  "userId": 8902,
+  "toolFqn": "mcp__e2egrants__e2e_grant_tool",
+  "scope": "conversation",
+  "conversationId": "e2e-conv-invalidate",
+  "riskAtGrant": "low",
+  "schemaSha256": "346249e429703992718cf1a09e6a3fde14dee8a32a00864634af1871561f5077",
+  "source": "admin",
+  "invalidated": true,
+  "invalidatedReason": "tool_disabled",
+  "decisionNote": "e2e 失效展示"
+}

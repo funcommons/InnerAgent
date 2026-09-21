@@ -1,0 +1,4 @@
+﻿"id","时间","工具FQN","裁决","decision_source","风险","用户","应用","耗时ms","错误","入参(脱敏)"
+"209","2026-09-21T10:03:46.589849","mcp__e2eaudit__e2e_audit_tool","revoked","user-grant","medium","8701","1","","",""
+"208","2026-09-21T10:03:46.579358","mcp__e2eaudit__e2e_audit_tool","granted","user-grant","medium","8701","1","","",""
+"207","2026-09-21T10:03:45.383758","mcp__e2eaudit__e2e_audit_tool","granted","user-g

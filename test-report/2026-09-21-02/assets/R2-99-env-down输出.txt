@@ -1,0 +1,11 @@
+== 清理 ==
+  gateway(pid=30187)已停止
+pid=30187
+  server(pid=30144)已停止
+  端口 18090 无监听 ✓
+  端口 18081 无监听 ✓
+== compose down ==
+ Network docker_default Removing 
+ Network docker_default Removed 
+  容器端口 35432 已释放 ✓
+  容器端口 36379 已释放 ✓

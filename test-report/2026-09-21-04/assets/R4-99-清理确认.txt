@@ -1,0 +1,23 @@
+== R4 复测轮清理确认(2026-09-21)==
+
+-- 辅助进程 --
+demo-host vite(pid=$(cat /tmp/ia-e2e-logs/demo-host.pid))已 kill;gateway/server 经 e2e/env.sh down 停止(均确认「已停止」)。
+R4 未启动:web vite dev 5177 / reconnect-host 18085 / demo-spring-host 18091(terminate-run 用内置 get_current_time 工具,不依赖 18091)。
+
+-- 8 端口核查(全空)--
+18090 无监听 ✓   18081 无监听 ✓   18085 无监听 ✓   5180 无监听 ✓
+18091 无监听 ✓   5177 无监听 ✓   35432 无监听 ✓   36379 无监听 ✓
+
+-- 容器 --
+docker ps:inneragent 容器 0(compose down 已执行,volume 保留)。
+
+-- 数据 --
+· spec 15/13 各 fixture(afterAll/finally 物理清理):自建应用行(e2e-app-*)、演示用户(92073/92074 等 uniqueDemoUser 段)、delivery fixture、mockScript 复位 null。
+· 熔断域复位:ia_app#1 circuit_limits_json 复位 §4.7 默认(afterAll);webhook_url=NULL、webhook_enabled=TRUE、webhook_events 复位 V14 默认(R4-05 清场段)。
+· 手验探针用户 98701~98703 已在探针后即时物理清理。
+· 本轮新增留痕:ia_circuit_event 4 条(R4 手验:emergency-stop/resume/run-terminated,operator=admin)+ 对 ia_audit_log run-terminated 1 条——属验证留痕,与前几轮惯例一致(下轮可复用或清理);ia_webhook_delivery 保留 R2/R3 存量 7 行未动。
+· spec 02 afterAll 物理清理 e2e-app-* 应用行;其余用例自建前置均 finally 清理。
+
+-- git --
+仅 e2e/** 变更:support.ts 证据目录切 2026-09-21-04、spec 07 断言反转+头注更新([R4])、新建 spec 15(6 用例)。
+提交前缀 test(e2e):,未 push。产品代码(inneragent-server/sdk-js/web/examples)零改动。

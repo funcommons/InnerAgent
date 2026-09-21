@@ -1,0 +1,1 @@
+platform|text_protocol: openai_compatible|mock

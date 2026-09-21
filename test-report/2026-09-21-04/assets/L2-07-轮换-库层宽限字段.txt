@@ -1,0 +1,2 @@
+previous_sign_public_key 非空 | sign_key_rotated_at 非空:
+t|t

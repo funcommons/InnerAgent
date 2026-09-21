@@ -1,0 +1,16 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "toolId": 70,
+    "fqn": "mcp__e2etools__e2e_refresh_tool",
+    "verdict": "breaking",
+    "reasons": [
+      "required_added:name",
+      "required_added:age"
+    ],
+    "revalidateRequired": true,
+    "effectiveSchemaSha256": "a3c3a668cf33b41f2e37bf2debad9031174889ddf61c167eb0a042ff268d4622",
+    "pendingSchemaSha256": "7a4997f8cde2e0c62b1c8709f2076b14501b314cf947db02b0e0cc81e6a75710"
+  }
+}

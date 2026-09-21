@@ -1,0 +1,139 @@
+{
+  "records": {},
+  "recordCount": 0,
+  "products": {
+    "88": {
+      "productId": "88",
+      "name": "便携磁吸充电宝",
+      "brief": "E2E-R1-L10-两轮脚本-muaczd1i",
+      "briefVersion": 5,
+      "createdAt": "2026-09-01 由运营创建",
+      "updatedAt": "2026-09-20T21:59:07.810314Z",
+      "briefHistory": [
+        {
+          "version": 1,
+          "brief": "大容量磁吸无线充电宝,支持 20W 快充,一贴即充,出差通勤随身备。",
+          "updatedBy": "seed",
+          "updatedAt": "2026-09-01 由运营创建"
+        },
+        {
+          "version": 2,
+          "brief": "E2E-R1-L10-批准路径简介-muacrrdg",
+          "updatedBy": "92046",
+          "updatedByRun": "7ac2d25bf9a94aecb76b58d2a199f3cd",
+          "updatedAt": "2026-09-20T21:53:13.167061Z"
+        },
+        {
+          "version": 3,
+          "brief": "E2E-R1-L10-两轮脚本-muacry5t",
+          "updatedBy": "92048",
+          "updatedByRun": "f5b78ff86624470f9ee8cb31d0355d06",
+          "updatedAt": "2026-09-20T21:53:21.953524Z"
+        },
+        {
+          "version": 4,
+          "brief": "E2E-R1-L10-批准路径简介-muacz6fl",
+          "updatedBy": "92101",
+          "updatedByRun": "dc135c03105446fa854cb7604217f1bc",
+          "updatedAt": "2026-09-20T21:58:59.192016Z"
+        },
+        {
+          "version": 5,
+          "brief": "E2E-R1-L10-两轮脚本-muaczd1i",
+          "updatedBy": "92103",
+          "updatedByRun": "790daaa3b16e4896ab3da48e6122cb46",
+          "updatedAt": "2026-09-20T21:59:07.810314Z"
+        }
+      ]
+    },
+    "129": {
+      "productId": "129",
+      "name": "降噪头戴耳机",
+      "brief": "主动降噪头戴耳机,40 小时续航,双设备同时连接,通勤与办公皆宜。",
+      "briefVersion": 1,
+      "createdAt": "2026-09-03 由运营创建",
+      "updatedAt": "2026-09-03 由运营创建",
+      "briefHistory": [
+        {
+          "version": 1,
+          "brief": "主动降噪头戴耳机,40 小时续航,双设备同时连接,通勤与办公皆宜。",
+          "updatedBy": "seed",
+          "updatedAt": "2026-09-03 由运营创建"
+        }
+      ]
+    },
+    "306": {
+      "productId": "306",
+      "name": "多功能桌面支架",
+      "brief": "铝合金桌面支架,四档高度调节,兼容手机与平板,走线隐藏设计。",
+      "briefVersion": 1,
+      "createdAt": "2026-09-05 由运营创建",
+      "updatedAt": "2026-09-05 由运营创建",
+      "briefHistory": [
+        {
+          "version": 1,
+          "brief": "铝合金桌面支架,四档高度调节,兼容手机与平板,走线隐藏设计。",
+          "updatedBy": "seed",
+          "updatedAt": "2026-09-05 由运营创建"
+        }
+      ]
+    }
+  },
+  "productCount": 3,
+  "flowTemplates": {
+    "3432": {
+      "templateId": "3432",
+      "name": "标准客服流程",
+      "nodes": [
+        "受理",
+        "分类分级",
+        "处理",
+        "回访"
+      ],
+      "createdAt": "2026-09-01 由运营创建"
+    },
+    "3433": {
+      "templateId": "3433",
+      "name": "轻量咨询流程",
+      "nodes": [
+        "受理",
+        "处理",
+        "回访"
+      ],
+      "createdAt": "2026-09-01 由运营创建"
+    }
+  },
+  "flowTemplateCount": 2,
+  "loginRecordCount": 16,
+  "invocations": {
+    "get_product_brief": 4,
+    "update_product_brief": 4,
+    "list_login_records": 1
+  },
+  "lastClaims": {
+    "get_product_brief": {
+      "userId": "92103",
+      "actSub": "inneragent-run:790daaa3b16e4896ab3da48e6122cb46",
+      "runId": "790daaa3b16e4896ab3da48e6122cb46",
+      "appKey": "",
+      "tenantId": "1",
+      "toolName": "mcp__demo-spring-host__get_product_brief"
+    },
+    "update_product_brief": {
+      "userId": "92103",
+      "actSub": "inneragent-run:790daaa3b16e4896ab3da48e6122cb46",
+      "runId": "790daaa3b16e4896ab3da48e6122cb46",
+      "appKey": "",
+      "tenantId": "1",
+      "toolName": "mcp__demo-spring-host__update_product_brief"
+    },
+    "list_login_records": {
+      "userId": "92049",
+      "actSub": "inneragent-run:935bffebe4a64288980bdfceb92e797f",
+      "runId": "935bffebe4a64288980bdfceb92e797f",
+      "appKey": "",
+      "tenantId": "1",
+      "toolName": "mcp__demo-spring-host__list_login_records"
+    }
+  }
+}

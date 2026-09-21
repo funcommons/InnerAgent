@@ -1,0 +1,6 @@
+demo-spring-host|get_host_time|mcp__demo-spring-host__get_host_time|low|t|f
+demo-spring-host|create_host_record|mcp__demo-spring-host__create_host_record|medium|t|f
+demo-spring-host|get_product_brief|mcp__demo-spring-host__get_product_brief|low|t|f
+demo-spring-host|update_product_brief|mcp__demo-spring-host__update_product_brief|medium|t|f
+demo-spring-host|copy_flow_template|mcp__demo-spring-host__copy_flow_template|medium|t|f
+demo-spring-host|list_login_records|mcp__demo-spring-host__list_login_records|low|t|f

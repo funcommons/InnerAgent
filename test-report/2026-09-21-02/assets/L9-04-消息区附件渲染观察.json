@@ -1,0 +1,5 @@
+{
+  "attachmentRenderedInMessages": false,
+  "messageImages": 0,
+  "note": "用户气泡模板仅渲染 content 文本(assistant-messages__user);附件渲染实测见截图"
+}

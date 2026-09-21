@@ -1,0 +1,1 @@
+{"code":0,"msg":"success","data":{"emergencyStopped":false,"stoppedAt":null,"stopReason":null,"limits":{"maxToolCallsPerRun":32,"maxTokensPerRun":300000,"maxRunDurationMinutes":30,"toolRetryLimit":2,"mcpConcurrency":8,"mcpQps":20,"confirmTimeoutHours":24},"activeRuns":0,"recentEvents":[]}}

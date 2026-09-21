@@ -1,0 +1,10 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJpbm5lcmFnZW50LWFkbWluIiwic3ViIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3ODk5NTU4MzEsImlhdCI6MTc4OTk0MTQzMSwianRpIjoiNGY0ZDA0MDAtZmNhNi00ZThhLThhMDItZmIxODQzYjZjMzUzIn0.TkU11xQ0weME_-eaZbC22MoVETVX8cLS0erM5RZt85M",
+    "tokenType": "Bearer",
+    "expiresInSeconds": 14400,
+    "username": "admin"
+  }
+}

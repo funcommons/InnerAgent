@@ -1,0 +1,1 @@
+allowed|live-confirm|mcp__demo-spring-host__update_product_brief

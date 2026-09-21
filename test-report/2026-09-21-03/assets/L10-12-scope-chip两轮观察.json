@@ -1,0 +1,5 @@
+{
+  "scopeChipVisible": true,
+  "batchApprovalBarVisible": false,
+  "note": "[R3 断言更新] 优化建议 #11 修复(commit 6b57c1a):单工具行内确认卡补 scope chip(与批量条同组件复用), 产品行为正确, R2 的「单工具无 chip」断言过时反转为正向"
+}

@@ -1,0 +1,22 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "createTime": "2026-09-21T05:57:35.294011",
+    "updateTime": "2026-09-21T05:57:35.294024",
+    "deleted": null,
+    "tenantId": null,
+    "id": 14,
+    "appId": 1,
+    "userId": 8902,
+    "toolFqn": "mcp__e2egrants__e2e_grant_tool",
+    "scope": "conversation",
+    "conversationId": "e2e-conv-permanent-l4",
+    "riskAtGrant": "low",
+    "schemaSha256": "346249e429703992718cf1a09e6a3fde14dee8a32a00864634af1871561f5077",
+    "source": "admin",
+    "invalidated": false,
+    "invalidatedReason": null,
+    "decisionNote": null
+  }
+}

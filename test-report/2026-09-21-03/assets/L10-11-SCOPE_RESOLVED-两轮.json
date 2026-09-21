@@ -1,0 +1,19 @@
+[
+  {
+    "at": "2026-09-21T02:05:18.157Z",
+    "conversationId": "3f835650-cb5d-4046-900d-4cab8ae98236",
+    "runId": "1f7da945bdb44cf6a78359e319ac88df",
+    "replyId": "343cb34137a545b7876e9a8d55477be1",
+    "tools": [
+      {
+        "toolCallId": "mock-call-168",
+        "toolName": "mcp__demo-spring-host__update_product_brief",
+        "scope": {
+          "resolved": false,
+          "degraded": true,
+          "summary": "宿主未实现约束范围反查(resolve_scope),本次运行无约束范围上下文"
+        }
+      }
+    ]
+  }
+]

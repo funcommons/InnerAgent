@@ -1,0 +1,1 @@
+type|operator = run-terminated|admin

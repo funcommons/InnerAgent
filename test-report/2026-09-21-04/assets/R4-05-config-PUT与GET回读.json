@@ -1,0 +1,22 @@
+{
+  "put": {
+    "appId": 1,
+    "url": "https://e2e-r4-muanw4vl.example.com/hook",
+    "secretMasked": "",
+    "enabled": false,
+    "events": [
+      "run.finished",
+      "run.failed"
+    ]
+  },
+  "get": {
+    "appId": 1,
+    "url": "https://e2e-r4-muanw4vl.example.com/hook",
+    "secretMasked": "",
+    "enabled": false,
+    "events": [
+      "run.finished",
+      "run.failed"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+#0 [200] http://localhost:18085/ia/api/v1/conversations?pageNo=1&pageSize=20&category=assistant
+{"code":0,"msg":"success","data":{"list":[],"total":0,"pageNo":null,"pageSize":null}}
+
+#1 [200] http://localhost:18085/ia/api/v1/me/models?type=1
+{"code":0,"msg":"success","data":[{"id":1,"name":"mock-text","code":"mock-text","description":"P0 冒烟 mock 文本模型(MockAiProvider,确定性脚本输出,生产禁用)","status":1,"defaultModel":true,"supportVision":true,"multimodalInputTypes":["image","file"],"multimodalInputTransports":{"file":["url","base64"],"image":["url","base64"]},"supportReasoning":false,"reasoningEffortLevels":[],"contextWindow":8192}]}
+
+#2 [200] http://localhost:18085/ia/api/v1/me/reference-options
+{"code":0,"msg":"success","data":{"skills":[],"mcpTools":[]}}
+
+#3 [200] http://localhost:18085/ia/api/v1/runs
+(body unavailable)
+
+#4 [200] http://localhost:18085/ia/api/v1/runs/1854aaae7c8c44bc9f3f97cb7f420c7f/events
+(body unavailable)

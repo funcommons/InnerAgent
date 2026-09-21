@@ -1,0 +1,17 @@
+{
+  "id": 38,
+  "appId": 1,
+  "tenantId": 0,
+  "userId": 7004,
+  "conversationId": null,
+  "runId": null,
+  "toolFqn": "mcp__e2eaudit__secret",
+  "decision": "allowed",
+  "decisionSource": "mode-default",
+  "riskLevel": "medium",
+  "paramsMaskedJson": "{\"password\":\"***\",\"api_key\":\"***\",\"nested\":{\"refreshToken\":\"***\",\"note\":\"keepme\"}}",
+  "resultSummary": null,
+  "errorText": null,
+  "durationMs": 3,
+  "createTime": "2026-09-20T21:51:51.84845"
+}

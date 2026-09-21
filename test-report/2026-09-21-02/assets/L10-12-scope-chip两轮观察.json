@@ -1,0 +1,5 @@
+{
+  "scopeChipVisible": false,
+  "batchApprovalBarVisible": false,
+  "note": "scope 数据随事件下发(SCOPE_RESOLVED detail 可证), 但行内单工具确认卡无 scope 渲染位"
+}

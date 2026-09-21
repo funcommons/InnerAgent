@@ -1,0 +1,6 @@
+{
+  "putResponseUrl": null,
+  "getAfterPut": "https://e2e-r4-muanw4vl.example.com/hook",
+  "dbUrl": "https://e2e-r4-muanw4vl.example.com/hook",
+  "note": "PUT url:\"\" 响应 url=null 但库层不清(MP updateById 跳过 null);与 b04b4fa 修复的 resume 清空缺陷同族,移交台账"
+}

@@ -1,0 +1,8 @@
+{
+  "status": 400,
+  "body": {
+    "code": 400,
+    "msg": "工具已停用,不能授予: e2e_refresh_tool",
+    "data": null
+  }
+}

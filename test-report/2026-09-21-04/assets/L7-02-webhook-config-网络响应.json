@@ -1,0 +1,19 @@
+{
+  "url": "http://localhost:18081/ia/api/v1/admin/webhooks/config",
+  "status": 200,
+  "body": {
+    "code": 0,
+    "msg": "success",
+    "data": {
+      "appId": 1,
+      "url": null,
+      "secretMasked": "",
+      "enabled": true,
+      "events": [
+        "run.finished",
+        "run.failed",
+        "run.cancelled"
+      ]
+    }
+  }
+}

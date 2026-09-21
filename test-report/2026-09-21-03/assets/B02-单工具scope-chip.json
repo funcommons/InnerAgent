@@ -1,0 +1,5 @@
+{
+  "chipText": "约束范围降级：未获取上下文提示，写操作将逐次确认",
+  "chipTitle": "宿主未实现约束范围反查(resolve_scope),本次运行无约束范围上下文",
+  "chipDegraded": true
+}

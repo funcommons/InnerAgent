@@ -1,0 +1,1 @@
+stopped|stopped_at|stop_reason = false|NULL|NULL

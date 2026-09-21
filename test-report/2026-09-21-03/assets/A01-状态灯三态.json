@@ -1,0 +1,17 @@
+{
+  "states": {
+    "connected": {
+      "text": "已连接",
+      "cls": "env-badge ok el-tooltip__trigger el-tooltip__trigger"
+    },
+    "offline": {
+      "text": "服务不可达",
+      "cls": "env-badge down el-tooltip__trigger el-tooltip__trigger"
+    },
+    "demo": {
+      "text": "演示数据",
+      "cls": "env-badge demo el-tooltip__trigger el-tooltip__trigger"
+    }
+  },
+  "note": "#1 修复(9bbc7f7):api 层健康探测驱动;demo 态经 web vite dev(msw)取证"
+}

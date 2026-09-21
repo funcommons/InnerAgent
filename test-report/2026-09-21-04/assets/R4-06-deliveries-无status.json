@@ -1,0 +1,20 @@
+{
+  "total": 8,
+  "count": 8,
+  "first": {
+    "id": 13,
+    "appId": 1,
+    "event": "run.finished",
+    "runId": "r4fix-failed-muanw51acs",
+    "url": "http://localhost:19999/hook",
+    "success": false,
+    "status": "FAILED",
+    "attempt": 0,
+    "maxAttempts": 5,
+    "httpStatus": null,
+    "responseSummary": null,
+    "nextRetryAt": 1789967072689,
+    "deliveredAt": null,
+    "createdAt": 1789959872689
+  }
+}

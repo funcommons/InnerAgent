@@ -1,0 +1,18 @@
+== R4 环境前置核对(2026-09-21 10:54) ==
+
+-- jar 新鲜度 --
+-rw-r--r--@ 1 justin  staff  222154297  9月 21 10:44 /Users/justin/codes/funcommons/InnerAgent/inneragent-server/target/inneragent-server-0.1.0-SNAPSHOT.jar
+HEAD = 27f9d9e 2026-09-21 10:43:41 +0800 fix(R3): OBS-R3-2 CircuitView 头注释去「≤5s」旧契约表述 + #25 规则漏洞复盘留痕
+jar(10:44) > HEAD(10:43:41) → 含修复,无需重建;unzip -l 确认 jar 内含 V15__ia_app_circuit_limits_text.sql(10:44)
+
+-- Flyway 增量(R3 保留卷直接升级,未重建)--
+15 | ia app circuit limits text | true
+14 | circuit breaker and webhook config | true
+13 | tool grant active unique index | true
+
+-- ia_app.circuit_limits_json 列型(V15 目标)= --
+text | default: '{"maxToolCallsPerRun":32,"maxTokensPerRun":300000,"maxRunDurationMinutes":30,"toolRetryLimit":2,"mcpConcurrency":8,"mcpQps":20,"confirmTimeoutHours":24}'::text
+
+-- server.log 迁移行 --
+2026-09-21T10:53:33.759+08:00  INFO 22978 --- [inneragent-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "15 - ia app circuit limits text"
+2026-09-21T10:53:33.789+08:00  INFO 22978 --- [inneragent-server] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 1 migration to schema "public", now at version v15 (execution time 00:00.021s)

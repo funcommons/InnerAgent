@@ -1,0 +1,81 @@
+{
+  "emergencyStopped": false,
+  "stoppedAt": null,
+  "stopReason": null,
+  "limits": {
+    "maxToolCallsPerRun": 45,
+    "maxTokensPerRun": 300000,
+    "maxRunDurationMinutes": 30,
+    "toolRetryLimit": 2,
+    "mcpConcurrency": 8,
+    "mcpQps": 33,
+    "confirmTimeoutHours": 24
+  },
+  "activeRuns": 0,
+  "recentEvents": [
+    {
+      "id": 8,
+      "type": "resume",
+      "runId": null,
+      "reason": "人工恢复",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T11:04:31.333Z"
+    },
+    {
+      "id": 7,
+      "type": "emergency-stop",
+      "runId": null,
+      "reason": "R4 复测:停用守卫取证",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T11:04:30.952Z"
+    },
+    {
+      "id": 6,
+      "type": "resume",
+      "runId": null,
+      "reason": "人工恢复",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T11:02:53.577Z"
+    },
+    {
+      "id": 5,
+      "type": "emergency-stop",
+      "runId": null,
+      "reason": "R4 复测:停用守卫取证",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T11:02:53.212Z"
+    },
+    {
+      "id": 4,
+      "type": "run-terminated",
+      "runId": "589e98a0ef13427d9d201f1a2d51fd47",
+      "reason": "R4 复测:管理员强制终止",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T11:02:21.682Z"
+    },
+    {
+      "id": 3,
+      "type": "resume",
+      "runId": null,
+      "reason": "人工恢复",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T11:02:20.531Z"
+    },
+    {
+      "id": 2,
+      "type": "emergency-stop",
+      "runId": null,
+      "reason": "R4 复测:停用守卫取证",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T11:02:20.050Z"
+    },
+    {
+      "id": 1,
+      "type": "run-terminated",
+      "runId": "579cba427ece48069def917f0b2cb520",
+      "reason": "R3 手验:管理员强制终止",
+      "operator": "demo-user",
+      "occurredAt": "2026-09-21T09:26:41.331Z"
+    }
+  ]
+}

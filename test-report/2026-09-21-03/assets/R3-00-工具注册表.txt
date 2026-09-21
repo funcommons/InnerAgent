@@ -1,0 +1,6 @@
+get_host_time → {"code":0,"msg":"success","data":{"createTime":"2026-09-21T09:22:54.0838","updateTime":"2026-09-21T09:22:54.084323","deleted":false,"id":25,"appId":1,"serverKey
+create_host_record → {"code":0,"msg":"success","data":{"createTime":"2026-09-21T09:22:54.149618","updateTime":"2026-09-21T09:22:54.149639","deleted":false,"id":26,"appId":1,"serverK
+get_product_brief → {"code":0,"msg":"success","data":{"createTime":"2026-09-21T09:22:54.170339","updateTime":"2026-09-21T09:22:54.170361","deleted":false,"id":27,"appId":1,"serverK
+update_product_brief → {"code":0,"msg":"success","data":{"createTime":"2026-09-21T09:22:54.19015","updateTime":"2026-09-21T09:22:54.190169","deleted":false,"id":28,"appId":1,"serverKe
+copy_flow_template → {"code":0,"msg":"success","data":{"createTime":"2026-09-21T09:22:54.210258","updateTime":"2026-09-21T09:22:54.210278","deleted":false,"id":29,"appId":1,"serverK
+list_login_records → {"code":0,"msg":"success","data":{"createTime":"2026-09-21T09:22:54.229792","updateTime":"2026-09-21T09:22:54.229809","deleted":false,"id":30,"appId":1,"serverK

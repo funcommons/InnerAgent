@@ -1,0 +1,7 @@
+{
+  "terminalState": "已完成",
+  "uiContentTail": "你好,当前时间是 2026-09-21T10:04:52.008335+08:00(时区 Asia/Shanghai),来自 get_current_time 工具。(本回复由 mock 模型脚本生成,仅用于 P0 冒烟与测试,生产禁用。)",
+  "dbAssistantContent": "[mock] 你好,当前时间是 2026-09-21T10:04:52.008335+08:00(时区 Asia/Shanghai),来自 get_current_time 工具。(本回复由 mock 模型脚本生成,仅用于 P0 冒烟与测试,生产禁用。)",
+  "uiMissingFooter": false,
+  "dbHasFooter": true
+}

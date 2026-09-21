@@ -1,0 +1,33 @@
+{
+  "url": "http://localhost:18081/ia/api/v1/admin/circuit-breaker",
+  "status": 200,
+  "body": {
+    "code": 0,
+    "msg": "success",
+    "data": {
+      "emergencyStopped": false,
+      "stoppedAt": null,
+      "stopReason": null,
+      "limits": {
+        "maxToolCallsPerRun": 32,
+        "maxTokensPerRun": 300000,
+        "maxRunDurationMinutes": 30,
+        "toolRetryLimit": 2,
+        "mcpConcurrency": 8,
+        "mcpQps": 20,
+        "confirmTimeoutHours": 24
+      },
+      "activeRuns": 0,
+      "recentEvents": [
+        {
+          "id": 1,
+          "type": "run-terminated",
+          "runId": "579cba427ece48069def917f0b2cb520",
+          "reason": "R3 手验:管理员强制终止",
+          "operator": "demo-user",
+          "occurredAt": "2026-09-21T09:26:41.331Z"
+        }
+      ]
+    }
+  }
+}

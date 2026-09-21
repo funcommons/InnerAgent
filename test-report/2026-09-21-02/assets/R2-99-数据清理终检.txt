@@ -1,0 +1,8 @@
+ia_tool_registry|0
+ia_tool_grant|0
+ia_agent_conversation|0
+ia_agent_run|0
+ia_agent_attachment|0
+ia_agent_event|0
+admin|f|0
+mockScript 复位: 0 行非空

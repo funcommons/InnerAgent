@@ -1,0 +1,20 @@
+{
+  "uiPut": {
+    "maxToolCallsPerRun": 45,
+    "maxTokensPerRun": 300000,
+    "maxRunDurationMinutes": 30,
+    "toolRetryLimit": 2,
+    "mcpConcurrency": 8,
+    "mcpQps": 33,
+    "confirmTimeoutHours": 24
+  },
+  "apiReadback": {
+    "maxToolCallsPerRun": 45,
+    "maxTokensPerRun": 300000,
+    "maxRunDurationMinutes": 30,
+    "toolRetryLimit": 2,
+    "mcpConcurrency": 8,
+    "mcpQps": 33,
+    "confirmTimeoutHours": 24
+  }
+}

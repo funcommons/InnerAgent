@@ -1,0 +1,28 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "list": [
+      {
+        "id": 221,
+        "appId": 1,
+        "tenantId": 0,
+        "userId": null,
+        "conversationId": null,
+        "runId": null,
+        "toolFqn": "mcp__e2etools__e2e_revive_tool",
+        "decision": "tool_revived",
+        "decisionSource": "forced-policy",
+        "riskLevel": "medium",
+        "paramsMaskedJson": null,
+        "resultSummary": "re-registered after logical delete; fqn=mcp__e2etools__e2e_revive_tool",
+        "errorText": null,
+        "durationMs": null,
+        "createTime": "2026-09-21T11:06:09.33304"
+      }
+    ],
+    "total": 1,
+    "pageNo": 1,
+    "pageSize": 10
+  }
+}

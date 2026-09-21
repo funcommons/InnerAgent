@@ -1,0 +1,34 @@
+#0 [200] http://localhost:18085/ia/api/v1/me/models?type=1
+{"code":0,"msg":"success","data":[{"id":1,"name":"mock-text","code":"mock-text","description":"P0 冒烟 mock 文本模型(MockAiProvider,确定性脚本输出,生产禁用)","status":1,"defaultModel":true,"supportVision":true,"multimodalInputTypes":["image","file"],"multimodalInputTransports":{"file":["url","base64"],"image":["url","base64"]},"supportReasoning":false,"reasoningEffortLevels":[],"contextWindow":8192}]}
+
+#1 [200] http://localhost:18085/ia/api/v1/conversations?pageNo=1&pageSize=20&category=assistant
+{"code":0,"msg":"success","data":{"list":[],"total":0,"pageNo":null,"pageSize":null}}
+
+#2 [200] http://localhost:18085/ia/api/v1/me/reference-options
+{"code":0,"msg":"success","data":{"skills":[],"mcpTools":[]}}
+
+#3 [200] http://localhost:18085/ia/api/v1/runs
+(body unavailable)
+
+#4 [200] http://localhost:18085/ia/api/v1/runs/f751043d7fc2404d9eb08644813c4892/events
+id:f751043d7fc2404d9eb08644813c4892:13
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"f751043d7fc2404d9eb08644813c4892","sequence":13,"messageId":"d908dab8d74947c9b7ed360a10e77ff8","conversationId":"215ac665-b985-44de-8616-5adc1a7b8d07","outputType":"CONTENT","content":"å½“å‰æ—¶é—´æ˜¯ ","finished":false,"replyId":"18408c902a374a9eabc46ae3cc6cd74f","blockId":"text","rawEventId":"d908dab8d74947c9b7ed360a10e77ff8","rawEventType":"TEXT_BLOCK_DELTA","createdAt":"2026-09-21T01:32:47.779Z"}
+
+id:f751043d7fc2404d9eb08644813c4892:14
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"f751043d7fc2404d9eb08644813c4892","sequence":14,"messageId":"49880729817c451795bfe1ac66f61e14","conversationId":"215ac665-b985-44de-8616-5adc1a7b8d07","outputType":"CONTENT","content":"2026-09-21T09:32:46.17139+08:00(æ—¶åŒº Asia/Shanghai)","finished":false,"replyId":"18408c902a374a9eabc46ae3cc6cd74f","blockId":"text","rawEventId":"49880729817c451795bfe1ac66f61e14","rawEventType":"TEXT_BLOCK_DELTA","createdAt":"2026-09-21T01:32:48.585Z"}
+
+id:f751043d7fc2404d9eb08644813c4892:15
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"f751043d7fc2404d9eb08644813c4892","sequence":15,"messageId":"58f1eb24964946cab89f9cd920fa2066","conversationId":"215ac665-b985-44de-8616-5adc1a7b8d07","outputType":"CONTENT","content":",æ¥è‡ª get_current_time å·¥å…·ã€‚","finished":false,"replyId":"18408c902a374a9eabc46ae3cc6cd74f","blockId":"text","rawEventId":"58f1eb24964946cab89f9cd920fa2066","rawEventType":"TEXT_BLOCK_DELTA","createdAt":"2026-09-21T01:32:49.386Z"}
+
+id:f751043d7fc2404d9eb08644813c4892:16
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"f751043d7fc2404d9eb08644813c4892","sequence":16,"messageId":"4b64c1860fbd44778f0f4258108bde12","conversationId":"215ac665-b985-44de-8616-5adc1a7b8d07","outputType":"CONTENT","content":"(æœ¬å›žå¤ç”± mock æ¨¡åž‹è„šæœ¬ç”Ÿæˆ,ä»…ç”¨äºŽ P0 å†’çƒŸä¸Žæµ‹è¯•,ç”Ÿäº§ç¦ç”¨ã€‚)","finished":false,"replyId":"18408c902a374a9eabc46ae3cc6cd74f","blockId":"text","rawEventId":"4b64c1860fbd44778f0f4258108bde12","rawEventType":"TEXT_BLOCK_DELTA","createdAt":"2026-09-21T01:32:50.187Z"}
+
+id:f751043d7fc2404d9eb08644813c4892:21
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"f751043d7fc2404d9eb08644813c4892","sequence":21,"messageId":"terminal-f582be0537d9422f98c8b498b14e8556","conversationId":"215ac665-b985-44de-8616-5adc1a7b8d07","outputType":"DONE","finished":true,"source":"main","rawEventId":"terminal-f582be0537d9422f98c8b498b14e8556","rawEventType":"RUN_TERMINAL","createdAt":"2026-09-21T01:32:50.206Z"}
+
+

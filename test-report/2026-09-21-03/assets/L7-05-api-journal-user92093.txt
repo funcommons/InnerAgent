@@ -1,0 +1,21 @@
+#0 [200] http://localhost:18085/ia/api/v1/me/reference-options
+{"code":0,"msg":"success","data":{"skills":[],"mcpTools":[]}}
+
+#1 [200] http://localhost:18085/ia/api/v1/me/models?type=1
+{"code":0,"msg":"success","data":[{"id":1,"name":"mock-text","code":"mock-text","description":"P0 冒烟 mock 文本模型(MockAiProvider,确定性脚本输出,生产禁用)","status":1,"defaultModel":true,"supportVision":true,"multimodalInputTypes":["image","file"],"multimodalInputTransports":{"file":["url","base64"],"image":["url","base64"]},"supportReasoning":false,"reasoningEffortLevels":[],"contextWindow":8192}]}
+
+#2 [200] http://localhost:18085/ia/api/v1/conversations?pageNo=1&pageSize=20&category=assistant
+{"code":0,"msg":"success","data":{"list":[],"total":0,"pageNo":null,"pageSize":null}}
+
+#3 [200] http://localhost:18085/ia/api/v1/runs/cancel?conversationId=75049641-e266-46c0-8547-c2c011d5c3bd
+{"code":0,"msg":"success","data":true}
+
+#4 [200] http://localhost:18085/ia/api/v1/runs
+id:a9f3babd8a0a4ca08b9f10a6de7c5515:1
+event:pipeline-event
+data:{"schemaVersion":1,"runId":"a9f3babd8a0a4ca08b9f10a6de7c5515","sequence":1,"messageId":"reconciled-92f21c1d7118471385f0eee963cc328c","conversationId":"75049641-e266-46c0-8547-c2c011d5c3bd","outputType":"CANCELLED","finished":true,"error":"Agent run was cancelled","source":"main","rawEventId":"reconciled-92f21c1d7118471385f0eee963cc328c","rawEventType":"RUN_TERMINAL","createdAt":"2026-09-21T02:04:14.730Z"}
+
+
+
+#5 [200] http://localhost:18085/ia/api/v1/conversations/75049641-e266-46c0-8547-c2c011d5c3bd/messages
+{"code":0,"msg":"success","data":[{"createTime":"2026-09-21T10:04:14.711221","updateTime":"2026-09-21T10:04:14.711235","deleted":false,"tenantId":0,"id":278,"conversationId":"75049641-e266-46c0-8547-c2c011d5c3bd","runId":"a9f3babd8a0a4ca08b9f10a6de7c5515","projectionKey":null,"role":"user","content":"现在几点了?","referencesJson":null,"toolName":null,"toolStatus":null,"toolCallId":null,"parentToolCallId":null,"reasoningContent":null,"reasoningDurationMs":null,"messageOrder":1}]}

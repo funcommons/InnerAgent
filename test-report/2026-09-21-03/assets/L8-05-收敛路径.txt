@@ -1,0 +1,4 @@
+path=A(auto-reconnect-resume)
+断流前内容长度=10
+断流后内容长度=127
+UI 含收尾段=true

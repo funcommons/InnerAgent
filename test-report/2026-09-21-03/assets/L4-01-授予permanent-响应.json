@@ -1,0 +1,22 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "createTime": "2026-09-21T10:03:31.427964",
+    "updateTime": "2026-09-21T10:03:31.427975",
+    "deleted": null,
+    "tenantId": null,
+    "id": 53,
+    "appId": 1,
+    "userId": 8901,
+    "toolFqn": "mcp__e2egrants__e2e_grant_tool",
+    "scope": "permanent",
+    "conversationId": null,
+    "riskAtGrant": "low",
+    "schemaSha256": "346249e429703992718cf1a09e6a3fde14dee8a32a00864634af1871561f5077",
+    "source": "admin",
+    "invalidated": false,
+    "invalidatedReason": null,
+    "decisionNote": "e2e 永久授权"
+  }
+}

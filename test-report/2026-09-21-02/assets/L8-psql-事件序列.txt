@@ -1,0 +1,24 @@
+runId=2a3c5fe955434fa4ad296c9f4dcdef8d
+可见事件 seq: 3,5,9,12,13,14,15,16,21
+全部行:
+1:(子事件)
+2:(子事件)
+3:TOOL_CALL_STARTED
+4:(子事件)
+5:TOOL_CALL
+6:(子事件)
+7:(子事件)
+8:(子事件)
+9:TOOL_FINISHED
+10:(子事件)
+11:(子事件)
+12:CONTENT
+13:CONTENT
+14:CONTENT
+15:CONTENT
+16:CONTENT
+17:(子事件)
+18:(子事件)
+19:(子事件)
+20:(子事件)
+21:DONE

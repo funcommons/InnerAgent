@@ -1,0 +1,5 @@
+{
+  "url": "http://localhost:18081/ia/api/v1/admin/circuit-breaker",
+  "status": 404,
+  "body": "{\"code\":404,\"msg\":\"资源未找到\",\"data\":null}"
+}

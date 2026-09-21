@@ -1,0 +1,4 @@
+GET /ia/api/v1/attachments/11
+status=200
+content-type=image/png
+bytes=70

@@ -1,0 +1,24 @@
+schema 历史:mcp__e2e13histalsfrg__hist_probe
+当前指纹
+08c8cc0e5745b1461ff0e3254761829dcd326eb328e9f4375a1ad67be880e009
+已应用
+无变更
+(初始)
+→
+08c8cc0e5745b1…
+register
+2026-09-21T10:05:40.689746 · 操作者:admin
+已应用
+兼容
+(初始)
+→
+555319d76d207a…
+[nested_schema_changed]
+2026-09-21T10:05:41.957146 · 操作者:admin
+静默刷新
+无变更
+555319d76d207a…
+→
+555319d76d207a…
+[schema_fingerprint_unchanged]
+2026-09-21T10:05:41.963961 · 操作者:admin

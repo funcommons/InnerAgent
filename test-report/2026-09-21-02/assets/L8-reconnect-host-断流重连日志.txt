@@ -1,0 +1,2 @@
+2026-09-20T21:58:36.140Z [drop] GET /ia/api/v1/runs/2a3c5fe955434fa4ad296c9f4dcdef8d/events (断流窗口内, 连接直接销毁)
+2026-09-20T21:58:41.145Z [reconn] SSE 重连游标 Last-Event-ID=2a3c5fe955434fa4ad296c9f4dcdef8d:12

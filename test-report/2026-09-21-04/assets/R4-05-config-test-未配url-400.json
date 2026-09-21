@@ -1,0 +1,5 @@
+{
+  "code": 400,
+  "msg": "尚未配置 Webhook 回调地址,请先保存 url 后再测试",
+  "data": null
+}

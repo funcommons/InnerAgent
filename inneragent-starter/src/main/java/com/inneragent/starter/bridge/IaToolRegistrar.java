@@ -16,15 +16,25 @@ public class IaToolRegistrar implements SmartInitializingSingleton {
 
 	private final IaToolScanner scanner;
 	private final IaMcpServerBridge bridge;
+	/** 工具暴露开关(inneragent.bridge.tools.*),null = 不过滤 */
+	private final IaToolExposureFilter exposureFilter;
 
 	public IaToolRegistrar(IaToolScanner scanner, IaMcpServerBridge bridge) {
+		this(scanner, bridge, null);
+	}
+
+	public IaToolRegistrar(IaToolScanner scanner, IaMcpServerBridge bridge, IaToolExposureFilter exposureFilter) {
 		this.scanner = scanner;
 		this.bridge = bridge;
+		this.exposureFilter = exposureFilter;
 	}
 
 	@Override
 	public void afterSingletonsInstantiated() {
 		var definitions = this.scanner.scan();
+		if (this.exposureFilter != null) {
+			definitions = this.exposureFilter.apply(definitions);
+		}
 		for (IaToolDefinition definition : definitions) {
 			this.bridge.register(definition);
 		}

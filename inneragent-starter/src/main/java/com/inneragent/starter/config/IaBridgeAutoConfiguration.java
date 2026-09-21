@@ -10,6 +10,7 @@ import com.inneragent.starter.act.IaActJwksCache;
 import com.inneragent.starter.act.IaActTokenFilter;
 import com.inneragent.starter.act.IaActTokenVerifier;
 import com.inneragent.starter.bridge.IaMcpServerBridge;
+import com.inneragent.starter.bridge.IaToolExposureFilter;
 import com.inneragent.starter.bridge.IaToolRegistrar;
 import com.inneragent.starter.bridge.IaToolScanner;
 import com.inneragent.starter.client.InnerAgentBridgeClient;
@@ -100,8 +101,11 @@ public class IaBridgeAutoConfiguration {
 	}
 
 	@Bean
-	public IaToolRegistrar iaToolRegistrar(IaToolScanner scanner, IaMcpServerBridge bridge) {
-		return new IaToolRegistrar(scanner, bridge);
+	public IaToolRegistrar iaToolRegistrar(IaToolScanner scanner, IaMcpServerBridge bridge,
+			IaBridgeProperties properties) {
+		var tools = properties.getTools();
+		return new IaToolRegistrar(scanner, bridge,
+				new IaToolExposureFilter(tools.getInclude(), tools.getExclude()));
 	}
 
 	@Bean

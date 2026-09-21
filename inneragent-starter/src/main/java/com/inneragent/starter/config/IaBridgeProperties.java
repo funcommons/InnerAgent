@@ -34,6 +34,8 @@ public class IaBridgeProperties {
 
 	private final Act act = new Act();
 
+	private final Tools tools = new Tools();
+
 	public boolean isEnabled() {
 		return this.enabled;
 	}
@@ -80,6 +82,41 @@ public class IaBridgeProperties {
 
 	public Act getAct() {
 		return this.act;
+	}
+
+	public Tools getTools() {
+		return this.tools;
+	}
+
+	/**
+	 * 工具暴露开关({@code inneragent.bridge.tools.*},§9.2.1 灰度按工具名放量):
+	 * include 白名单 / exclude 黑名单,exclude 优先于 include;
+	 * 元素支持精确工具名与前缀通配 {@code prefix.*}(如 {@code generate_*}),大小写敏感。
+	 */
+	public static class Tools {
+
+		/** 白名单:缺省空 = 全部暴露;非空 = 仅名单内工具暴露 */
+		private List<String> include = new ArrayList<>();
+
+		/** 黑名单:缺省空;命中即剔除(优先于 include) */
+		private List<String> exclude = new ArrayList<>();
+
+		public List<String> getInclude() {
+			return this.include;
+		}
+
+		public void setInclude(List<String> include) {
+			this.include = include;
+		}
+
+		public List<String> getExclude() {
+			return this.exclude;
+		}
+
+		public void setExclude(List<String> exclude) {
+			this.exclude = exclude;
+		}
+
 	}
 
 	/** 工具扫描行为 */

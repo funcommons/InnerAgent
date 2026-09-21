@@ -64,7 +64,8 @@ public class AdminMcpServerController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "更新三方 MCP 服务器(端点/静态头/超时等)")
+    @Operation(summary = "更新三方 MCP 服务器(端点/静态头/超时等;"
+            + "credentials 缺省/null/空串=保持原值,显式非空=覆盖)")
     public CommonResult<McpServerRespVO> update(
             @PathVariable long id, @Valid @RequestBody McpServerSaveReqVO request) {
         return success(McpServerRespVO.of(appServerService.update(

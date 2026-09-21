@@ -186,6 +186,76 @@ class McpThirdPartyServerServiceTests {
     }
 
     // ------------------------------------------------------------------
+    // credentials 空值语义定案(K③):null/空串=保持原值,显式非空=覆盖
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("应用级更新:credentials null → 保持原值(updateById 实体携旧值)")
+    void appUpdateKeepsCredentialsWhenAbsent() {
+        McpServerConfig existing = new McpServerConfig();
+        existing.setId(5L);
+        existing.setAppId(1L);
+        existing.setServerKey("crm");
+        existing.setCredentials("old-secret");
+        when(appMapper.selectById(5L)).thenReturn(existing);
+
+        appService.update(1L, 5L, upsertWithCredentials("crm", null));
+
+        ArgumentCaptor<McpServerConfig> captor =
+                ArgumentCaptor.forClass(McpServerConfig.class);
+        verify(appMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getCredentials()).isEqualTo("old-secret");
+    }
+
+    @Test
+    @DisplayName("用户级更新:credentials 空串 → 保持原值;显式非空 → 覆盖")
+    void userUpdateCredentialsKeepAndOverwrite() {
+        McpUserServer existing = new McpUserServer();
+        existing.setId(6L);
+        existing.setAppId(1L);
+        existing.setUserId(10001L);
+        existing.setServerKey("crm");
+        existing.setCredentials("old-secret");
+        when(userMapper.selectById(6L)).thenReturn(existing);
+
+        // 空串 = 保持原值(SDK 编辑流不回传原文,凭据不被打码形污染)
+        userService.update(1L, 10001L, 6L, upsertWithCredentials("crm", ""));
+        ArgumentCaptor<McpUserServer> captor =
+                ArgumentCaptor.forClass(McpUserServer.class);
+        verify(userMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getCredentials()).isEqualTo("old-secret");
+
+        // 显式非空 = 覆盖(轮换即重置)
+        Mockito.reset(userMapper);
+        when(userMapper.selectById(6L)).thenReturn(existing);
+        userService.update(1L, 10001L, 6L, upsertWithCredentials("crm", "  new-secret  "));
+        ArgumentCaptor<McpUserServer> overwrite =
+                ArgumentCaptor.forClass(McpUserServer.class);
+        verify(userMapper).updateById(overwrite.capture());
+        assertThat(overwrite.getValue().getCredentials()).isEqualTo("new-secret");
+    }
+
+    @Test
+    @DisplayName("注册语义不变:credentials null/空串仍 400(必填)")
+    void registerStillRequiresCredentials() {
+        assertThatThrownBy(() -> appService.register(upsertWithCredentials("crm", null)))
+                .isInstanceOfSatisfying(BusinessException.class, e ->
+                        assertThat(e.getCode()).isEqualTo(400));
+        assertThatThrownBy(() -> userService.register(1L, 10001L,
+                upsertWithCredentials("crm", "   ")))
+                .isInstanceOf(BusinessException.class);
+        verify(appMapper, never()).insert(any(McpServerConfig.class));
+        verify(userMapper, never()).insert(any(McpUserServer.class));
+    }
+
+    private static McpThirdPartyServerSupport.Upsert upsertWithCredentials(
+            String serverKey, String credentials) {
+        return new McpThirdPartyServerSupport.Upsert(
+                serverKey, "CRM 线索", "https://crm.example.com/mcp",
+                null, null, "X-Api-Key", credentials, 45, true);
+    }
+
+    // ------------------------------------------------------------------
     // 注册成功形态 / 审计 / 失效
     // ------------------------------------------------------------------
 

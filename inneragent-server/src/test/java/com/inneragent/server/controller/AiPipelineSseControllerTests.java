@@ -66,6 +66,10 @@ class AiPipelineSseControllerTests {
     private CancellationCoordinator cancellations;
     private AgentConfirmationService confirmations;
     private AgentConfirmationExpiryCoordinator confirmationExpiry;
+    /** IA-4 重连计数断言手柄(P4 差距收口)。 */
+    private final com.inneragent.platform.metrics.IaBusinessMetrics businessMetrics =
+            new com.inneragent.platform.metrics.IaBusinessMetrics(
+                    new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     private AiPipelineController controller;
     private MockMvc mockMvc;
 
@@ -84,7 +88,8 @@ class AiPipelineSseControllerTests {
                 new PipelineCursorParser(),
                 cancellations,
                 confirmations,
-                confirmationExpiry);
+                confirmationExpiry,
+                businessMetrics);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -166,6 +171,58 @@ class AiPipelineSseControllerTests {
                 .contains("id:run-1:1")
                 .contains("\"content\":\"hi\"");
         verify(replay).replayThenLive("run-1", 0);
+    }
+
+    @Test
+    void reconnectCompletionCountsResumedSessionMetric() {
+        AgentRun run = run("run-1", "conversation-1", AgentRunStatus.RUNNING);
+        CommittedAgentEvent committed = event("run-1", 8, "CONTENT", "hello");
+        when(queries.requireAuthorizedRun("run-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
+        when(replay.replayThenLive("run-1", 7)).thenReturn(Flux.just(committed));
+        when(queries.project(run, committed)).thenReturn(Mono.just(projection(
+                "run-1", 8, "CONTENT", "hello", false)));
+
+        // 重连(带 Last-Event-ID)且流正常完结 = resumed(终态事件送达追平)
+        StepVerifier.create(controller.events("run-1", null, "run-1:7"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        assertThat(businessMetrics.counterValue("ia.reconnect",
+                "app", "1", "result", "resumed")).isEqualTo(1.0);
+        assertThat(businessMetrics.counterValue("ia.reconnect",
+                "app", "1", "result", "failed")).isEqualTo(0.0);
+    }
+
+    @Test
+    void reconnectFailureCountsFailedSessionMetric() {
+        AgentRun run = run("run-1", "conversation-1", AgentRunStatus.RUNNING);
+        when(queries.requireAuthorizedRun("run-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
+        when(replay.replayThenLive("run-1", 7))
+                .thenReturn(Flux.error(new IllegalStateException("stream broken")));
+
+        StepVerifier.create(controller.events("run-1", null, "run-1:7"))
+                .verifyError();
+
+        assertThat(businessMetrics.counterValue("ia.reconnect",
+                "app", "1", "result", "failed")).isEqualTo(1.0);
+    }
+
+    @Test
+    void freshConnectWithoutCursorIsNotCountedAsReconnect() {
+        AgentRun run = run("run-1", "conversation-1", AgentRunStatus.RUNNING);
+        when(queries.requireAuthorizedRun("run-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(run));
+        when(replay.replayThenLive("run-1", 0)).thenReturn(Flux.empty());
+
+        StepVerifier.create(controller.events("run-1", null, null))
+                .verifyComplete();
+
+        assertThat(businessMetrics.counterValue("ia.reconnect",
+                "app", "1", "result", "resumed")).isEqualTo(0.0);
+        assertThat(businessMetrics.counterValue("ia.reconnect",
+                "app", "1", "result", "failed")).isEqualTo(0.0);
     }
 
     @Test

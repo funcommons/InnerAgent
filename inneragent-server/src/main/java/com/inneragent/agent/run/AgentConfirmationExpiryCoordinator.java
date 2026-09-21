@@ -56,6 +56,8 @@ public final class AgentConfirmationExpiryCoordinator {
     private final AgentRuntimeSchedulers schedulers;
     private final com.inneragent.platform.toolhub.ToolAuditService audits;
     private final ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs;
+    /** [adapt] IA-3 过期终态业务计数(ia_confirmation_total;P4 差距收口)。 */
+    private final com.inneragent.platform.metrics.IaBusinessMetrics metrics;
 
     public AgentConfirmationExpiryCoordinator(
             AgentRunMapper runMapper,
@@ -66,7 +68,8 @@ public final class AgentConfirmationExpiryCoordinator {
             AgentEventEnvelopeSanitizer sanitizer,
             AgentRuntimeSchedulers schedulers,
             com.inneragent.platform.toolhub.ToolAuditService audits,
-            ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs) {
+            ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs,
+            com.inneragent.platform.metrics.IaBusinessMetrics metrics) {
         this.runMapper = Objects.requireNonNull(runMapper, "runMapper must not be null");
         this.eventMapper = Objects.requireNonNull(
                 eventMapper, "eventMapper must not be null");
@@ -81,6 +84,9 @@ public final class AgentConfirmationExpiryCoordinator {
         this.audits = Objects.requireNonNull(audits, "audits must not be null");
         this.toolCatalogs = Objects.requireNonNull(
                 toolCatalogs, "toolCatalogs must not be null");
+        this.metrics = metrics == null
+                ? com.inneragent.platform.metrics.IaBusinessMetrics.noop()
+                : metrics;
     }
 
     public Mono<Boolean> expireAuthorized(
@@ -193,6 +199,9 @@ public final class AgentConfirmationExpiryCoordinator {
      * decision=denied;decision_source=expired(V8/ToolDecisionSource.EXPIRED);
      * 入参快照取待审批载荷的 argumentsPreview(写入侧已做预览/打码);
      * conversationId 取运行行。任何写入失败沿 journal 上抛,终止决策不生效。
+     *
+     * <p>[adapt] IA-3 业务计数与审计同点位、逐工具一比一
+     * ({@code ia_confirmation_total{app,decision=expired,source=expired}})。
      */
     private void auditExpiredDecision(AgentRun run, ArrayNode pendingToolCalls) {
         long appId = com.inneragent.platform.context.AppContext.currentOrDefault();
@@ -201,6 +210,9 @@ public final class AgentConfirmationExpiryCoordinator {
             if (toolName == null || toolName.isBlank()) {
                 continue;
             }
+            metrics.confirmation(appId,
+                    com.inneragent.platform.metrics.IaBusinessMetrics.DECISION_EXPIRED,
+                    com.inneragent.platform.toolhub.ToolDecisionSource.EXPIRED.code());
             audits.append(new com.inneragent.platform.toolhub.ToolAuditService.ToolAuditEntry(
                     appId,
                     run.getTenantId(),

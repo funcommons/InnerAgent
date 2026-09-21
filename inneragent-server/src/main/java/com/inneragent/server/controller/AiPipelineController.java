@@ -66,6 +66,8 @@ public class AiPipelineController {
     private final CancellationCoordinator cancellations;
     private final AgentConfirmationService confirmations;
     private final AgentConfirmationExpiryCoordinator confirmationExpiry;
+    /** [adapt] IA-4 会话级重连计数(ia_reconnect_total;P4 差距收口,可空免装配)。 */
+    private final com.inneragent.platform.metrics.IaBusinessMetrics businessMetrics;
 
     @Operation(summary = "启动 Run（SSE 流式）")
     @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -137,6 +139,13 @@ public class AiPipelineController {
             @RequestParam(required = false) Long afterSequence,
             @RequestHeader(name = "Last-Event-ID", required = false) String lastEventId) {
         long currentUserId = requireCurrentUserId();
+        // [adapt] IA-4 会话级重连计数(ia_reconnect_total{app,result}):仅计
+        // 真重连(带 Last-Event-ID/afterSequence);resumed=流正常完结(终态
+        // 事件送达追平),failed=流出错;客户端断连(cancel)两侧都不计。
+        // businessMetrics 可空(测试直构免装配)
+        boolean resume = afterSequence != null
+                || (lastEventId != null && !lastEventId.isBlank());
+        long appId = com.inneragent.platform.context.AppContext.currentOrDefault();
         return runQueries.requireAuthorizedRun(runId, currentUserId)
                 .flatMapMany(run -> {
                     RunCursor cursor = cursorParser.parse(
@@ -145,6 +154,20 @@ public class AiPipelineController {
                             cursor.runId(), cursor.afterSequence())
                             .concatMap(event -> runQueries.project(run, event))
                             .map(this::toSse);
+                })
+                .doOnComplete(() -> {
+                    if (resume && businessMetrics != null) {
+                        businessMetrics.reconnect(appId,
+                                com.inneragent.platform.metrics.IaBusinessMetrics
+                                        .RECONNECT_RESUMED);
+                    }
+                })
+                .doOnError(failure -> {
+                    if (resume && businessMetrics != null) {
+                        businessMetrics.reconnect(appId,
+                                com.inneragent.platform.metrics.IaBusinessMetrics
+                                        .RECONNECT_FAILED);
+                    }
                 });
     }
 

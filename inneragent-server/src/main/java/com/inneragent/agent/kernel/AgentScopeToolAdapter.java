@@ -51,6 +51,8 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
     private final com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker;
     /** [adapt] 任务 #18b(W5):execute_tool span 工厂(null=noop 旁路)。 */
     private final com.inneragent.agent.observability.GenAiSpanFactory spanFactory;
+    /** [adapt] IA-2 工具终态业务计数(null=noop 旁路;ia_tool_calls_total)。 */
+    private final com.inneragent.platform.metrics.IaBusinessMetrics businessMetrics;
 
     public AgentScopeToolAdapter(
             ToolExecutor toolExecutor,
@@ -58,7 +60,8 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             Scheduler toolScheduler,
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper) {
-        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper, null, null, null);
+        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper,
+                null, null, null, null);
     }
 
     public AgentScopeToolAdapter(
@@ -69,7 +72,7 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             ObjectMapper objectMapper,
             ActTokenSupplier actTokenSupplier) {
         this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper,
-                actTokenSupplier, null, null);
+                actTokenSupplier, null, null, null);
     }
 
     public AgentScopeToolAdapter(
@@ -81,7 +84,7 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             ActTokenSupplier actTokenSupplier,
             com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker) {
         this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper,
-                actTokenSupplier, mcpToolInvoker, null);
+                actTokenSupplier, mcpToolInvoker, null, null);
     }
 
     public AgentScopeToolAdapter(
@@ -93,6 +96,20 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             ActTokenSupplier actTokenSupplier,
             com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker,
             com.inneragent.agent.observability.GenAiSpanFactory spanFactory) {
+        this(toolExecutor, schema, toolScheduler, leaseGuard, objectMapper,
+                actTokenSupplier, mcpToolInvoker, spanFactory, null);
+    }
+
+    public AgentScopeToolAdapter(
+            ToolExecutor toolExecutor,
+            AgentScopeToolSchema.PreparedSchema schema,
+            Scheduler toolScheduler,
+            RunLeaseGuard leaseGuard,
+            ObjectMapper objectMapper,
+            ActTokenSupplier actTokenSupplier,
+            com.inneragent.agent.mcp.McpToolInvoker mcpToolInvoker,
+            com.inneragent.agent.observability.GenAiSpanFactory spanFactory,
+            com.inneragent.platform.metrics.IaBusinessMetrics businessMetrics) {
         super(builder(toolExecutor, schema));
         this.toolExecutor = Objects.requireNonNull(toolExecutor, "toolExecutor must not be null");
         this.toolScheduler = Objects.requireNonNull(toolScheduler, "toolScheduler must not be null");
@@ -103,6 +120,9 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
         this.spanFactory = spanFactory == null
                 ? com.inneragent.agent.observability.GenAiSpanFactory.noop()
                 : spanFactory;
+        this.businessMetrics = businessMetrics == null
+                ? com.inneragent.platform.metrics.IaBusinessMetrics.noop()
+                : businessMetrics;
     }
 
     /** T2b 接管点访问器(MCP client 适配器接入后经此执行宿主调用;当前不可达)。 */
@@ -135,6 +155,12 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             // [adapt] 任务 #18b(W5):execute_tool span(工具调用元数据;内容默认关)。
             com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan toolSpan =
                     startExecuteToolSpan(param, runtime, run, input);
+            // [adapt] IA-2 业务计数:app 在订阅期捕获(AppContext 跨调度器传播),
+            // 终态在 doFinally 恰好一次落数(初始 error 兜底超时/取消/异常路径)
+            long app = com.inneragent.platform.context.AppContext.currentOrDefault();
+            java.util.concurrent.atomic.AtomicReference<String> outcome =
+                    new java.util.concurrent.atomic.AtomicReference<>(
+                            com.inneragent.platform.metrics.IaBusinessMetrics.RESULT_ERROR);
             // 业务工具按发起 run 的租户执行：工具内部读写业务表依赖租户过滤与 tenant_id 注入
             Mono<String> invocation = Mono.fromCallable(() -> TenantContext.runInTenant(
                             toolContext.tenantId(),
@@ -154,11 +180,13 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                             : failure -> { })
                     .flatMap(result -> cancellation.checkpoint()
                             .then(assertLease(run))
-                            .thenReturn(projectResult(param, result)))
+                            .then(Mono.fromSupplier(
+                                    () -> projectResult(param, result, outcome))))
                     .doFinally(sig -> {
                         if (toolSpan != null) {
                             toolSpan.end();
                         }
+                        businessMetrics.toolCall(app, getName(), outcome.get());
                     })
                     .timeout(remaining);
         });
@@ -223,7 +251,13 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
         return toolExecutor.mayRequireHighRiskApproval();
     }
 
-    private ToolResultBlock projectResult(ToolCallParam param, String result) {
+    /**
+     * 结果投影 + IA-2 终态归类(status=error/failed 的平台契约 JSON 或 null
+     * 输出 → error;其余 → ok)。null 输出抛出(流走 error 信号,计数保持
+     * 初始 error)。
+     */
+    private ToolResultBlock projectResult(ToolCallParam param, String result,
+                                          java.util.concurrent.atomic.AtomicReference<String> outcome) {
         if (result == null) {
             throw new IllegalStateException("AgentScope tool returned null output: " + getName());
         }
@@ -234,12 +268,14 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                 if (status != null && status.isTextual()
                         && ("error".equalsIgnoreCase(status.textValue())
                             || "failed".equalsIgnoreCase(status.textValue()))) {
+                    outcome.set(com.inneragent.platform.metrics.IaBusinessMetrics.RESULT_ERROR);
                     return errorResult(param, result);
                 }
             }
         } catch (JsonProcessingException plainTextResult) {
             // ToolExecutor permits text output; only JSON objects carry the platform status contract.
         }
+        outcome.set(com.inneragent.platform.metrics.IaBusinessMetrics.RESULT_OK);
         return textResult(param, result);
     }
 

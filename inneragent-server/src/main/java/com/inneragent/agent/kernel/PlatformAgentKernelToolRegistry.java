@@ -57,6 +57,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
     private final McpToolCatalog mcpToolCatalog;
     // [adapt] 任务 #18b(W5):GenAI span 工厂(execute_tool/MCP 挂点;缺省 noop)。
     private final ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories;
+    // [adapt] IA-2 业务计数(工具终态 ia_tool_calls_total;缺省 noop,P4 差距收口)。
+    private final ObjectProvider<com.inneragent.platform.metrics.IaBusinessMetrics> businessMetrics;
 
     public PlatformAgentKernelToolRegistry(
             ToolExecutorRegistry executors,
@@ -71,7 +73,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             ObjectProvider<ActTokenSupplier> actTokenSuppliers,
             ObjectProvider<com.inneragent.agent.mcp.McpToolInvoker> mcpToolInvokers,
             McpToolCatalog mcpToolCatalog,
-            ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories) {
+            ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories,
+            ObjectProvider<com.inneragent.platform.metrics.IaBusinessMetrics> businessMetrics) {
         this.executors = Objects.requireNonNull(executors, "executors must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -89,6 +92,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
         this.mcpToolCatalog = mcpToolCatalog;
         this.spanFactories = Objects.requireNonNull(
                 spanFactories, "spanFactories must not be null");
+        this.businessMetrics = Objects.requireNonNull(
+                businessMetrics, "businessMetrics must not be null");
     }
 
     @Override
@@ -143,7 +148,9 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                             // [adapt] P1-T2a:MCP 调用端口随适配器下发(T2b 接管点)
                             mcpToolInvokers.getIfAvailable(),
                             // [adapt] 任务 #18b(W5):execute_tool span 挂点
-                            spanFactories.getIfAvailable()));
+                            spanFactories.getIfAvailable(),
+                            // [adapt] IA-2 工具终态业务计数(ia_tool_calls_total)
+                            businessMetrics.getIfAvailable()));
                 } else if (child != null) {
                     AgentScopeToolSchema.PreparedSchema schema =
                             AgentScopeToolSchema.prepareSubAgent(
@@ -174,7 +181,9 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                             schedulers.toolBlocking(),
                             leaseGuard,
                             objectMapper,
-                            mcpToolInvokers.getIfAvailable()));
+                            mcpToolInvokers.getIfAvailable(),
+                            // [adapt] IA-2 工具终态业务计数(ia_tool_calls_total)
+                            businessMetrics.getIfAvailable()));
                 } else if (mcpTool) {
                     AgentTool registered = Objects.requireNonNull(
                             toolkit.getTool(toolName),

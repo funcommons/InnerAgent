@@ -65,6 +65,8 @@ public final class AgentConfirmationService {
      */
     private final ToolAuditService audits;
     private final ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs;
+    /** [adapt] IA-3 确认终态业务计数(ia_confirmation_total;P4 差距收口)。 */
+    private final com.inneragent.platform.metrics.IaBusinessMetrics metrics;
 
     public AgentConfirmationService(
             AgentWaitingStatePort waitingState,
@@ -75,7 +77,8 @@ public final class AgentConfirmationService {
             AgentScopeV2Properties properties,
             ObjectMapper objectMapper,
             ToolAuditService audits,
-            ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs) {
+            ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog> toolCatalogs,
+            com.inneragent.platform.metrics.IaBusinessMetrics metrics) {
         this.waitingState = Objects.requireNonNull(waitingState, "waitingState must not be null");
         this.runtimeContexts = Objects.requireNonNull(
                 runtimeContexts, "runtimeContexts must not be null");
@@ -88,6 +91,9 @@ public final class AgentConfirmationService {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.audits = Objects.requireNonNull(audits, "audits must not be null");
         this.toolCatalogs = Objects.requireNonNull(toolCatalogs, "toolCatalogs must not be null");
+        this.metrics = metrics == null
+                ? com.inneragent.platform.metrics.IaBusinessMetrics.noop()
+                : metrics;
     }
 
     public Mono<Void> respond(ToolConfirmationReqVO request, long currentUserId) {
@@ -152,6 +158,10 @@ public final class AgentConfirmationService {
      * [adapt] U1/D3:确认决策逐工具追加 ia_audit_log(V22)。
      * decision=allowed/denied;decision_source=live-confirm(V22 裁定:确认流
      * 实弹决策由运行侧落库);conversationId 在确认载荷中不可得,留空。
+     *
+     * <p>[adapt] IA-3 业务计数与审计同点位、逐工具一比一
+     * ({@code ia_confirmation_total{app,decision,source}};
+     * decision 用大盘契约值域 approved/rejected,source=live-confirm)。
      */
     private void auditDecisions(
             String runId,
@@ -164,6 +174,11 @@ public final class AgentConfirmationService {
             if (approved == null) {
                 continue;
             }
+            metrics.confirmation(appId,
+                    approved
+                            ? com.inneragent.platform.metrics.IaBusinessMetrics.DECISION_APPROVED
+                            : com.inneragent.platform.metrics.IaBusinessMetrics.DECISION_REJECTED,
+                    ToolDecisionSource.LIVE_CONFIRM.code());
             audits.append(new ToolAuditService.ToolAuditEntry(
                     appId,
                     null,

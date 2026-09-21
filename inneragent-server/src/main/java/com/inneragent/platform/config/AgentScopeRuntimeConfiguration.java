@@ -41,6 +41,19 @@ public class AgentScopeRuntimeConfiguration {
         return new AgentRuntimeMetrics(registries);
     }
 
+    /**
+     * 业务计数门面(IA-2/IA-3/IA-4,docs/灰度与指标大盘.md §7.1;P4 差距
+     * 收口):工具终态/确认终态/会话级重连 counter。registry 注入模式同
+     * {@link AgentRuntimeMetrics}(IA-1),缺 Bean 时测试切片回退进程内
+     * SimpleMeterRegistry。
+     */
+    @Bean
+    @ConditionalOnMissingBean(com.inneragent.platform.metrics.IaBusinessMetrics.class)
+    public com.inneragent.platform.metrics.IaBusinessMetrics iaBusinessMetrics(
+            ObjectProvider<io.micrometer.core.instrument.MeterRegistry> registries) {
+        return new com.inneragent.platform.metrics.IaBusinessMetrics(registries);
+    }
+
     @Bean(destroyMethod = "close")
     public AgentRuntimeSchedulers agentRuntimeSchedulers(
             AgentScopeRuntimeProperties properties,

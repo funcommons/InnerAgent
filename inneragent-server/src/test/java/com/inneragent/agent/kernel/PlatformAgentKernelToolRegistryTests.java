@@ -68,6 +68,7 @@ class PlatformAgentKernelToolRegistryTests {
                 mock(org.springframework.beans.factory.ObjectProvider.class),
                 providerOf(invoker),
                 catalog,
+                mock(org.springframework.beans.factory.ObjectProvider.class),
                 mock(org.springframework.beans.factory.ObjectProvider.class));
 
         Toolkit toolkit = new Toolkit(ToolkitConfig.builder().parallel(true).build());

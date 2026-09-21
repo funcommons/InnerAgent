@@ -95,12 +95,23 @@ public class McpUserServerService {
         return server;
     }
 
+    /**
+     * 更新本人的三方 MCP 服务器(端点/静态头/超时等整包刷新,credentials 除外)。
+     *
+     * <p><strong>credentials 空值语义定案(K③)</strong>:null/空串 = 保持
+     * 原值(实体保留库中旧值,updateById 写回同值;SDK 编辑流「GET 拿打码形
+     * → 改其他字段 → PUT」不回传原文时凭据不被打码形污染);显式非空 = 覆盖
+     * (轮换即重置)。不提供「清空」语义——STATIC_HEADER 无值即残废,MP
+     * updateById 跳 null 列,清空会在库层静默失效(webhook url 教训同族),
+     * 撤销凭据请删除该三方服务。
+     */
     @Transactional
     public McpUserServer update(long appId, long userId, long id,
                                 McpThirdPartyServerSupport.Upsert request) {
         McpUserServer server = requireOwned(appId, userId, id);
         McpThirdPartyServerSupport.Normalized normalized =
-                McpThirdPartyServerSupport.normalize(request, true);
+                McpThirdPartyServerSupport.normalize(
+                        request, true, McpThirdPartyServerSupport.CredentialsMode.KEEP_IF_ABSENT);
         if (!server.getServerKey().equals(normalized.serverKey())) {
             requireServerKeyFree(appId, userId, normalized.serverKey());
         }
@@ -156,13 +167,16 @@ public class McpUserServerService {
         }
     }
 
+    /** 字段落库(credentials=null = 保持原值,见 {@link #update} 语义定案)。 */
     private void apply(McpUserServer server, McpThirdPartyServerSupport.Normalized normalized) {
         server.setName(normalized.name());
         server.setEndpointUrl(normalized.endpointUrl());
         server.setTransport(normalized.transport());
         server.setAuthType(normalized.authType());
         server.setHeaderName(normalized.headerName());
-        server.setCredentials(normalized.credentials());
+        if (normalized.credentials() != null) {
+            server.setCredentials(normalized.credentials());
+        }
         server.setTimeoutSeconds(normalized.timeoutSeconds());
         server.setEnabled(normalized.enabled());
     }

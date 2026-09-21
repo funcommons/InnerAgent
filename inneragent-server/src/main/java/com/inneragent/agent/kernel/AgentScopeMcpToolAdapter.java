@@ -57,6 +57,8 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
     private final ObjectMapper objectMapper;
     /** MCP 工具调用端口(生产 McpClientToolInvoker;缺省 Unavailable 即调用抛错)。 */
     private final McpToolInvoker mcpToolInvoker;
+    /** [adapt] IA-2 工具终态业务计数(null=noop 旁路;ia_tool_calls_total,tool=FQN)。 */
+    private final com.inneragent.platform.metrics.IaBusinessMetrics businessMetrics;
 
     public AgentScopeMcpToolAdapter(
             McpToolCatalogEntry entry,
@@ -66,6 +68,19 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper,
             McpToolInvoker mcpToolInvoker) {
+        this(entry, appId, schema, toolScheduler, leaseGuard, objectMapper,
+                mcpToolInvoker, null);
+    }
+
+    public AgentScopeMcpToolAdapter(
+            McpToolCatalogEntry entry,
+            long appId,
+            AgentScopeToolSchema.PreparedSchema schema,
+            Scheduler toolScheduler,
+            RunLeaseGuard leaseGuard,
+            ObjectMapper objectMapper,
+            McpToolInvoker mcpToolInvoker,
+            com.inneragent.platform.metrics.IaBusinessMetrics businessMetrics) {
         super(builder(entry, schema));
         this.entry = Objects.requireNonNull(entry, "entry must not be null");
         this.appId = appId;
@@ -75,6 +90,9 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.mcpToolInvoker = Objects.requireNonNull(
                 mcpToolInvoker, "mcpToolInvoker must not be null");
+        this.businessMetrics = businessMetrics == null
+                ? com.inneragent.platform.metrics.IaBusinessMetrics.noop()
+                : businessMetrics;
     }
 
     @Override
@@ -87,6 +105,11 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
                     requireContext(runtime, ToolExecutionContext.class);
             Map<String, Object> input = Objects.requireNonNull(
                     param.getInput(), "AgentScope tool input must not be null");
+            // [adapt] IA-2 业务计数:终态 doFinally 恰好一次落数(初始 error
+            // 兜底超时/取消/异常路径;tool 标签取目录 FQN,app 取注册期捕获值)
+            java.util.concurrent.atomic.AtomicReference<String> outcome =
+                    new java.util.concurrent.atomic.AtomicReference<>(
+                            com.inneragent.platform.metrics.IaBusinessMetrics.RESULT_ERROR);
             // 宿主调用显式携带 appId(AppContext):目录定位/行级过滤按应用隔离。
             // 注意不设租户上下文——ia_tool_registry 为 app 级治理表(无 tenant_id
             // 列),租户注入会让 invoker 的注册表定位 SQL 报错;act token 身份
@@ -102,7 +125,10 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
                     .then(invocation)
                     .flatMap(result -> cancellation.checkpoint()
                             .then(assertLease(run))
-                            .thenReturn(projectResult(param, result)))
+                            .then(Mono.fromSupplier(
+                                    () -> projectResult(param, result, outcome))))
+                    .doFinally(sig -> businessMetrics.toolCall(
+                            appId, entry.fqn(), outcome.get()))
                     .timeout(remaining(run));
         });
     }
@@ -113,13 +139,15 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
 
     /**
      * 结果投影:宿主错误(isError / platform status 契约)→ AgentScope error
-     * 结果回灌模型可续跑;其余为文本结果。
+     * 结果回灌模型可续跑;其余为文本结果。同步归入 IA-2 终态(outcome)。
      */
-    private ToolResultBlock projectResult(ToolCallParam param, McpToolInvocationResult result) {
+    private ToolResultBlock projectResult(ToolCallParam param, McpToolInvocationResult result,
+                                          java.util.concurrent.atomic.AtomicReference<String> outcome) {
         if (result == null) {
             throw new IllegalStateException("AgentScope MCP tool returned null result: " + getName());
         }
         if (result.error()) {
+            outcome.set(com.inneragent.platform.metrics.IaBusinessMetrics.RESULT_ERROR);
             return errorResult(param, result.payloadJson());
         }
         if (result.payloadJson() == null) {
@@ -133,12 +161,14 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
                 if (status != null && status.isTextual()
                         && ("error".equalsIgnoreCase(status.textValue())
                             || "failed".equalsIgnoreCase(status.textValue()))) {
+                    outcome.set(com.inneragent.platform.metrics.IaBusinessMetrics.RESULT_ERROR);
                     return errorResult(param, result.payloadJson());
                 }
             }
         } catch (JsonProcessingException plainTextResult) {
             // payloadJson 恒为合法 JSON(McpClientToolInvoker 契约);容错按文本处理
         }
+        outcome.set(com.inneragent.platform.metrics.IaBusinessMetrics.RESULT_OK);
         return textResult(param, result.payloadJson());
     }
 

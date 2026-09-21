@@ -57,7 +57,25 @@ public final class McpThirdPartyServerSupport {
             Boolean enabled) {
     }
 
-    /** 归一化结果(服务层据此写实体)。 */
+    /**
+     * credentials 空值语义(P4 差距收口 K③,与 webhook url 清空教训同族——
+     * MP updateById 跳过 null 列,清空语义会在库层静默失效):
+     * <ul>
+     *   <li>{@link #REQUIRED}:注册语义,静态头值必填(null/空串 400);</li>
+     *   <li>{@link #KEEP_IF_ABSENT}:更新语义,null/空串 = 保持原值
+     *       (归一化结果 credentials=null,服务层跳过该列覆盖);显式非空值 =
+     *       覆盖(轮换即重置,不提供「清空」语义——STATIC_HEADER 无值即残废,
+     *       撤销凭据请删除该三方服务)。</li>
+     * </ul>
+     */
+    public enum CredentialsMode {
+        /** 注册:静态头值必填。 */
+        REQUIRED,
+        /** 更新:null/空串 = 保持原值;显式非空 = 覆盖;无「清空」语义。 */
+        KEEP_IF_ABSENT
+    }
+
+    /** 归一化结果(服务层据此写实体;credentials=null 仅在 KEEP_IF_ABSENT 下出现)。 */
     record Normalized(
             String serverKey,
             String name,
@@ -72,6 +90,15 @@ public final class McpThirdPartyServerSupport {
 
     /** 字段级校验 + 归一化(userFacing=true 时附加内网/本机地址拒绝——用户自接防 SSRF)。 */
     public static Normalized normalize(Upsert request, boolean userFacing) {
+        return normalize(request, userFacing, CredentialsMode.REQUIRED);
+    }
+
+    /**
+     * 字段级校验 + 归一化(带 credentials 空值语义)。其余字段规则与
+     * {@link #normalize(Upsert, boolean)} 完全一致。
+     */
+    public static Normalized normalize(Upsert request, boolean userFacing,
+                                       CredentialsMode credentialsMode) {
         String serverKey = requireText(request.serverKey(), "serverKey");
         if (!SERVER_KEY.matcher(serverKey).matches()) {
             throw new BusinessException(400,
@@ -107,7 +134,7 @@ public final class McpThirdPartyServerSupport {
         if (headerName.length() > 128) {
             throw new BusinessException(400, "静态头名超长(≤128)");
         }
-        credentials = requireText(request.credentials(), "静态头值");
+        credentials = credentials(request, credentialsMode);
         String endpointUrl = validateUrl(request.endpointUrl(), userFacing);
         int timeoutSeconds = request.timeoutSeconds() == null ? 30 : request.timeoutSeconds();
         if (timeoutSeconds < 1 || timeoutSeconds > MAX_TIMEOUT_SECONDS) {
@@ -117,6 +144,18 @@ public final class McpThirdPartyServerSupport {
         return new Normalized(serverKey, name, endpointUrl, transport, authType,
                 headerName, credentials, timeoutSeconds,
                 request.enabled() == null || request.enabled());
+    }
+
+    /**
+     * credentials 归一:REQUIRED 必填;KEEP_IF_ABSENT 下 null/空串 → null
+     * (= 保持原值哨兵,服务层跳过覆盖),非空 → trimmed 覆盖值。
+     */
+    private static String credentials(Upsert request, CredentialsMode mode) {
+        if (mode == CredentialsMode.KEEP_IF_ABSENT
+                && (request.credentials() == null || request.credentials().isBlank())) {
+            return null;
+        }
+        return requireText(request.credentials(), "静态头值");
     }
 
     private static String validateUrl(String value, boolean userFacing) {

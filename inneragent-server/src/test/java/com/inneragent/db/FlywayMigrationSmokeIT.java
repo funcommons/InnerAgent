@@ -31,7 +31,8 @@ import org.testcontainers.utility.DockerImageName;
  * 签名公钥轮换双 key 列增补、P2-obs 随 V11__webhook_delivery.sql 终态 Webhook 投递增补、
  * R1 修复随 V13__tool_grant_active_unique_index.sql 授权活跃行部分唯一索引增补、
  * 优化建议 #2 随 V14__circuit_breaker_and_webhook_config.sql 熔断/Webhook 订阅配置增补、
- * R3 修复随 V15__ia_app_circuit_limits_text.sql 熔断上限列 JSONB → TEXT 增补)。
+ * R3 修复随 V15__ia_app_circuit_limits_text.sql 熔断上限列 JSONB → TEXT 增补、
+ * P2-safety 批次②随 V16__tool_registry_health_check.sql 工具体检位增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
  * 上执行 classpath:db/migration 全链迁移,断言 26 张 ia_ 业务表全部建成、种子数据落库,
@@ -102,18 +103,18 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(15, result.migrationsExecuted, "应依次执行 V1-V15 十五个迁移(V9 轮换双 key;V10 管理站账号认证;V11 终态 Webhook 投递;V12 审计列宽;V13 授权活跃行部分唯一索引;V14 熔断/Webhook 订阅配置;V15 熔断上限列 JSONB→TEXT)");
+        assertEquals(16, result.migrationsExecuted, "应依次执行 V1-V16 十六个迁移(V9 轮换双 key;V10 管理站账号认证;V11 终态 Webhook 投递;V12 审计列宽;V13 授权活跃行部分唯一索引;V14 熔断/Webhook 订阅配置;V15 熔断上限列 JSONB→TEXT;V16 工具体检位)");
 
         List<String> actualTables = listIaTables();
         assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 26 张 ia_ 表(V14 增熔断事件流水)");
 
-        // flyway_schema_history:十五条记录且全部 success
+        // flyway_schema_history:十六条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(15, resultSet.getInt(1), "flyway_schema_history 应有 15 条成功记录(V9 轮换双 key + V10 管理站认证 + V11 Webhook 投递 + V12 审计列宽 + V13 授权部分唯一索引 + V14 熔断/Webhook 配置 + V15 熔断上限列 TEXT)");
+            assertEquals(16, resultSet.getInt(1), "flyway_schema_history 应有 16 条成功记录(V9 轮换双 key + V10 管理站认证 + V11 Webhook 投递 + V12 审计列宽 + V13 授权部分唯一索引 + V14 熔断/Webhook 配置 + V15 熔断上限列 TEXT + V16 工具体检位)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -121,6 +122,16 @@ class FlywayMigrationSmokeIT {
                 "ia_tool_registry.revalidate_required 应存在(V14 分诊标记)");
         assertTrue(columnExists("ia_tool_registry", "pending_schema"),
                 "ia_tool_registry.pending_schema 应存在(BREAKING 暂存)");
+
+        // V16:工具体检 v1 三列(结论/时间/明细;明细为 TEXT 存 JSON,R3 DEF-08 教训)
+        assertEquals("character varying", columnType("ia_tool_registry", "health_status"),
+                "ia_tool_registry.health_status 应为 VARCHAR(16)(V16 体检结论)");
+        assertEquals(16, columnCharLength("ia_tool_registry", "health_status"),
+                "ia_tool_registry.health_status 列宽应为 16(ok/degraded/unreachable,V16)");
+        assertEquals("timestamp without time zone", columnType("ia_tool_registry", "last_checked_at"),
+                "ia_tool_registry.last_checked_at 应为 TIMESTAMP(V16 体检时间)");
+        assertEquals("text", columnType("ia_tool_registry", "health_detail_json"),
+                "ia_tool_registry.health_detail_json 应为 TEXT(V16;不用 JSONB——R3 DEF-08 教训)");
         assertTrue(columnExists("ia_tool_grant", "invalidated"),
                 "ia_tool_grant.invalidated 应存在(自动失效,V18)");
         assertEquals("character varying", columnType("ia_tool_grant", "conversation_id"),

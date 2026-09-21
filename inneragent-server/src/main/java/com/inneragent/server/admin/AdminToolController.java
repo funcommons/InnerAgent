@@ -1,6 +1,7 @@
 package com.inneragent.server.admin;
 
 import com.inneragent.platform.common.CommonResult;
+import com.inneragent.platform.toolhub.ToolHealthService;
 import com.inneragent.platform.toolhub.ToolRegistryEntry;
 import com.inneragent.platform.toolhub.ToolRegistryService;
 import com.inneragent.platform.toolhub.ToolSchemaHistory;
@@ -38,6 +39,7 @@ import static com.inneragent.platform.common.CommonResult.success;
 public class AdminToolController {
 
     private final ToolRegistryService toolRegistryService;
+    private final ToolHealthService toolHealthService;
 
     public record RegisterToolReqVO(
             @NotBlank String serverKey,
@@ -179,6 +181,23 @@ public class AdminToolController {
     @Operation(summary = "启用")
     public CommonResult<ToolRegistryEntry> enable(@PathVariable long id) {
         return success(toolRegistryService.enable(id));
+    }
+
+    @PostMapping("/{id}/check")
+    @Operation(summary = "工具体检 v1(单工具同步:可达/清单/指纹/注解,结论落库)")
+    public CommonResult<ToolHealthService.ToolCheckResult> check(@PathVariable long id) {
+        return success(toolHealthService.checkOne(id));
+    }
+
+    /** 批量体检请求体:ids 为空/缺省 → 全量(全部未删除注册行)。 */
+    public record CheckBatchReqVO(List<Long> ids) {
+    }
+
+    @PostMapping("/check-batch")
+    @Operation(summary = "工具体检 v1(批量/全量异步:受理后逐个执行,结果经详情接口可查)")
+    public CommonResult<ToolHealthService.CheckBatchReceipt> checkBatch(
+            @RequestBody(required = false) CheckBatchReqVO request) {
+        return success(toolHealthService.checkBatch(request == null ? null : request.ids()));
     }
 
     @DeleteMapping("/{id}")

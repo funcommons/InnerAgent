@@ -143,6 +143,13 @@ inneragent:
     # 存量用户不被轮换立即全量下线。支持 Duration 简单格式(72h/30m/7d);
     # 配 0 或负值 = 关闭宽限(轮换即时全量生效)。
     embed-key-grace: 72h
+  tools:
+    health:
+      # 工具体检 v1(V16;POST /ia/api/v1/admin/tools/{id}/check 与 /check-batch):
+      # 单工具探活超时(MCP initialize/listTools 握手;结论 ok/degraded/unreachable
+      # 落 ia_tool_registry 体检位,列表/详情回显)。批量体检单线程逐个执行,
+      # 无并发旋钮(v1 不做并发扫描,避免对宿主桥形成突发压力)。
+      probe-timeout: 10s
   webhook:
     # 终态 Webhook 投递(任务 #18b;02-技术方案 §7.1「HMAC 签名,5 次指数退避」):
     # 运行终态(PRD 最小事件集 run.finished/failed/cancelled)经

@@ -1,6 +1,7 @@
 package com.inneragent.admin;
 
 import com.inneragent.platform.common.BusinessException;
+import com.inneragent.platform.toolhub.ToolHealthService;
 import com.inneragent.platform.toolhub.ToolRegistryEntry;
 import com.inneragent.platform.toolhub.ToolRegistryService;
 import com.inneragent.platform.toolhub.ToolSchemaHistory;
@@ -35,13 +36,15 @@ class AdminToolApiTests {
     private static final String ADMIN_KEY = "test-admin-key";
 
     private ToolRegistryService registryService;
+    private ToolHealthService healthService;
     private MockMvc mockMvc;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
         registryService = Mockito.mock(ToolRegistryService.class);
-        AdminToolController controller = new AdminToolController(registryService);
+        healthService = Mockito.mock(ToolHealthService.class);
+        AdminToolController controller = new AdminToolController(registryService, healthService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new AdminAppApiTests.BusinessExceptionAdvice())
                 .addFilters(new AdminTokenFilter(ADMIN_KEY))
@@ -76,7 +79,7 @@ class AdminToolApiTests {
     @Test
     @DisplayName("无密钥:全部 403(复用 AdminTokenFilter 缺省封闭)")
     void requiresAdminKey() throws Exception {
-        MockMvc closed = MockMvcBuilders.standaloneSetup(new AdminToolController(registryService))
+        MockMvc closed = MockMvcBuilders.standaloneSetup(new AdminToolController(registryService, healthService))
                 .setControllerAdvice(new AdminAppApiTests.BusinessExceptionAdvice())
                 .addFilters(new AdminTokenFilter(""))
                 .build();

@@ -93,4 +93,13 @@ public class ToolRegistryEntry extends BaseEntity {
 
     /** 最近一次工具体检/连通性测试结果 */
     private String lastTestStatus;
+
+    /** 最近一次工具体检结论:ok/degraded/unreachable(V16;NULL-从未体检) */
+    private String healthStatus;
+
+    /** 最近一次工具体检时间(V16) */
+    private LocalDateTime lastCheckedAt;
+
+    /** 工具体检明细 JSON(TEXT 存 JSON 字符串;V16,R3 DEF-08 教训不用 JSONB) */
+    private String healthDetailJson;
 }

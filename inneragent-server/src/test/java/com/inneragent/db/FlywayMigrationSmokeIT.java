@@ -37,7 +37,8 @@ import org.testcontainers.utility.DockerImageName;
  * P4-W13 随 V18__mcp_third_party_server.sql 三方 MCP 服务器两表增补、
  * P4-W13 Skill 随 V19__skill_hub.sql Skill 包两表增补、
  * P4-W14 随 V20__ia_kb.sql mini KB 两表增补、P4-W15 随 V21__ia_feedback.sql 用户反馈表增补、
- * 收尾批次随 V22__ia_storage_config_options_text.sql 存储配置 options 列 JSONB → TEXT 增补)。
+ * 收尾批次随 V22__ia_storage_config_options_text.sql 存储配置 options 列 JSONB → TEXT 增补、
+ * demo 冒烟修复随 V23__ia_skill_tenant_id.sql Skill 两表 tenant_id 列增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
  * 上执行 classpath:db/migration 全链迁移,断言 33 张 ia_ 业务表全部建成、种子数据落库,
@@ -119,7 +120,7 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(22, result.migrationsExecuted, "应依次执行 V1-V22 二十二个迁移(V18 三方 MCP 服务器两表;V19 Skill 包两表;V20 mini KB 两表;V21 用户反馈表;V22 存储配置 options 列 TEXT 化)");
+        assertEquals(23, result.migrationsExecuted, "应依次执行 V1-V23 二十三个迁移(V19 Skill 包两表;V20 mini KB 两表;V21 用户反馈表;V22 存储配置 options 列 TEXT 化;V23 Skill 两表 tenant_id 列)");
 
         List<String> actualTables = listIaTables();
         assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 33 张 ia_ 表(V18 三方 MCP 两表;V19 Skill 两表;V20 mini KB 两表;V21 用户反馈表)");
@@ -130,7 +131,7 @@ class FlywayMigrationSmokeIT {
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(22, resultSet.getInt(1), "flyway_schema_history 应有 22 条成功记录(V18 三方 MCP 两表 + V19 Skill 两表 + V20 mini KB 两表 + V21 用户反馈表 + V22 options 列 TEXT 化)");
+            assertEquals(23, resultSet.getInt(1), "flyway_schema_history 应有 23 条成功记录(V19 Skill 两表 + V20 mini KB 两表 + V21 用户反馈表 + V22 options 列 TEXT 化 + V23 Skill 两表 tenant_id 列)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -138,6 +139,12 @@ class FlywayMigrationSmokeIT {
                 "ia_tool_registry.revalidate_required 应存在(V14 分诊标记)");
         assertTrue(columnExists("ia_tool_registry", "pending_schema"),
                 "ia_tool_registry.pending_schema 应存在(BREAKING 暂存)");
+
+        // V23:Skill 两表 tenant_id 列(用户面租户注入依赖;demo 冒烟修复)
+        assertTrue(columnExists("ia_skill", "tenant_id"),
+                "ia_skill.tenant_id 应存在(V23;用户面请求租户注入,缺失即 500)");
+        assertTrue(columnExists("ia_skill_file", "tenant_id"),
+                "ia_skill_file.tenant_id 应存在(V23)");
 
         // V16:工具体检 v1 三列(结论/时间/明细;明细为 TEXT 存 JSON,R3 DEF-08 教训)
         assertEquals("character varying", columnType("ia_tool_registry", "health_status"),

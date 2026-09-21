@@ -32,6 +32,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -86,6 +87,23 @@ class SkillHubLifecycleIT {
     @AfterEach
     void resetAppContext() {
         AppContext.setAppId(null);
+        com.inneragent.platform.tenant.TenantContext.clear();
+    }
+
+    /**
+     * 回归(V23):用户面请求携带 embed token 的 tenantId 时,
+     * TenantIdLineHandler 会向 ia_skill/ia_skill_file 查询注入 tenant_id 条件——
+     * V19 建表漏列导致 500(真实环境复现,既有 IT 无租户上下文未暴露)。
+     * 带租户上下文再查,断言不再抛 SQL 异常。
+     */
+    @Test
+    void listActiveWithTenantContextInjectedColumnDoesNotFail() {
+        importSkill(1L, "tenant-context");
+        com.inneragent.platform.tenant.TenantContext.setTenantId(0L);
+        assertThatCode(() -> {
+            assertThat(skillService.listActive(1L)).isNotNull();
+            assertThat(appSkillCatalog.activated(1L)).isNotNull();
+        }).doesNotThrowAnyException();
     }
 
     @Test

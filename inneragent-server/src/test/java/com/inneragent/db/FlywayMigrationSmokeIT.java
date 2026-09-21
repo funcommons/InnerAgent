@@ -35,10 +35,11 @@ import org.testcontainers.utility.DockerImageName;
  * P2-W5 随 V16__audit_admin_plane_codes.sql 审计管理面码值注释刷新、
  * P2-safety 批次②随 V17__tool_registry_health_check.sql 工具体检位增补(合并时自 V16 顺延)、
  * P4-W13 随 V18__mcp_third_party_server.sql 三方 MCP 服务器两表增补、
- * P4-W13 Skill 随 V19__skill_hub.sql Skill 包两表增补)。
+ * P4-W13 Skill 随 V19__skill_hub.sql Skill 包两表增补、
+ * P4-W14 随 V20__ia_kb.sql mini KB 两表增补、P4-W15 随 V21__ia_feedback.sql 用户反馈表增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
- * 上执行 classpath:db/migration 全链迁移,断言 30 张 ia_ 业务表全部建成、种子数据落库,
+ * 上执行 classpath:db/migration 全链迁移,断言 33 张 ia_ 业务表全部建成、种子数据落库,
  * 并重复执行 migrate 验证幂等。由 maven-failsafe-plugin 执行(类名 *IT 结尾)。</p>
  */
 @Testcontainers
@@ -52,7 +53,7 @@ class FlywayMigrationSmokeIT {
             .withUsername("inneragent")
             .withPassword("inneragent");
 
-    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件 + V10 管理站认证 + V11 终态 Webhook 投递 + V14 熔断事件流水 + V18 三方 MCP 服务器两表 + V19 Skill 包两表(字典序,30 张)。 */
+    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件 + V10 管理站认证 + V11 终态 Webhook 投递 + V14 熔断事件流水 + V18 三方 MCP 服务器两表 + V19 Skill 包两表 + V20 KB 两表 + V21 反馈表(字典序,33 张)。 */
     private static final List<String> EXPECTED_IA_TABLES = List.of(
             // V10:管理站账号认证(18a;ia_adm 字典序居 ia_agent_* 之前)
             "ia_admin_account",
@@ -80,6 +81,11 @@ class FlywayMigrationSmokeIT {
             "ia_audit_log",
             // V14:熔断事件流水(优化建议 #2 服务端半)
             "ia_circuit_event",
+            // V21:用户反馈(👍/👎,upsert 幂等;P4-W15)
+            "ia_feedback",
+            // V20:mini KB(文档 + 分块;P4-W14)
+            "ia_kb_chunk",
+            "ia_kb_document",
             // V18:三方 MCP 服务器(应用级 + 用户级;P4-W13)
             "ia_mcp_server_config",
             "ia_mcp_user_server",
@@ -112,10 +118,10 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(19, result.migrationsExecuted, "应依次执行 V1-V19 十九个迁移(V14 熔断/Webhook 订阅配置;V15 熔断上限列 JSONB→TEXT;V16 审计管理面码值注释刷新;V17 工具体检位;V18 三方 MCP 服务器两表;V19 Skill 包两表)");
+        assertEquals(21, result.migrationsExecuted, "应依次执行 V1-V21 二十一个迁移(V17 工具体检位;V18 三方 MCP 服务器两表;V19 Skill 包两表;V20 mini KB 两表;V21 用户反馈表)");
 
         List<String> actualTables = listIaTables();
-        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 30 张 ia_ 表(V14 增熔断事件流水;V18 增三方 MCP 服务器两表;V19 增 Skill 包两表)");
+        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 33 张 ia_ 表(V18 三方 MCP 两表;V19 Skill 两表;V20 mini KB 两表;V21 用户反馈表)");
 
         // flyway_schema_history:十八条记录且全部 success
         try (Connection connection = openConnection();
@@ -123,7 +129,7 @@ class FlywayMigrationSmokeIT {
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(19, resultSet.getInt(1), "flyway_schema_history 应有 19 条成功记录(V14 熔断/Webhook 配置 + V15 熔断上限列 TEXT + V16 审计码值注释刷新 + V17 工具体检位 + V18 三方 MCP 两表 + V19 Skill 包两表)");
+            assertEquals(21, resultSet.getInt(1), "flyway_schema_history 应有 21 条成功记录(V18 三方 MCP 两表 + V19 Skill 两表 + V20 mini KB 两表 + V21 用户反馈表)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)

@@ -95,12 +95,12 @@ class AdminAgentDefinitionApiTests {
     }
 
     @Test
-    @DisplayName("GET 列表:PageResult 形(list/total/pageNo/pageSize,同 audit-logs)")
+    @DisplayName("GET 列表:PageResult 形(list/total/pageNo/pageSize,同 audit-logs);kind 过滤透传")
     void listReturnsPageResultShape() throws Exception {
         PageResult<DefinitionView> page = new PageResult<>(List.of(view(7L, "demo")), 1L);
         page.setPageNo(1);
         page.setPageSize(10);
-        when(definitionService.page(1L, 1, 10)).thenReturn(page);
+        when(definitionService.page(1L, 1, 10, null)).thenReturn(page);
 
         mockMvcWithKey.perform(get("/ia/api/v1/admin/definitions")
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY))
@@ -113,6 +113,14 @@ class AdminAgentDefinitionApiTests {
                 .andExpect(jsonPath("$.data.list[0].prompts.systemPrompt").value("系统提示词"))
                 .andExpect(jsonPath("$.data.list[0].spec.toolWhitelist[0]")
                         .value("get_current_time"));
+
+        // [adapt] P4-W14:kind=sub 查询参数透传服务层(区分 main/sub 定义)
+        when(definitionService.page(1L, 1, 10, "sub")).thenReturn(page);
+        mockMvcWithKey.perform(get("/ia/api/v1/admin/definitions")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("kind", "sub"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1));
     }
 
     @Test

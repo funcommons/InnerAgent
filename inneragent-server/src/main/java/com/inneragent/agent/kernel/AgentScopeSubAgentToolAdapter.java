@@ -2,6 +2,7 @@ package com.inneragent.agent.kernel;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.config.ai.AiAgentDefinition;
 import com.inneragent.platform.enums.ai.AgentRunStatus;
 import com.inneragent.agent.context.AgentRunContext;
@@ -93,14 +94,57 @@ public final class AgentScopeSubAgentToolAdapter extends AbstractPlatformAgentTo
                             return Mono.error(new IllegalStateException(
                                     "Platform sub-agent run service is unavailable"));
                         }
-                        return childRunPort.start(command)
-                                .flatMap(childRunPort::awaitCompletion);
+                        return startChildRun(param, command, childRunPort);
                     }))
-                    .flatMap(child -> cancellation.checkpoint()
+                    .flatMap(result -> cancellation.checkpoint()
                             .then(assertLease(run))
-                            .thenReturn(projectResult(param, child)))
+                            .thenReturn(result))
                     .timeout(remaining(run));
         });
+    }
+
+    /**
+     * [adapt] P4-W14 起跑准入拒绝的「报错回灌模型」(深度/扇出护栏 429、
+     * 父不可准入 409、父截止已过等):映射为 status:error 的工具结果
+     * (ToolResultState.ERROR,与 MCP 工具 JSON status 契约同形),模型可读
+     * 取原因调整后续动作;基础设施类失败(IllegalState/journal 等)不命中
+     * 判定,仍按运行失败走 reconcile 路径。
+     */
+    private Mono<ToolResultBlock> startChildRun(
+            ToolCallParam param,
+            PlatformSubAgentCommand command,
+            PlatformSubAgentRunPort childRunPort) {
+        return childRunPort.start(command)
+                .flatMap(childRunPort::awaitCompletion)
+                .map(child -> projectResult(param, child))
+                .onErrorResume(AgentScopeSubAgentToolAdapter::isAdmissionRejection,
+                        rejection -> Mono.just(
+                                rejectionResult(param, command, rejection)));
+    }
+
+    private static boolean isAdmissionRejection(Throwable failure) {
+        return failure instanceof BusinessException
+                || failure instanceof IllegalArgumentException;
+    }
+
+    private ToolResultBlock rejectionResult(
+            ToolCallParam param,
+            PlatformSubAgentCommand command,
+            Throwable rejection) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("parentRunId", command.parentRunId());
+        result.put("parentToolCallId", command.parentToolCallId());
+        result.put("agentName", command.agentName());
+        // status:error 与平台工具 JSON 契约同形(AgentScopeToolAdapter.projectResult)
+        result.put("status", "error");
+        result.put("executionMode", "PLATFORM_MANAGED_CHILD_RUN");
+        result.put("resultDelivery", "PARENT_TOOL_RESULT");
+        result.put("error", rejection.getMessage());
+        try {
+            return errorResult(param, objectMapper.writeValueAsString(result));
+        } catch (JsonProcessingException failure) {
+            return errorResult(param, String.valueOf(rejection.getMessage()));
+        }
     }
 
     private ToolResultBlock projectResult(

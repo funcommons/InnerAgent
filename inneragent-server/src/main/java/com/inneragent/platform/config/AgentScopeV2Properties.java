@@ -180,6 +180,17 @@ public class AgentScopeV2Properties {
         private Duration runTimeout = Duration.ofMinutes(30);
         private Duration confirmationTimeout = Duration.ofHours(48);
         private int maxIters = 999;
+        /**
+         * [adapt] P4-W14 子 Agent 嵌套深度上限(根运行=1 层;03-开发计划
+         * §7.3 验收 4 护栏,默认 3,可配)。子运行准入时按祖先链计数,
+         * 超限 429 明确拒绝(错误文案经工具结果回灌模型)。
+         */
+        private int maxSubAgentDepth = 3;
+        /**
+         * [adapt] P4-W14 单父并发子运行上限(默认 5,可配)。准入事务内按
+         * 活跃子运行计数(排除同 parentToolCallId 的幂等重试),超限 429。
+         */
+        private int maxConcurrentSubAgents = 5;
 
         public String getInstanceId() {
             return instanceId;
@@ -225,6 +236,30 @@ public class AgentScopeV2Properties {
                 throw new IllegalArgumentException("maxIters must be greater than zero");
             }
             this.maxIters = maxIters;
+        }
+
+        public int getMaxSubAgentDepth() {
+            return maxSubAgentDepth;
+        }
+
+        public void setMaxSubAgentDepth(int maxSubAgentDepth) {
+            if (maxSubAgentDepth <= 0) {
+                throw new IllegalArgumentException(
+                        "maxSubAgentDepth must be greater than zero");
+            }
+            this.maxSubAgentDepth = maxSubAgentDepth;
+        }
+
+        public int getMaxConcurrentSubAgents() {
+            return maxConcurrentSubAgents;
+        }
+
+        public void setMaxConcurrentSubAgents(int maxConcurrentSubAgents) {
+            if (maxConcurrentSubAgents <= 0) {
+                throw new IllegalArgumentException(
+                        "maxConcurrentSubAgents must be greater than zero");
+            }
+            this.maxConcurrentSubAgents = maxConcurrentSubAgents;
         }
     }
 

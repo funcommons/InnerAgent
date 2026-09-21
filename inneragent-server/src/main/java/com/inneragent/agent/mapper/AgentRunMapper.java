@@ -367,4 +367,26 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
     List<AgentRun> selectCancellationRetryCandidates(
             @Param("now") LocalDateTime now,
             @Param("limit") int limit);
+
+    /**
+     * [adapt] P4-W14 级联取消兜底扫描:父运行已终态但其活跃子运行仍在的
+     * 孤儿候选(父被租约收敛 FAILED、或取消树与子准入竞态窗口外终态化)。
+     * 以子运行为根再走取消树,孙辈随单次树遍历级联。
+     */
+    @Select("""
+            SELECT c.*
+            FROM ia_agent_run c
+            INNER JOIN ia_agent_run p
+              ON p.run_id = c.parent_run_id
+            WHERE c.parent_run_id IS NOT NULL
+              AND c.status IN (
+                  'RUNNING',
+                  'WAITING_CONFIRMATION',
+                  'WAITING_EXTERNAL',
+                  'CANCEL_REQUESTED')
+              AND p.status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+            ORDER BY c.id
+            LIMIT #{limit}
+            """)
+    List<AgentRun> selectOrphanedActiveChildren(@Param("limit") int limit);
 }

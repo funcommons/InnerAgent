@@ -63,6 +63,18 @@ public class AiChatStreamRespVO {
     /** 父级工具调用 ID（子 Agent 输出时用于归属映射） */
     private String parentToolCallId;
 
+    /**
+     * [adapt] P4-W14 父运行 ID(仅子运行自身事件流携带;前端父子层级渲染的
+     * 服务端数据支撑,新增可选字段不破既有消费者)。
+     */
+    private String parentRunId;
+
+    /**
+     * [adapt] P4-W14 子运行 ID(仅镜像进父运行事件流的子事件携带,与
+     * parentToolCallId/agentName 配套定位子运行)。
+     */
+    private String childRunId;
+
     /** 产生此事件的 Agent 名称 */
     private String agentName;
 

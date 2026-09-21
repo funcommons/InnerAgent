@@ -1,6 +1,7 @@
 package com.inneragent.agent.run;
 
 import com.inneragent.platform.common.BusinessException;
+import com.inneragent.platform.config.AgentScopeV2Properties;
 import com.inneragent.agent.entity.AgentConversation;
 import com.inneragent.agent.entity.AgentMessage;
 import com.inneragent.agent.entity.AgentRun;
@@ -52,6 +53,7 @@ public class AgentRunCoordinator {
     private final TransactionTemplate transactionTemplate;
     private final AgentRuntimeSchedulers schedulers;
     private final AgentStateCleanupPolicyService stateCleanupPolicy;
+    private final AgentScopeV2Properties properties;
 
     public Mono<StartedAgentRun> start(StartAgentRunCommand command) {
         Objects.requireNonNull(command, "command must not be null");
@@ -118,10 +120,9 @@ public class AgentRunCoordinator {
         LocalDateTime databaseNow = runRepository.databaseNow();
         requireAdmissibleParent(parent, command, databaseNow);
 
-        LocalDateTime deadline = requireFutureDeadline(command.deadline(), databaseNow);
-        if (deadline.isAfter(parent.getDeadlineAt())) {
-            throw new IllegalArgumentException("Child run deadline must not exceed parent deadline");
-        }
+        LocalDateTime deadline = clampChildDeadline(
+                parent, requireFutureDeadline(command.deadline(), databaseNow));
+        enforceSubAgentGuardrails(parent, command);
         LocalDateTime leaseUntil = leaseUntil(databaseNow, command.ownerLease(), deadline);
         AgentRun child = AgentRun.builder()
                 .runId(command.childRunId())
@@ -251,6 +252,48 @@ public class AgentRunCoordinator {
             throw new IllegalArgumentException("Agent run deadline must be in the future");
         }
         return persisted;
+    }
+
+    /**
+     * [adapt] P4-W14 子运行 deadline 钳制(03-开发计划 §7.3 验收 4「子 deadline
+     * ≤ 父」):缺省请求(适配器传父 deadline)天然不越界;显式传入更大值时
+     * 钳制到父 deadlineAt 并 WARN 留痕——子运行生命周期恒被父覆盖,而非
+     * 整次调起被拒绝。更短请求按原样生效。
+     */
+    private LocalDateTime clampChildDeadline(AgentRun parent, LocalDateTime requested) {
+        LocalDateTime parentDeadline = parent.getDeadlineAt();
+        if (parentDeadline == null || !requested.isAfter(parentDeadline)) {
+            return requested;
+        }
+        log.warn("Child run deadline clamped to parent deadline: parentRunId={}, "
+                        + "requested={}, clamped={}",
+                parent.getRunId(), requested, parentDeadline);
+        return parentDeadline;
+    }
+
+    /**
+     * [adapt] P4-W14 深度/扇出护栏(fusion.agentscope.v2.execution.
+     * max-sub-agent-depth 默认 3 / max-concurrent-sub-agents 默认 5):
+     * 深度按父子链代数计数(根=1);扇出按父下活跃子运行计数,排除同
+     * parentToolCallId 的幂等重试。超限以 429 明确拒绝,错误经子 Agent 工具
+     * 结果回灌模型(见 AgentScopeSubAgentToolAdapter 的准入拒绝映射)。
+     */
+    private void enforceSubAgentGuardrails(AgentRun parent, StartChildAgentRunCommand command) {
+        int maxDepth = properties.getExecution().getMaxSubAgentDepth();
+        int parentDepth = runRepository.generationDepthOf(parent, maxDepth);
+        if (parentDepth + 1 > maxDepth) {
+            throw new BusinessException(429, "子 Agent 嵌套深度超过上限 " + maxDepth
+                    + "(当前层级 " + (parentDepth + 1) + "),父运行 " + parent.getRunId());
+        }
+        int maxConcurrent = properties.getExecution().getMaxConcurrentSubAgents();
+        long activeOthers = runRepository.findActiveChildren(parent.getRunId()).stream()
+                .filter(child -> !command.parentToolCallId()
+                        .equals(child.getParentToolCallId()))
+                .count();
+        if (activeOthers >= maxConcurrent) {
+            throw new BusinessException(429, "子 Agent 并发数超过上限 " + maxConcurrent
+                    + "(父运行 " + parent.getRunId() + " 当前活跃子运行 " + activeOthers + "个)");
+        }
     }
 
     /**

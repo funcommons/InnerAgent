@@ -19,8 +19,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -78,13 +81,26 @@ public class AgentDefinitionAdminService {
 
     /** 分页列表(agent_key 升序稳定排序;出参含提示词与规格视图)。 */
     public PageResult<DefinitionView> page(long appId, int pageNo, int pageSize) {
+        return page(appId, pageNo, pageSize, null);
+    }
+
+    /**
+     * 分页列表(kind 过滤版,[adapt] P4-W14「web/admin 查询区分 main/sub」):
+     * kind 缺省不过滤;非 main/sub 值 400(值域与 V1 DDL CHECK 一致)。
+     */
+    public PageResult<DefinitionView> page(
+            long appId, int pageNo, int pageSize, String kind) {
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.min(Math.max(pageSize, 1), 100);
+        LambdaQueryWrapper<AgentDefinition> query = new LambdaQueryWrapper<AgentDefinition>()
+                .eq(AgentDefinition::getAppId, appId)
+                .orderByAsc(AgentDefinition::getAgentKey);
+        String normalizedKind = normalizeKind(kind);
+        if (normalizedKind != null) {
+            query.eq(AgentDefinition::getKind, normalizedKind);
+        }
         Page<AgentDefinition> page = definitionMapper.selectPage(
-                new Page<>(safePageNo, safePageSize),
-                new LambdaQueryWrapper<AgentDefinition>()
-                        .eq(AgentDefinition::getAppId, appId)
-                        .orderByAsc(AgentDefinition::getAgentKey));
+                new Page<>(safePageNo, safePageSize), query);
         PageResult<DefinitionView> result = new PageResult<>(
                 page.getRecords().stream().map(this::toView).toList(),
                 page.getTotal());
@@ -185,14 +201,31 @@ public class AgentDefinitionAdminService {
         String policy = normalizePolicy(conflictPolicy);
         validateBundleShape(rawBundle);
         List<AgentDefinitionBundle.ImportError> errors = new ArrayList<>();
-        int created = 0;
-        int updated = 0;
-        int skipped = 0;
+        // [adapt] P4-W14:先全量解析(条目级错误就地入 errors[]),再对
+        // 「bundle ∪ 现库」引用图做环检测,最后按冲突策略逐条落库。
+        List<AgentDefinitionBundle.DefinitionEntry> parsed = new ArrayList<>();
         for (JsonNode element : rawBundle.path("definitions")) {
             String echoType = element.path("agentType").isTextual()
                     ? element.path("agentType").asText() : null;
             try {
-                AgentDefinitionBundle.DefinitionEntry entry = parseEntry(element);
+                parsed.add(parseEntry(element));
+            } catch (BusinessException invalidEntry) {
+                // 条目级校验失败:记入 errors[],不落库、不占 skipped,继续其余条目
+                errors.add(new AgentDefinitionBundle.ImportError(
+                        echoType, invalidEntry.getMessage()));
+            }
+        }
+        Set<String> cycleNodes = referenceCycleNodes(appId, parsed);
+        errors.addAll(referenceCycleErrors(appId, parsed));
+        int created = 0;
+        int updated = 0;
+        int skipped = 0;
+        for (AgentDefinitionBundle.DefinitionEntry entry : parsed) {
+            if (cycleNodes.contains(entry.agentType())) {
+                // 引用环条目:已记 errors[],拒绝落库
+                continue;
+            }
+            try {
                 AgentDefinition existing =
                         definitionMapper.selectByAppAndKey(appId, entry.agentType());
                 if (existing == null) {
@@ -212,14 +245,150 @@ public class AgentDefinitionAdminService {
                     updated++;
                 }
             } catch (BusinessException invalidEntry) {
-                // 条目级校验失败:记入 errors[],不落库、不占 skipped,继续其余条目
                 errors.add(new AgentDefinitionBundle.ImportError(
-                        echoType, invalidEntry.getMessage()));
+                        entry.agentType(), invalidEntry.getMessage()));
             }
         }
         log.info("Agent 定义导入{}: appId={}, policy={}, created={}, updated={}, skipped={}, errors={}",
                 dryRun ? "(dryRun 预演)" : "", appId, policy, created, updated, skipped, errors.size());
         return new AgentDefinitionBundle.ImportResult(dryRun, created, updated, skipped, errors);
+    }
+
+    /**
+     * [adapt] P4-W14 子 Agent 定义引用规则(kind=sub 全链,按内核语义定):
+     * <ul>
+     *   <li><strong>嵌套允许</strong>:内核子 Agent 即工具,sub 定义可再声明
+     *       subAgentTools(孙辈),运行时受 max-sub-agent-depth(默认 3)钳制;</li>
+     *   <li><strong>引用环禁止</strong>:refAgentType 首尾相接(含自引用、
+     *       跨 DB 与 bundle 的环)会导致调起链无限递归,参与环的 bundle 条目
+     *       逐条记 errors[] 并拒绝落库;环必须在「现库行 ∪ bundle 条目」
+     *       合成图上检测(分批导入先导者不因目标未入库而受阻);</li>
+     *   <li><strong>ref 目标未知不阻导入</strong>:允许先导 sub 后导 main 的
+     *       分批导入;运行时调起时才要求目标定义存在;</li>
+     *   <li><strong>kind 与引用解耦</strong>:导入按 specJson.kind 原样落库;
+     *       代码注册表播种侧以「被引用者即 sub」派生(AgentDefinitionSeeder)。</li>
+     * </ul>
+     */
+    private List<AgentDefinitionBundle.ImportError> referenceCycleErrors(
+            long appId, List<AgentDefinitionBundle.DefinitionEntry> parsed) {
+        Set<String> inCycle = referenceCycleNodes(appId, parsed);
+        if (inCycle.isEmpty()) {
+            return List.of();
+        }
+        return parsed.stream()
+                .filter(entry -> inCycle.contains(entry.agentType()))
+                .map(entry -> new AgentDefinitionBundle.ImportError(
+                        entry.agentType(),
+                        "定义引用环(subAgentTools.refAgentType 首尾相接): "
+                                + String.join(" -> ", sortedCycle(inCycle))
+                                + " -> " + firstOfCycle(inCycle, entry.agentType())))
+                .toList();
+    }
+
+    /**
+     * 引用环节点集合(参与环的 bundle 条目跳过落库)。图 = 现库行(appId 视图)
+     * ∪ bundle 条目(bundle 覆盖同名节点的出边);仅「双方都已知」的边参与,
+     * 分批导入先导者不因目标未入库而受阻。
+     */
+    private Set<String> referenceCycleNodes(
+            long appId, List<AgentDefinitionBundle.DefinitionEntry> parsed) {
+        Map<String, Set<String>> edges = new LinkedHashMap<>();
+        for (AgentDefinition row : definitionMapper.selectList(
+                new LambdaQueryWrapper<AgentDefinition>()
+                        .eq(AgentDefinition::getAppId, appId))) {
+            edges.put(row.getAgentKey(), refsOfJson(row.getSubAgentToolsJson()));
+        }
+        for (AgentDefinitionBundle.DefinitionEntry entry : parsed) {
+            JsonNode spec = entry.specJson();
+            edges.put(entry.agentType(), spec == null
+                    ? Set.of()
+                    : refsOfNode(spec.path("subAgentTools")));
+        }
+        return findCycleNodes(edges);
+    }
+
+    /** 现库 subAgentToolsJson 文本 → refAgentType 集合(脏 JSON 容错为空)。 */
+    private Set<String> refsOfJson(String subAgentToolsJson) {
+        if (subAgentToolsJson == null || subAgentToolsJson.isBlank()) {
+            return Set.of();
+        }
+        try {
+            return refsOfNode(objectMapper.readTree(subAgentToolsJson));
+        } catch (JsonProcessingException malformedStoredJson) {
+            return Set.of();
+        }
+    }
+
+    private Set<String> refsOfNode(JsonNode subAgentTools) {
+        if (subAgentTools == null || !subAgentTools.isArray()) {
+            return Set.of();
+        }
+        Set<String> refs = new LinkedHashSet<>();
+        for (JsonNode sub : subAgentTools) {
+            JsonNode ref = sub.path("refAgentType");
+            if (ref.isTextual() && !ref.asText().isBlank()) {
+                refs.add(ref.asText().trim());
+            }
+        }
+        return refs;
+    }
+
+    /**
+     * 三色 DFS 找环:仅「双方都已知」的边参与(未知节点分批导入后续补);
+     * 环上全部节点计入 inCycle。定义规模为两位数,递归深度安全。
+     */
+    private static Set<String> findCycleNodes(Map<String, Set<String>> edges) {
+        Set<String> visiting = new HashSet<>();
+        Set<String> done = new HashSet<>();
+        Set<String> inCycle = new LinkedHashSet<>();
+        for (String start : edges.keySet()) {
+            dfsForCycle(start, edges, visiting, done, inCycle, new ArrayDeque<>());
+        }
+        return inCycle;
+    }
+
+    private static void dfsForCycle(
+            String node,
+            Map<String, Set<String>> edges,
+            Set<String> visiting,
+            Set<String> done,
+            Set<String> inCycle,
+            Deque<String> path) {
+        if (done.contains(node)) {
+            return;
+        }
+        if (visiting.contains(node)) {
+            boolean recording = false;
+            for (String step : path) {
+                if (step.equals(node)) {
+                    recording = true;
+                }
+                if (recording) {
+                    inCycle.add(step);
+                }
+            }
+            return;
+        }
+        visiting.add(node);
+        path.addLast(node);
+        for (String next : edges.getOrDefault(node, Set.of())) {
+            if (edges.containsKey(next)) {
+                dfsForCycle(next, edges, visiting, done, inCycle, path);
+            }
+        }
+        path.pollLast();
+        visiting.remove(node);
+        done.add(node);
+    }
+
+    private static List<String> sortedCycle(Set<String> inCycle) {
+        List<String> cycle = new ArrayList<>(inCycle);
+        java.util.Collections.sort(cycle);
+        return cycle;
+    }
+
+    private static String firstOfCycle(Set<String> inCycle, String fallback) {
+        return inCycle.iterator().hasNext() ? inCycle.iterator().next() : fallback;
     }
 
     // ------------------------------------------------------------------
@@ -389,6 +558,27 @@ public class AgentDefinitionAdminService {
                         "specJson." + arrayField + " 必须为数组: " + agentType);
             }
         }
+        // [adapt] P4-W14 引用条目校验:subAgentTools[] 每项必须有 toolName 与
+        // refAgentType(调起链定位子定义的唯一名);缺者条目级 errors[]。
+        JsonNode subAgentTools = spec.path("subAgentTools");
+        if (subAgentTools.isArray()) {
+            for (JsonNode sub : subAgentTools) {
+                if (!sub.isObject()) {
+                    throw new BusinessException(400,
+                            "specJson.subAgentTools 条目必须为对象: " + agentType);
+                }
+                JsonNode toolName = sub.path("toolName");
+                if (!toolName.isTextual() || toolName.asText().isBlank()) {
+                    throw new BusinessException(400,
+                            "specJson.subAgentTools[].toolName 不能为空: " + agentType);
+                }
+                JsonNode refAgentType = sub.path("refAgentType");
+                if (!refAgentType.isTextual() || refAgentType.asText().isBlank()) {
+                    throw new BusinessException(400,
+                            "specJson.subAgentTools[].refAgentType 不能为空: " + agentType);
+                }
+            }
+        }
     }
 
     private AgentDefinition toNewRow(long appId, AgentDefinitionBundle.DefinitionEntry entry) {
@@ -519,6 +709,19 @@ public class AgentDefinitionAdminService {
         if (!POLICY_SKIP.equals(normalized) && !POLICY_OVERWRITE.equals(normalized)) {
             throw new BusinessException(400,
                     "conflictPolicy 仅支持 skip/overwrite: " + conflictPolicy);
+        }
+        return normalized;
+    }
+
+    /** kind 过滤值归一(缺省 null=不过滤;值域与 V1 DDL CHECK 一致)。 */
+    private static String normalizeKind(String kind) {
+        if (kind == null || kind.isBlank()) {
+            return null;
+        }
+        String normalized = kind.trim().toLowerCase(Locale.ROOT);
+        if (!KINDS.contains(normalized)) {
+            throw new BusinessException(400,
+                    "kind 仅支持 main/sub: " + kind);
         }
         return normalized;
     }

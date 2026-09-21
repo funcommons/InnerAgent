@@ -283,6 +283,10 @@ public final class AgentRunQueryService {
                 .setBlockId(identity.blockId())
                 .setToolCallId(identity.toolCallId())
                 .setParentToolCallId(identity.parentToolCallId())
+                // [adapt] P4-W14 父子层级:子运行自身事件流带 parentRunId;
+                // 镜像进父事件流的子事件带 childRunId(payload 透传)。
+                .setParentRunId(run.getParentRunId())
+                .setChildRunId(firstText(payload, "childRunId"))
                 .setAgentName(identity.agentName())
                 .setRawEventId(identity.rawEventId())
                 .setRawEventType(identity.rawEventType())

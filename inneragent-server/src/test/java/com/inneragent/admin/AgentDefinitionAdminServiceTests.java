@@ -424,6 +424,143 @@ class AgentDefinitionAdminServiceTests {
         assertThat(result.updated()).isZero();
     }
 
+    // ------------------------------------------------------------------
+    // P4-W14 kind=sub 定义全链:kind 过滤 + 引用条目校验 + 引用环检测
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("分页 kind 过滤:kind=sub 仅出子定义;非法 kind 400;缺省不过滤")
+    void pageFiltersByKindWhenRequested() {
+        when(definitionMapper.selectPage(any(), any())).thenAnswer(invocation -> {
+            Page<AgentDefinition> page = invocation.getArgument(0);
+            page.setRecords(List.of());
+            page.setTotal(0);
+            return page;
+        });
+
+        service.page(1, 1, 10, "sub");
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AgentDefinition>>
+            captor = ArgumentCaptor.forClass(wrapperType());
+        verify(definitionMapper).selectPage(any(), captor.capture());
+        assertThat(captor.getValue().getSqlSegment()).contains("kind");
+
+        service.page(1, 1, 10, null);
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AgentDefinition>>
+            unfiltered = ArgumentCaptor.forClass(wrapperType());
+        verify(definitionMapper, Mockito.times(2)).selectPage(any(), unfiltered.capture());
+        assertThat(unfiltered.getAllValues().get(1).getSqlSegment())
+                .doesNotContain("kind");
+
+        assertThatThrownBy(() -> service.page(1, 1, 10, "workflow"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("kind");
+    }
+
+    private static String entryWithRefs(String agentType, String kind, String refsJson) {
+        return """
+                {
+                  "agentType": "%s",
+                  "name": "定义-%s",
+                  "specJson": {
+                    "kind": "%s",
+                    "subAgentTools": %s
+                  },
+                  "prompts": [{"slot": "systemPrompt", "content": "提示词-%s"}]
+                }
+                """.formatted(agentType, agentType, kind, refsJson, agentType);
+    }
+
+    @Test
+    @DisplayName("引用环检测(环全在 bundle 内):A→B→A 双双记 errors[],零落库")
+    void importRejectsReferenceCycleInsideBundle() {
+        JsonNode bundle = bundleOf(
+                entryWithRefs("agent_a", "main",
+                        "[{\"toolName\":\"run_b\",\"refAgentType\":\"agent_b\"}]"),
+                entryWithRefs("agent_b", "sub",
+                        "[{\"toolName\":\"run_a\",\"refAgentType\":\"agent_a\"}]"));
+        when(definitionMapper.selectByAppAndKey(anyLong(), anyString())).thenReturn(null);
+        when(definitionMapper.selectList(any())).thenReturn(List.of());
+
+        AgentDefinitionBundle.ImportResult result =
+                service.importBundle(1, bundle, "skip", false);
+
+        assertThat(result.created()).isZero();
+        assertThat(result.errors())
+                .extracting(AgentDefinitionBundle.ImportError::agentType)
+                .containsExactlyInAnyOrder("agent_a", "agent_b");
+        assertThat(result.errors().getFirst().reason()).contains("引用环");
+        verify(definitionMapper, never()).insert(any(AgentDefinition.class));
+    }
+
+    @Test
+    @DisplayName("引用环检测(环跨 DB 与 bundle):DB 行 B→A,导入 A→B 记 errors[]")
+    void importRejectsCycleSpanningDatabaseAndBundle() throws Exception {
+        JsonNode bundle = bundleOf(
+                entryWithRefs("agent_a", "main",
+                        "[{\"toolName\":\"run_b\",\"refAgentType\":\"agent_b\"}]"));
+        when(definitionMapper.selectByAppAndKey(1, "agent_a")).thenReturn(null);
+        AgentDefinition dbRow = row(9L, "agent_b", "sub");
+        dbRow.setSubAgentToolsJson(
+                "[{\"toolName\":\"run_a\",\"refAgentType\":\"agent_a\"}]");
+        when(definitionMapper.selectList(any())).thenReturn(List.of(dbRow));
+
+        AgentDefinitionBundle.ImportResult result =
+                service.importBundle(1, bundle, "skip", false);
+
+        assertThat(result.created()).isZero();
+        assertThat(result.errors())
+                .extracting(AgentDefinitionBundle.ImportError::agentType)
+                .containsExactly("agent_a");
+        assertThat(result.errors().getFirst().reason()).contains("引用环");
+        verify(definitionMapper, never()).insert(any(AgentDefinition.class));
+    }
+
+    @Test
+    @DisplayName("无环嵌套链放行:main→sub 同 bundle 双建;自引用判环")
+    void importAcceptsAcyclicChainButRejectsSelfReference() throws Exception {
+        JsonNode chain = bundleOf(
+                entryWithRefs("agent_parent", "main",
+                        "[{\"toolName\":\"run_child\",\"refAgentType\":\"agent_child\"}]"),
+                entryWithRefs("agent_child", "sub", "null"));
+        when(definitionMapper.selectByAppAndKey(anyLong(), anyString())).thenReturn(null);
+        when(definitionMapper.selectList(any())).thenReturn(List.of());
+
+        AgentDefinitionBundle.ImportResult chainResult =
+                service.importBundle(1, chain, "skip", false);
+        assertThat(chainResult.created()).isEqualTo(2);
+        assertThat(chainResult.errors()).isEmpty();
+
+        JsonNode selfReference = bundleOf(
+                entryWithRefs("agent_self", "main",
+                        "[{\"toolName\":\"run_self\",\"refAgentType\":\"agent_self\"}]"));
+        AgentDefinitionBundle.ImportResult selfResult =
+                service.importBundle(1, selfReference, "skip", false);
+        assertThat(selfResult.created()).isZero();
+        assertThat(selfResult.errors()).hasSize(1);
+        assertThat(selfResult.errors().getFirst().reason()).contains("引用环");
+    }
+
+    @Test
+    @DisplayName("subAgentTools 条目校验:缺 toolName/refAgentType/非对象 → 条目级 errors[]")
+    void importValidatesSubAgentToolEntries() {
+        JsonNode bundle = bundleOf(
+                entryWithRefs("bad_ref", "main", "[{\"toolName\":\"run_x\"}]"),
+                entryWithRefs("bad_tool", "main", "[{\"refAgentType\":\"someone\"}]"),
+                entryWithRefs("bad_shape", "main", "[\"not-an-object\"]"),
+                entryWithRefs("good_agent", "sub", "null"));
+        when(definitionMapper.selectByAppAndKey(anyLong(), anyString())).thenReturn(null);
+        when(definitionMapper.selectList(any())).thenReturn(List.of());
+
+        AgentDefinitionBundle.ImportResult result =
+                service.importBundle(1, bundle, "skip", false);
+
+        assertThat(result.errors())
+                .extracting(AgentDefinitionBundle.ImportError::agentType)
+                .containsExactlyInAnyOrder("bad_ref", "bad_tool", "bad_shape");
+        assertThat(result.created()).isEqualTo(1);
+        verify(definitionMapper).insert(any(AgentDefinition.class));
+    }
+
     @SuppressWarnings("unchecked")
     private static Class<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AgentDefinition>> wrapperType() {
         return (Class<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AgentDefinition>>)

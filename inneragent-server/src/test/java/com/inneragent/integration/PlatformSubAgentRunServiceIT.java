@@ -1,6 +1,7 @@
 package com.inneragent.integration;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.inneragent.agent.entity.AgentRun;
 import com.inneragent.model.entity.AiModel;
@@ -16,6 +17,7 @@ import com.inneragent.agent.permission.ToolExecutionMode;
 import com.inneragent.agent.tool.PlatformSubAgentCommand;
 import com.inneragent.agent.tool.PlatformSubAgentRun;
 import com.inneragent.agent.run.AgentRunCoordinator;
+import com.inneragent.agent.run.AgentRunMaintenanceScheduler;
 import com.inneragent.agent.run.AgentRunRedisSignalService;
 import com.inneragent.agent.run.PlatformSubAgentRunService;
 import com.inneragent.agent.run.RunExecutionSupervisor;
@@ -106,6 +108,9 @@ class PlatformSubAgentRunServiceIT {
 
     @Autowired
     private RunTerminalCoordinator terminalCoordinator;
+
+    @Autowired
+    private AgentRunMaintenanceScheduler maintenance;
 
     @MockitoBean
     private RunExecutionSupervisor supervisor;
@@ -265,6 +270,100 @@ class PlatformSubAgentRunServiceIT {
         assertThat(runMapper.selectActiveChildren(parent.runId()))
                 .allSatisfy(child -> assertThat(child.getStatus())
                         .isEqualTo(AgentRunStatus.CANCEL_REQUESTED.name()));
+    }
+
+    /**
+     * [adapt] P4-W14 级联取消兜底扫描(03-开发计划 §7.3 验收 4 / §6.3 验收 1):
+     * 父运行已终态(跨实例租约收敛 FAILED / 取消树竞态窗口外终态化)但其活跃
+     * 子/孙运行仍在跑的泄漏场景,由维护调度周期扫描兜底——父→子→孙整链级联
+     * 取消;子先终态、父后终态的时序不产生误伤,扫描空转无副作用。
+     */
+    @Test
+    void maintenanceSweepCancelsActiveDescendantsOfTerminalParents() {
+        StartedAgentRun parent = startParent();
+        PlatformSubAgentRun child = await(service.start(
+                childCommand(parent, "tool-orphan", "researcher")));
+        AgentRun childRow = run(child.childRunId());
+        PlatformSubAgentCommand grandchildCommand = new PlatformSubAgentCommand(
+                child.childRunId(),
+                "tool-orphan-grandchild",
+                childRow.getOwnerInstanceId(),
+                childRow.getOwnerEpoch(),
+                "researcher",
+                childSpec(),
+                messages(),
+                new ProjectContext(77L),
+                ToolExecutionMode.DEFAULT,
+                childRow.getDeadlineAt().toInstant(java.time.ZoneOffset.UTC)
+                        .minusSeconds(1));
+        PlatformSubAgentRun grandchild = await(service.start(grandchildCommand));
+
+        // 父运行经租约收敛类路径直接终态化(模拟 owner 失联被收敛),子/孙仍 RUNNING。
+        assertThat(runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
+                .eq(AgentRun::getRunId, parent.runId())
+                .set(AgentRun::getStatus, AgentRunStatus.FAILED.name()))).isEqualTo(1);
+
+        await(maintenance.maintainOnce());
+
+        assertThat(run(child.childRunId()).getStatus())
+                .isIn(AgentRunStatus.CANCEL_REQUESTED.name(),
+                        AgentRunStatus.CANCELLED.name());
+        assertThat(run(grandchild.childRunId()).getStatus())
+                .isIn(AgentRunStatus.CANCEL_REQUESTED.name(),
+                        AgentRunStatus.CANCELLED.name());
+        // 再扫一遍:幂等空转,不抛错、不改变终态走向。
+        await(maintenance.maintainOnce());
+        assertThat(run(child.childRunId()).getStatus())
+                .isIn(AgentRunStatus.CANCEL_REQUESTED.name(),
+                        AgentRunStatus.CANCELLED.name());
+    }
+
+    @Test
+    void childReachingTerminalFirstKeepsLaterParentCancelLeakFree() {
+        StartedAgentRun parent = startParent();
+        PlatformSubAgentRun started = await(service.start(
+                childCommand(parent, "tool-early-exit", "researcher")));
+        AgentRun child = run(started.childRunId());
+        await(terminalCoordinator.terminateOwned(
+                new RunTerminalRequest(
+                        child.getRunId(),
+                        new StateStoreSlot(
+                                String.valueOf(child.getUserId()),
+                                child.getAgentStateSessionId()),
+                        Set.of(AgentRunStatus.RUNNING),
+                        AgentRunStatus.COMPLETED,
+                        AgentTerminalOutputType.DONE,
+                        null,
+                        null,
+                        new AgentEventEnvelope(
+                                unique("child-early-terminal"),
+                                "RUN_TERMINAL",
+                                "main/researcher",
+                                null,
+                                null,
+                                null,
+                                "tool-early-exit",
+                                "researcher",
+                                "DONE",
+                                JsonNodeFactory.instance.objectNode()
+                                        .put("outputType", "DONE")
+                                        .put("finished", true),
+                                Instant.now())),
+                child.getOwnerInstanceId(),
+                child.getOwnerEpoch()));
+
+        // 子先终态后父取消:无活跃子可取消,不误伤任何运行。
+        await(service.cancelChildren(parent.runId()));
+        assertThat(runMapper.selectActiveChildren(parent.runId())).isEmpty();
+        assertThat(run(parent.runId()).getStatus())
+                .isEqualTo(AgentRunStatus.RUNNING.name());
+
+        // 父随后终态化:兜底扫描无候选,空转无副作用。
+        assertThat(runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
+                .eq(AgentRun::getRunId, parent.runId())
+                .set(AgentRun::getStatus, AgentRunStatus.COMPLETED.name()))).isEqualTo(1);
+        await(maintenance.maintainOnce());
+        assertThat(runMapper.selectActiveChildren(parent.runId())).isEmpty();
     }
 
     private StartedAgentRun startParent() {

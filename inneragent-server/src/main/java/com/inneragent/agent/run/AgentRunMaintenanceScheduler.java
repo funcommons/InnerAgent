@@ -77,6 +77,8 @@ public final class AgentRunMaintenanceScheduler {
         return heartbeatOwned()
                 .then(reconciliation.reconcileBatch(BATCH_SIZE))
                 .then(cancellations.retryBatch(BATCH_SIZE))
+                // [adapt] P4-W14:父已终态而子运行仍活跃的孤儿兜底(级联取消收尾)
+                .then(cancellations.cancelOrphanedChildren(BATCH_SIZE))
                 .then(projections.recoverTerminalBatch(BATCH_SIZE));
     }
 

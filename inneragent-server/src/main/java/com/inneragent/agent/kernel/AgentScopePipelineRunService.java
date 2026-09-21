@@ -67,6 +67,18 @@ public final class AgentScopePipelineRunService {
     private static final int MAX_ACTIVE_SKILLS = 8;
     private static final int MAX_ACTIVE_SKILL_CONTENT_LENGTH = 128 * 1024;
 
+    /**
+     * [adapt] P4-W14 mini KB 内核侧缺省口径(PRD M5/任务):检索 top-k 缺省
+     * 4、「引用资料」注入预算 8000 字符(整段截停)。平台属性
+     * {@code inneragent.kb.*} 提供管理面调参;运行组装走端口实现解释
+     * topK ≤ 0 为平台缺省。
+     */
+    private static final int DEFAULT_KB_TOP_K = 4;
+    private static final int DEFAULT_KB_MAX_INJECTED_CHARS = 8000;
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(AgentScopePipelineRunService.class);
+
     private static final String DEFAULT_SYSTEM_PROMPT = """
             你是一个专业的 AI 视频创作助手，专注于帮助用户进行剧本编辑和分镜设计。
 
@@ -103,6 +115,11 @@ public final class AgentScopePipelineRunService {
     private final AgentUserSkillService userSkillService;
     /** [adapt] P4-W13:应用级激活 Skill 目录端口(可空:测试直构免装配)。 */
     private final com.inneragent.agent.skill.AppSkillCatalogPort appSkillCatalog;
+    /**
+     * [adapt] P4-W14:mini 知识库端口(可空:测试直构免装配;无命中不注入,
+     * 端口异常降级不阻断会话可用性)。
+     */
+    private final com.inneragent.agent.kb.AgentKnowledgeBasePort knowledgeBase;
     private final CircuitBreakerAdminService circuitBreakers;
     private final com.inneragent.platform.safety.ContentSafetyGate safetyGate;
 
@@ -127,6 +144,7 @@ public final class AgentScopePipelineRunService {
             AgentScopeSkillRegistry skillRegistry,
             AgentUserSkillService userSkillService,
             com.inneragent.agent.skill.AppSkillCatalogPort appSkillCatalog,
+            com.inneragent.agent.kb.AgentKnowledgeBasePort knowledgeBase,
             CircuitBreakerAdminService circuitBreakers,
             com.inneragent.platform.safety.ContentSafetyGate safetyGate) {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
@@ -154,6 +172,7 @@ public final class AgentScopePipelineRunService {
         this.userSkillService = Objects.requireNonNull(
                 userSkillService, "userSkillService must not be null");
         this.appSkillCatalog = appSkillCatalog;
+        this.knowledgeBase = knowledgeBase;
         this.circuitBreakers = Objects.requireNonNull(
                 circuitBreakers, "circuitBreakers must not be null");
         this.safetyGate = Objects.requireNonNull(
@@ -226,6 +245,7 @@ public final class AgentScopePipelineRunService {
 
     private Mono<StartedAgentRun> launch(PreparedRun prepared) {
         return coordinator.start(prepared.admission())
+                .flatMap(started -> recordKbCitations(started, prepared.kbHits()))
                 .flatMap(started -> runtimeContexts.forRoot(
                                 started,
                                 prepared.spec().agentDefinitionStableKey(),
@@ -239,6 +259,30 @@ public final class AgentScopePipelineRunService {
                                                 prepared.spec(),
                                                 runtime))
                                 .thenReturn(started)));
+    }
+
+    /**
+     * [adapt] P4-W14:引用清单随运行落痕(ia_agent_run.kb_citations_json,
+     * 经端口平台实现序列化落列)。best-effort:落库失败仅 WARN 不使运行
+     * 失败——执行输入已组装完毕,缺引用展示属可观测降级。
+     */
+    private Mono<StartedAgentRun> recordKbCitations(
+            StartedAgentRun started,
+            List<com.inneragent.agent.kb.AgentKnowledgeBasePort.KbHit> kbHits) {
+        if (kbHits.isEmpty() || knowledgeBase == null) {
+            return Mono.just(started);
+        }
+        long appId = com.inneragent.platform.context.AppContext.currentOrDefault();
+        return Mono.fromCallable(() -> {
+                    knowledgeBase.recordRunCitations(started.runId(), appId, kbHits);
+                    return started;
+                })
+                .subscribeOn(schedulers.journal())
+                .onErrorResume(failure -> {
+                    log.warn("KB 引用清单落库失败(不影响运行): runId={}, error={}",
+                            started.runId(), failure.toString());
+                    return Mono.just(started);
+                });
     }
 
     private PreparedRun prepare(AiChatReqVO request, long userId) {
@@ -267,6 +311,13 @@ public final class AgentScopePipelineRunService {
                         AppContext.currentOrDefault(), userId, conversationId, null),
                 visibleUserContent);
         String input = input(request, visibleUserContent);
+        // [adapt] P4-W14 mini KB:按用户消息检索 top-k(缺省 4),命中才注入
+        // ——以「引用资料」区块随执行输入进上下文(不改变系统提示词,防
+        // 提示注入语义,03-开发计划 §7.4);引用清单随运行留痕供终态事件
+        // 溯源。端口缺失/查询异常按无命中降级,不阻断会话可用性。
+        List<com.inneragent.agent.kb.AgentKnowledgeBasePort.KbHit> kbHits =
+                retrieveKnowledgeBase(visibleUserContent);
+        input = appendKbReferences(input, kbHits);
         String systemPrompt = systemPrompt(request, definition, promptVariables, activeSkills);
         AiModel model = AiModelRequestOptions.withReasoningEffort(
                 model(request.getModelId()), request.getReasoningEffort(), objectMapper);
@@ -319,7 +370,8 @@ public final class AgentScopePipelineRunService {
                 admission,
                 messages.toUserMessages(input, multimodalInputs),
                 project,
-                toolExecutionMode);
+                toolExecutionMode,
+                kbHits);
     }
 
     private PreparedRun prepareContinuation(
@@ -375,7 +427,8 @@ public final class AgentScopePipelineRunService {
                 admission,
                 executionMessages,
                 project,
-                ToolExecutionMode.FULL_ACCESS);
+                ToolExecutionMode.FULL_ACCESS,
+                List.of());
     }
 
     private void requireContinuableRoot(AgentRun previous, long userId) {
@@ -457,6 +510,50 @@ public final class AgentScopePipelineRunService {
             prompt = prompt + "\n\n" + activeSkillsPrompt(activeSkills);
         }
         return prompt;
+    }
+
+    /**
+     * [adapt] P4-W14:按用户消息检索知识库 top-k 命中。端口缺失/查询为空/
+     * 查询异常一律按无命中处理(空列表 = 不注入):KB 不可用不阻断会话
+     * 可用性,查询文本由平台实现自行截断。
+     */
+    private List<com.inneragent.agent.kb.AgentKnowledgeBasePort.KbHit> retrieveKnowledgeBase(
+            String visibleUserContent) {
+        if (knowledgeBase == null) {
+            return List.of();
+        }
+        String query = normalize(visibleUserContent);
+        if (query == null || query.length() < 2) {
+            return List.of();
+        }
+        try {
+            return knowledgeBase.retrieve(
+                    com.inneragent.platform.context.AppContext.currentOrDefault(),
+                    query,
+                    DEFAULT_KB_TOP_K);
+        } catch (RuntimeException retrievalFailure) {
+            log.warn("mini KB 检索失败,按无命中继续: {}", retrievalFailure.toString());
+            return List.of();
+        }
+    }
+
+    /**
+     * 命中注入:引用资料区块拼在执行输入的 user_request 之前(无命中不变);
+     * 纯文本输入(无 <user_request> 包裹)时以同款包裹补齐指令/资料分界。
+     */
+    private String appendKbReferences(
+            String input, List<com.inneragent.agent.kb.AgentKnowledgeBasePort.KbHit> kbHits) {
+        String block = com.inneragent.agent.kb.KbReferencesBlock.render(
+                kbHits, DEFAULT_KB_MAX_INJECTED_CHARS);
+        if (block == null) {
+            return input;
+        }
+        int userRequest = input.indexOf("<user_request>");
+        if (userRequest < 0) {
+            return block + "\n\n<user_request>\n" + input + "\n</user_request>";
+        }
+        return input.substring(0, userRequest) + block + "\n\n"
+                + input.substring(userRequest);
     }
 
     private List<ActiveSkill> resolveActiveSkills(List<String> requestedNames, long userId) {
@@ -679,7 +776,8 @@ public final class AgentScopePipelineRunService {
             StartAgentRunCommand admission,
             List<Msg> executionMessages,
             ProjectContext project,
-            ToolExecutionMode toolExecutionMode) {
+            ToolExecutionMode toolExecutionMode,
+            List<com.inneragent.agent.kb.AgentKnowledgeBasePort.KbHit> kbHits) {
         private PreparedRun {
             Objects.requireNonNull(spec, "spec must not be null");
             Objects.requireNonNull(snapshot, "snapshot must not be null");
@@ -689,6 +787,7 @@ public final class AgentScopePipelineRunService {
                 throw new IllegalArgumentException("executionMessages must not be empty");
             }
             Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
+            kbHits = List.copyOf(kbHits);
         }
     }
 

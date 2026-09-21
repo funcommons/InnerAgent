@@ -75,6 +75,14 @@ public class AiChatStreamRespVO {
      */
     private String childRunId;
 
+    /**
+     * [adapt] P4-W14 mini KB 引用溯源:本次运行注入的知识库分段引用
+     * (chunk id/来源标题等)。终态 DONE 事件投影时回填(来源为运行行
+     * kb_citations_json;事件载荷已有 kbCitations 时透传优先)。可选字段,
+     * 无命中/旧事件为 null,不破既有消费者(N-1 兼容)。
+     */
+    private List<KbCitationVO> kbCitations;
+
     /** 产生此事件的 Agent 名称 */
     private String agentName;
 
@@ -162,5 +170,20 @@ public class AiChatStreamRespVO {
     public static class ToolConfirmationDecisionVO {
         private String toolCallId;
         private Boolean approved;
+    }
+
+    /**
+     * [adapt] P4-W14 mini KB 引用溯源最小字段集(PRD M5「回答须可溯源,
+     * 展示来源」:chunk 定位 + 文档名/章节锚点)。
+     */
+    @Data
+    @Accessors(chain = true)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class KbCitationVO {
+        private Long chunkId;
+        private Long documentId;
+        private String documentTitle;
+        private String anchor;
+        private Integer seq;
     }
 }

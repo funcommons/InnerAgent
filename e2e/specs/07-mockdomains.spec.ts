@@ -6,12 +6,13 @@
  * /admin/webhooks/config + /admin/webhook-deliveries → 产品行为正确,旧「404 取证」
  * 断言过时,本 spec 反转为「真端点 + 页面渲染」正向回归。
  *
- * 已知残留(DEF-08/DEF-09,只记录不修):
+ * 已知残留(R3 记录,DEF-08/DEF-09 已在 R4 前修复,定点复测见 spec 15):
  *  - DEF-08:PUT /limits 与 emergency-stop/resume 落库 500(JsonbTypeHandler 发
- *    varchar 给 PG jsonb 列;单测 mock 层覆盖不到)。
+ *    varchar 给 PG jsonb 列;单测 mock 层覆盖不到)→ b04b4fa:V15 JSONB→TEXT,
+ *    R4 复测全绿。
  *  - DEF-09:GET /admin/webhook-deliveries 不带 status → NPE 500
- *    (WebhookDeliveryAdminService.normalizeStatus 对 null trim);
- *    UI 首载 deliveries(未选状态)同样命中 → 选择状态过滤后恢复 200。
+ *    (WebhookDeliveryAdminService.normalizeStatus 对 null trim)→ 612f979:
+ *    空值护栏(不过滤),R4 复测全绿。
  */
 import { test, expect, saveJson, saveText, shot } from '../helpers/support'
 
@@ -34,7 +35,7 @@ test('熔断与紧急停用页:GET /admin/circuit-breaker → 200,页面渲染�
   await shot(adminPage, 'L7-01-熔断页-真服务渲染(200)')
 })
 
-test('Webhook 页:config 200 接真;deliveries 状态过滤可用(首载 500=DEF-09 记录)', async ({ adminPage }) => {
+test('Webhook 页:config 200 接真;deliveries 首载/状态过滤均 200(DEF-09 已修)', async ({ adminPage }) => {
   const configResp = adminPage.waitForResponse((r) => r.url().includes('/admin/webhooks/config') && r.request().method() === 'GET', { timeout: 15_000 })
   const deliveriesFirst = adminPage.waitForResponse((r) => r.url().includes('/admin/webhook-deliveries'), { timeout: 15_000 }).catch(() => null)
   await adminPage.goto('/webhooks')
@@ -44,11 +45,11 @@ test('Webhook 页:config 200 接真;deliveries 状态过滤可用(首载 500=DEF
   expect(cfg.status(), 'webhook config 端点 200(V14 后接真)').toBe(200)
   expect(cfgBody?.data).toBeTruthy()
 
-  // 首载 deliveries(无 status 参数)→ DEF-09 NPE 500(记录,不判 UI 缺陷)
+  // [R4 断言更新] 首载 deliveries(无 status 参数)R3 为 DEF-09 NPE 500(记录不判);
+  // 612f979 空值护栏修复后反转为正向断言。
   const first = await deliveriesFirst
-  if (first) {
-    saveJson('L7-02-webhook-deliveries-首载响应.json', { url: first.url(), status: first.status() })
-  }
+  expect(first?.status(), '[R4] DEF-09 修复:首载无 status 请求 200(R3 为 500)').toBe(200)
+  saveJson('L7-02-webhook-deliveries-首载响应.json', first ? { url: first.url(), status: first.status() } : { note: '未捕获' })
 
   // 选择状态过滤(status 参数生效,偏离 #18b 语义的 500 消失)→ 200
   await adminPage.locator('.el-select').filter({ hasText: '投递状态' }).first().click()

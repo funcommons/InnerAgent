@@ -17,8 +17,8 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const REPO = '/Users/justin/codes/funcommons/InnerAgent'
-// R3 验证轮:证据落 2026-09-21-03(R1/R2 证据保留原目录,收官文档可回引)
-export const REPORT_DIR = join(REPO, 'test-report', '2026-09-21-03')
+// R4 复测轮:证据落 2026-09-21-04(R1~R3 证据保留原目录,收官文档可回引)
+export const REPORT_DIR = join(REPO, 'test-report', '2026-09-21-04')
 export const ASSETS = join(REPORT_DIR, 'assets')
 
 export const GATEWAY = process.env.GATEWAY_URL || 'http://localhost:18081'

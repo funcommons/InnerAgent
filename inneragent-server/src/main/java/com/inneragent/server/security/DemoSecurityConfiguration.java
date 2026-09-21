@@ -126,11 +126,17 @@ public class DemoSecurityConfiguration {
             if (authorization != null && authorization.startsWith("Bearer ")) {
                 return true;
             }
+            // actuator 域豁免(IA-1 指标出口):部署层内网端点不注入演示身份,
+            // 与 embed 域豁免同口径(抓取请求保持无凭据、凭据域干净)
+            String uri = request.getRequestURI();
+            if (uri.startsWith("/actuator/")) {
+                return true;
+            }
             // 管理面凭据由 AdminTokenFilter 双轨裁决(Bearer 会话 / X-IA-Admin-Key),
             // 演示身份不得注入管理面:引导 key 通道无认证时 currentOperator 才能按
             // 契约回落 admin(OBS-R3-1:演示环境经 key 通道 terminate-run,操作者
             // 被本过滤器覆写成 demo-user,误入熔断事件与审计)
-            return request.getRequestURI().startsWith(AdminTokenFilter.ADMIN_PATH_PREFIX);
+            return uri.startsWith(AdminTokenFilter.ADMIN_PATH_PREFIX);
         }
 
         @Override

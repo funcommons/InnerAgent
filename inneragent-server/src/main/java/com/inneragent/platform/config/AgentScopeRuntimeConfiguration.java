@@ -27,6 +27,13 @@ import javax.sql.DataSource;
 @EnableConfigurationProperties({AgentScopeRuntimeProperties.class, AgentScopeV2Properties.class})
 public class AgentScopeRuntimeConfiguration {
 
+    /**
+     * Micrometer 门面(IA-1 指标出口,docs/灰度与指标大盘.md §7.1):注入
+     * <strong>Spring 管理的</strong> MeterRegistry——classpath 有 actuator +
+     * micrometer-registry-prometheus(pom 已引)时即 PrometheusMeterRegistry
+     * 或其复合注册表,meters 由 /actuator/prometheus 抓取;纯测试切片无注册表
+     * Bean 时回退进程内 SimpleMeterRegistry(不可抓取,仅保语义不破)。
+     */
     @Bean
     @ConditionalOnMissingBean(AgentRuntimeMetrics.class)
     public AgentRuntimeMetrics agentRuntimeMetrics(

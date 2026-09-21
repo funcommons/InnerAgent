@@ -112,6 +112,23 @@ springdoc:
   swagger-ui:
     path: /ia/swagger-ui.html
 
+# 指标出口(docs/灰度与指标大盘.md §7.1 台账 IA-1,W9 双跑前阻塞项):
+# Prometheus 抓取端点,路径缺省 /actuator/prometheus(与大盘文档口径一致)。
+# 白名单仅 health/info/prometheus,其余端点(env/metrics/…)一律不暴露。
+# 安全口径:actuator 属部署层内网端点(与 §S5「同源策略由部署层 Nginx 收敛」
+# 一致),不进 embed-token 业务凭据域——security 过滤器链已对 /actuator/**
+# 前缀豁免 embed/demo 验签(见 EmbedTokenAuthenticationFilter/DemoUserAuthenticationFilter),
+# HTTP 授权层本就 anyRequest().permitAll;health 只出聚合态(show-details=never,
+# 不泄 DB/Redis 组件细节),抓取凭 Prometheus 服务发现/网络隔离防护。
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+
 # MCP 宿主桥调用端(P1-T2b;McpClientToolInvoker 接管 McpToolInvoker 端口):
 # 客户端按 (appId, endpointUrl) 懒建懒连——无可达宿主不阻断启动,按调用懒失败。
 # 超时默认对齐 02-技术方案 §4.7;重连编排对应 spike 风险 R1(SDK 无自动重连,

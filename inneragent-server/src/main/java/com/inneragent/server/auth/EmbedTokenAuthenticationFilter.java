@@ -34,6 +34,10 @@ public class EmbedTokenAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
     /** 管理面前缀:该域 Bearer 是管理会话 token,由 AdminTokenFilter 独立守卫 */
     private static final String ADMIN_PATH_PREFIX = "/ia/api/v1/admin/";
+    /** actuator 域(IA-1 指标出口,/actuator/prometheus 抓取、/actuator/health 探针):
+     * 部署层内网端点,凭据域隔离(与 02-技术方案 §S5「同源策略由部署层收敛」同口径),
+     * 不进 embed-token 业务域 */
+    static final String ACTUATOR_PATH_PREFIX = "/actuator/";
 
     private final EmbedTokenVerifier verifier;
 
@@ -42,7 +46,14 @@ public class EmbedTokenAuthenticationFilter extends OncePerRequestFilter {
         // 两套凭据域隔离(02-技术方案 §6.3,P2-admin 18a 真机联调修复):
         // admin 路径上的 Bearer 是管理会话 token(HS256),不进入 embed 验签
         // (RS256)——否则合法管理会话被误判 401「算法必须为 RS256」
-        return request.getRequestURI().startsWith(ADMIN_PATH_PREFIX);
+        String uri = request.getRequestURI();
+        if (uri.startsWith(ADMIN_PATH_PREFIX)) {
+            return true;
+        }
+        // actuator 前缀豁免(IA-1):Prometheus 抓取不带 Bearer 本就直通(无凭据
+        // 不拦),豁免保证的是——垃圾/失效 Bearer 不让内网抓取 fail-closed 401,
+        // 且 embed 身份(AppContext/UserContext)不写入基础设施端点
+        return uri.startsWith(ACTUATOR_PATH_PREFIX);
     }
 
     @Override

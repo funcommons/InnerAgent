@@ -137,6 +137,21 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webflux</artifactId>
 		</dependency>
+		<!-- 指标出口(docs/灰度与指标大盘.md §7.1 台账 IA-1,W9 双跑前阻塞项):
+			actuator 管理端点 + Prometheus 抓取注册表。版本由 Spring Boot BOM 管理。
+			装配点 AgentScopeRuntimeConfiguration 据此注入 Spring 管理的 MeterRegistry
+			(prometheus 场景为 PrometheusMeterRegistry/复合注册表),AgentRuntimeMetrics
+			的 meters 由 /actuator/prometheus 抓取(此前自建 SimpleMeterRegistry 仅进程内
+			不可抓取);抓取端点属部署层内网(§S5 同源策略口径),security 链已按
+			前缀豁免。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-core</artifactId>

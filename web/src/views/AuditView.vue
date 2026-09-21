@@ -14,10 +14,13 @@ import IaListPage, { type IaListColumnDef } from '@/components/IaListPage.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
 import IaTime from '@/components/IaTime.vue'
+import { useNarrowViewport } from '@/composables/useNarrowViewport'
 import { useAuditStore, DECISION_SOURCES, AUDIT_DECISIONS } from '@/stores/audit'
 import type { IaAuditLog } from '@/api/types'
 
 const store = useAuditStore()
+// #26 短期方案:窄屏收次要列(与列设置叠加:仅在被选为可见时且非窄屏渲染)
+const narrow = useNarrowViewport()
 const detail = ref<IaAuditLog | null>(null)
 const detailVisible = ref(false)
 const exporting = ref(false)
@@ -201,9 +204,9 @@ async function exportCsv() {
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column v-if="!visibleColumns.length || visibleColumns.includes('userId')" prop="userId" label="用户" width="100" show-overflow-tooltip />
-        <el-table-column v-if="!visibleColumns.length || visibleColumns.includes('appId')" prop="appId" label="应用" width="70" align="right" />
-        <el-table-column v-if="!visibleColumns.length || visibleColumns.includes('durationMs')" prop="durationMs" label="耗时(ms)" width="95" align="right" />
+        <el-table-column v-if="!narrow && (!visibleColumns.length || visibleColumns.includes('userId'))" prop="userId" label="用户" width="100" show-overflow-tooltip />
+        <el-table-column v-if="!narrow && (!visibleColumns.length || visibleColumns.includes('appId'))" prop="appId" label="应用" width="70" align="right" />
+        <el-table-column v-if="!narrow && (!visibleColumns.length || visibleColumns.includes('durationMs'))" prop="durationMs" label="耗时(ms)" width="95" align="right" />
       </el-table>
       <!-- 统一分页器(#20):总数/pageSize 切换/快速跳页 -->
       <IaPagination

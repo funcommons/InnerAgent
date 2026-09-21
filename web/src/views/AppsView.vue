@@ -9,6 +9,7 @@
  */
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useNarrowViewport } from '@/composables/useNarrowViewport'
 import { Plus, Refresh, Key, EditPen, CopyDocument } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
@@ -17,6 +18,8 @@ import { useAppsStore, apiErrorMessage, isValidPemPublicKey } from '@/stores/app
 import type { IaApp } from '@/api/types'
 
 const store = useAppsStore()
+// #26 短期方案:窄屏收次要列
+const narrow = useNarrowViewport()
 
 const statusText: Record<number, string> = { 1: '启用', 0: '停用' }
 const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' }
@@ -200,7 +203,7 @@ async function saveKey() {
           </template>
         </el-table-column>
         <el-table-column prop="conversationRetentionDays" label="保留期(天)" width="105" align="right" />
-        <el-table-column label="Webhook" min-width="160" show-overflow-tooltip>
+        <el-table-column v-if="!narrow" label="Webhook" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.webhookUrl" class="mono">{{ row.webhookUrl }}</span>
             <span v-else class="dim">未配置</span>

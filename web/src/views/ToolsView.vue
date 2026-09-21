@@ -14,6 +14,7 @@ import { Plus, Refresh, CircleCheck, CircleClose, Setting, Clock } from '@elemen
 import {
   useToolsStore, RISK_LEVELS, ADMIN_POLICIES, GRANT_INVALID_REASONS, parseAnnotations,
 } from '@/stores/tools'
+import { useNarrowViewport } from '@/composables/useNarrowViewport'
 import { apiErrorMessage } from '@/stores/apps'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
@@ -23,6 +24,8 @@ import type { GrantScope, IaToolGrant, IaToolRegistry, IaToolSchemaHistory, Tool
 
 const store = useToolsStore()
 const tab = ref<'registry' | 'grants'>('registry')
+// #26 短期方案:窄屏收次要列,降低固定列克隆 DOM 使用面
+const narrow = useNarrowViewport()
 
 const riskMeta = (level: string) => RISK_LEVELS.find(r => r.value === level)
 const policyLabel = (value: string | null) =>
@@ -323,13 +326,13 @@ function shortSha(sha: string): string {
                 <el-tag v-if="row.revalidateRequired" size="small" type="danger" class="ml4">待重新确认</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
+            <el-table-column v-if="!narrow" prop="description" label="描述" min-width="160" show-overflow-tooltip />
             <el-table-column label="风险" width="80">
               <template #default="{ row }">
                 <el-tag :type="riskMeta(row.riskLevel)?.tag" size="small">{{ riskMeta(row.riskLevel)?.label }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="MCP 注解" width="150">
+            <el-table-column v-if="!narrow" label="MCP 注解" width="150">
               <template #default="{ row }">
                 <div class="hints">
                   <el-tooltip content="readOnlyHint(可信宿主采信,只读直通)" placement="top"><span class="hint" :class="{ on: parseAnnotations(row.annotationsJson)?.readOnlyHint }">R</span></el-tooltip>
@@ -414,7 +417,7 @@ function shortSha(sha: string): string {
                 <el-tag :type="riskMeta(row.riskAtGrant)?.tag" size="small">{{ riskMeta(row.riskAtGrant)?.label }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="schema 指纹" min-width="140">
+            <el-table-column v-if="!narrow" label="schema 指纹" min-width="140">
               <template #default="{ row }"><span class="mono fingerprint">{{ row.schemaSha256 }}</span></template>
             </el-table-column>
             <el-table-column label="来源" width="100">

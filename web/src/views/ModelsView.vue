@@ -10,6 +10,7 @@
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useNarrowViewport } from '@/composables/useNarrowViewport'
 import { Plus, Refresh, Connection, Delete, EditPen } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
@@ -24,6 +25,8 @@ import {
 import type { IaModelApiConfig } from '@/api/types'
 
 const store = useModelsStore()
+// #26 短期方案:窄屏收次要列
+const narrow = useNarrowViewport()
 
 onMounted(() => {
   void store.load()
@@ -167,7 +170,7 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
             <el-tag :type="statusTag[row.status as number]" size="small">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
+        <el-table-column v-if="!narrow" prop="remark" label="备注" min-width="160" show-overflow-tooltip />
         <el-table-column label="操作" width="230" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" :icon="Connection" :loading="testingId === row.id" @click="testConnectivity(row)">测试</el-button>

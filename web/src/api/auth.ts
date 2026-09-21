@@ -1,12 +1,11 @@
 /**
- * [new] 管理站认证 API(DEF-01 修复:对齐服务端 P2-admin 18a 真实契约)。
+ * [new] 管理站认证 API(对齐服务端 AdminAuthController,18a 已落地)。
  * 《02-技术方案》§6.3:内置管理员账号(Argon2 口令散列 + 失败锁定 + 登录审计)。
  * - POST /admin/auth/login {username,password} → 200 {token, tokenType,
  *   expiresInSeconds, username};失败统一 401(文案防枚举)、锁定 423(含剩余秒数)。
  * - POST /admin/auth/logout 吊销当前 Bearer 会话 token(jti 黑名单,幂等)。
  * - 凭据双轨(AdminTokenFilter):Bearer 会话 token 无效 → 401;
  *   X-IA-Admin-Key(自动化/引导通道)无效/缺失 → 403。
- * (历史注记「服务端无 /admin/auth 端点」已过时——18a 已落地本端点。)
  */
 import { http } from './request'
 

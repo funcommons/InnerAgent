@@ -70,7 +70,7 @@ function requireAdminCredential(request: Request): HttpResponse<DefaultBodyType>
   return null
 }
 
-/** 通用分页器(仅服务端未实现分页的 mock 域使用) */
+/** 通用分页器(镜像服务端 PageResult 切片语义,供分页域 handler 复用) */
 function paginate<T>(list: T[], pageNo = 1, pageSize = 10): PageResult<T> {
   const start = (pageNo - 1) * pageSize
   return { list: list.slice(start, start + pageSize), total: list.length, pageNo, pageSize }
@@ -683,7 +683,7 @@ const modelHandlers = [
   }),
 ]
 
-// ==================== 熔断与资源上限(mock 域:服务端未实现) ====================
+// ==================== 熔断与资源上限(镜像 AdminCircuitBreakerController) ====================
 
 function pushEvent(type: CircuitBreakerEvent['type'], runId: string | null, reason: string): CircuitBreakerEvent {
   const event: CircuitBreakerEvent = { id: genId(), type, runId, reason, operator: 'admin', occurredAt: nowIso() }
@@ -738,7 +738,7 @@ const circuitHandlers = [
   }),
 ]
 
-// ==================== Webhook(deliveries=任务 #18b 真路径镜像;config 待服务端) ====================
+// ==================== Webhook(deliveries=#18b;config=AdminWebhookConfigController 镜像) ====================
 
 const webhookHandlers = [
   http.get('/ia/api/v1/admin/webhooks/config', ({ request }) => {

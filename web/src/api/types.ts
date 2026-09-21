@@ -289,7 +289,7 @@ export interface ToolGrantListQuery {
   activeOnly?: boolean
 }
 
-// ==================== 审计(ia_audit_log;查询端点服务端未实现,域保持 mock) ====================
+// ==================== 审计(ia_audit_log;镜像 AdminAuditController,W5) ====================
 
 /** 决策来源(V22 真实码值 + V8 增补 expired;「高危 100% 确认」的日志证明锚点。
  *  下拉值域以 GET /audit-logs/dictionary 字典端点为准(#12),常量仅作兜底) */
@@ -450,7 +450,7 @@ export interface ResourceLimits {
   confirmTimeoutHours: number
 }
 
-/** 熔断事件(紧急停用/单运行终止/上限触发,展示用;端点待服务端落地,见上) */
+/** 熔断事件(紧急停用/单运行终止/上限触发;镜像 CircuitBreakerAdminService.CircuitEventView) */
 export interface CircuitBreakerEvent {
   id: number
   type: 'limit-triggered' | 'emergency-stop' | 'resume' | 'run-terminated'

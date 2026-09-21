@@ -194,7 +194,7 @@ export const seedCircuitEvents: CircuitBreakerEvent[] = [
   { id: 63, type: 'resume', runId: null, reason: '人工恢复', operator: 'admin', occurredAt: '2026-09-18T10:00:00Z' },
 ]
 
-// ==================== Webhook(deliveries=任务 #18b 契约形;config 待服务端) ====================
+// ==================== Webhook(deliveries=#18b;config=AdminWebhookConfigController 镜像) ====================
 
 export const seedWebhookConfig: WebhookConfig = {
   appId: 1,

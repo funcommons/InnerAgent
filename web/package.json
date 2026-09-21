@@ -8,9 +8,10 @@
     "build": "vue-tsc -b --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc -b --noEmit",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "vue-tsc -b --noEmit && vitest run"
+    "verify": "vue-tsc -b --noEmit && eslint . && vitest run"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -24,14 +25,17 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "@types/uuid": "^10.0.0",
+    "@typescript-eslint/parser": "^8.70.0",
     "@vitejs/plugin-vue": "^6.0.2",
     "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.8.1",
+    "eslint": "^10.11.0",
     "jsdom": "^29.1.1",
     "msw": "^2.13.1",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.1.10",
+    "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^3.1.5"
   }
 }

@@ -2,8 +2,8 @@
  * [new] InnerAgent 管理 API 通用信封与分页类型。
  * 信封对齐服务端 com/inneragent/platform/common/CommonResult:{code,msg,data},
  * code===0 成功;错误时 HTTP 状态=业务 code,响应体仍为该信封(P2 对齐)。
- * 分页请求/响应对齐 $SRC PageResult 形状(list + total + pageNo/pageSize)——
- * 仅服务端未实现分页的域(mock)使用。
+ * 分页请求/响应对齐服务端 PageResult 形状(list + total + pageNo/pageSize):
+ * audit-logs / model-configs / webhook-deliveries 等分页域共用。
  */
 
 /** 业务信封(code===0 成功;data 为载荷;服务端字段名为 msg) */

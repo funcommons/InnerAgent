@@ -10,6 +10,12 @@
 import tsParser from '@typescript-eslint/parser'
 import vueParser from 'vue-eslint-parser'
 
+// 已知漂移字样清单(R3 起按实发漂移逐条补录;命中且同块无跟踪链接即报错)。
+// 未收录的语义漂移族(R3 复盘):熔断域旧契约「≤5s 生效,经 Redis 取消通道」
+// ——无法以关键词区分「漂移主张」与「实况否定」(api/admin.ts「无 Redis 广播/
+// ≤5s 生效语义」、views/CircuitView.vue 确认框注记均为合法否定形态),且现存
+// 残留 api/types.ts 紧急停用注释仍带旧契约表述,待下批清零后再把
+// `≤5s 生效|经 Redis 取消通道` 收进本清单,避免守卫误伤在册实况注释。
 const FORBIDDEN = /未实现|not\s*implemented|待服务端|待后端/i
 
 /** 允许条件:同一注释块携带跟踪链接(跟踪:xxx / 已知文档/issue 路径) */

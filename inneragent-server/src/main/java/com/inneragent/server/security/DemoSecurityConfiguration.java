@@ -123,7 +123,14 @@ public class DemoSecurityConfiguration {
         protected boolean shouldNotFilter(HttpServletRequest request) {
             // 已携带 embed token 的请求交给 Embed 认证,不再叠加演示身份
             String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
-            return authorization != null && authorization.startsWith("Bearer ");
+            if (authorization != null && authorization.startsWith("Bearer ")) {
+                return true;
+            }
+            // 管理面凭据由 AdminTokenFilter 双轨裁决(Bearer 会话 / X-IA-Admin-Key),
+            // 演示身份不得注入管理面:引导 key 通道无认证时 currentOperator 才能按
+            // 契约回落 admin(OBS-R3-1:演示环境经 key 通道 terminate-run,操作者
+            // 被本过滤器覆写成 demo-user,误入熔断事件与审计)
+            return request.getRequestURI().startsWith(AdminTokenFilter.ADMIN_PATH_PREFIX);
         }
 
         @Override

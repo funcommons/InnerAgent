@@ -40,7 +40,8 @@ import java.util.List;
 public class AdminTokenFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-IA-Admin-Key";
-    static final String ADMIN_PATH_PREFIX = "/ia/api/v1/admin/";
+    /** 管理面路径前缀(管理面凭据唯一裁决入口;演示身份过滤链同口径引用) */
+    public static final String ADMIN_PATH_PREFIX = "/ia/api/v1/admin/";
     /** 登录端点豁免:登录本身不能要求已有凭据(引导路径) */
     static final String LOGIN_PATH = "/ia/api/v1/admin/auth/login";
 

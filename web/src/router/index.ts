@@ -31,6 +31,13 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '工具注册', domain: '工具中心', page: '工具注册与授权' },
       },
       {
+        path: 'definitions',
+        name: 'Definitions',
+        component: () => import('@/views/DefinitionsView.vue'),
+        // P2-W5 定义管理域(AdminAgentDefinitionController)
+        meta: { title: 'Agent 定义', domain: '定义中心', page: '定义与提示词' },
+      },
+      {
         path: 'audit',
         name: 'Audit',
         component: () => import('@/views/AuditView.vue'),

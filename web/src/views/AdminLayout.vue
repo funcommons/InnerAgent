@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor, Coin, Document, Cpu, Lightning, Connection, SwitchButton } from '@element-plus/icons-vue'
+import { Monitor, Coin, Document, Cpu, Lightning, Connection, Tickets, SwitchButton } from '@element-plus/icons-vue'
 import IaEnvBadge from '@/components/IaEnvBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -17,6 +17,7 @@ const auth = useAuthStore()
 const navs = [
   { path: '/apps', title: '应用管理', icon: Monitor },
   { path: '/tools', title: '工具注册与授权', icon: Coin },
+  { path: '/definitions', title: 'Agent 定义', icon: Tickets },
   { path: '/audit', title: '审计查询', icon: Document },
   { path: '/models', title: '模型配置', icon: Cpu },
   { path: '/circuit', title: '熔断与紧急停用', icon: Lightning },

@@ -9,6 +9,7 @@ import LoginView from '@/views/LoginView.vue'
 import AdminLayout from '@/views/AdminLayout.vue'
 import AppsView from '@/views/AppsView.vue'
 import ToolsView from '@/views/ToolsView.vue'
+import DefinitionsView from '@/views/DefinitionsView.vue'
 import AuditView from '@/views/AuditView.vue'
 import ModelsView from '@/views/ModelsView.vue'
 import CircuitView from '@/views/CircuitView.vue'
@@ -22,10 +23,11 @@ describe('视图挂载冒烟', () => {
     wrapper.unmount()
   })
 
-  it('AdminLayout:渲染六项导航', async () => {
+  it('AdminLayout:渲染七项导航(P2-W5 起 + Agent 定义)', async () => {
     const wrapper = await mountView(AdminLayout, '/apps')
     expect(wrapper.text()).toContain('应用管理')
     expect(wrapper.text()).toContain('工具注册与授权')
+    expect(wrapper.text()).toContain('Agent 定义')
     expect(wrapper.text()).toContain('审计查询')
     expect(wrapper.text()).toContain('模型配置')
     expect(wrapper.text()).toContain('熔断与紧急停用')
@@ -73,6 +75,23 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('schema 历史')
     // 种子无历史 → 空态引导文案
     expect(wrapper.text()).toContain('暂无变更历史')
+    wrapper.unmount()
+  })
+
+  it('DefinitionsView:渲染定义列表与导入导出骨架(P2-W5)', async () => {
+    const wrapper = await mountView(DefinitionsView, '/definitions')
+    // 种子四行(agentKey 升序,首页 10 全容纳):main/sub 双 kind
+    expect(wrapper.text()).toContain('demo')
+    expect(wrapper.text()).toContain('InnerAgent 演示助手')
+    expect(wrapper.text()).toContain('script_assistant')
+    expect(wrapper.text()).toContain('主定义')
+    expect(wrapper.text()).toContain('子代理')
+    // 导出/导入入口与审计口径提示
+    expect(wrapper.text()).toContain('全量导出')
+    expect(wrapper.text()).toContain('导入')
+    expect(wrapper.text()).toContain('编辑留痕')
+    // 分页总数
+    expect(wrapper.text()).toContain('共 4 条')
     wrapper.unmount()
   })
 

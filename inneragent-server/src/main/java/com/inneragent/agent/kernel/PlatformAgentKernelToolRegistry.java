@@ -119,7 +119,9 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                         ? mcpRegistry.isMcpTool(toolName, spec.agentDefinitionStableKey())
                         : mcpRegistry.isMcpTool(
                                 toolName, spec.agentDefinitionStableKey(), ownerUserId);
-                McpToolCatalogEntry catalogEntry = catalogEntry(catalog, appId, toolName);
+                McpToolCatalogEntry catalogEntry = ownerUserId == null
+                        ? catalogEntry(catalog, appId, toolName)
+                        : catalogEntryForUser(catalog, appId, ownerUserId, toolName);
                 int matches = (executor == null ? 0 : 1)
                         + (child == null ? 0 : 1)
                         + (mcpTool ? 1 : 0)
@@ -215,6 +217,18 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             return null;
         }
         return catalog.find(appId, toolName).orElse(null);
+    }
+
+    /**
+     * [P4-W13] 用户视角目录反查(用户级三方条目仅存在于 catalogForUser 聚合;
+     * 行级 userId 隔离——仅本人目录可命中)。
+     */
+    private McpToolCatalogEntry catalogEntryForUser(
+            McpToolCatalog catalog, long appId, long ownerUserId, String toolName) {
+        if (catalog == null) {
+            return null;
+        }
+        return catalog.findForUser(appId, ownerUserId, toolName).orElse(null);
     }
 
     /** 目录 schema 规范化(与 spec 侧 catalogManifest 同一 prepare 口径)。 */

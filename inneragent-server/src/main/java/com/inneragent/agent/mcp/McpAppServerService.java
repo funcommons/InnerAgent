@@ -170,12 +170,10 @@ public class McpAppServerService {
         server.setEnabled(normalized.enabled());
     }
 
-    /** 配置变更 → 工具清单 LRU + 目录快照 + 已建客户端全量失效(LRU 懒回填)。 */
+    /** 配置变更 → 全部失效实现(清单 LRU + 目录快照 + 已建客户端)依次触发。 */
     private void invalidate() {
-        McpThirdPartyConfigInvalidator invalidator = configInvalidators.getIfAvailable();
-        if (invalidator != null) {
-            invalidator.invalidateThirdPartyConfigs();
-        }
+        configInvalidators.orderedStream()
+                .forEach(McpThirdPartyConfigInvalidator::invalidateThirdPartyConfigs);
     }
 
     /**

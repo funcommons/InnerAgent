@@ -38,6 +38,12 @@ public class McpInvokerProperties {
     /** 重连编排参数(R1)。 */
     private final Reconnect reconnect = new Reconnect();
 
+    /** [P4-W13] 三方 MCP 每 server 工具清单 LRU 缓存 TTL(缺省 5min,可配)。 */
+    private Duration thirdPartyToolListTtl = Duration.ofMinutes(5);
+
+    /** [P4-W13] 三方 MCP 工具清单缓存容量(LRU 上限,按 server 计)。 */
+    private int thirdPartyMaxCachedServers = 256;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -72,6 +78,22 @@ public class McpInvokerProperties {
 
     public Reconnect getReconnect() {
         return reconnect;
+    }
+
+    public Duration getThirdPartyToolListTtl() {
+        return thirdPartyToolListTtl;
+    }
+
+    public void setThirdPartyToolListTtl(Duration thirdPartyToolListTtl) {
+        this.thirdPartyToolListTtl = thirdPartyToolListTtl;
+    }
+
+    public int getThirdPartyMaxCachedServers() {
+        return thirdPartyMaxCachedServers;
+    }
+
+    public void setThirdPartyMaxCachedServers(int thirdPartyMaxCachedServers) {
+        this.thirdPartyMaxCachedServers = thirdPartyMaxCachedServers;
     }
 
     /**

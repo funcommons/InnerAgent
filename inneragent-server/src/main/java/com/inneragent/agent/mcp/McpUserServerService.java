@@ -168,10 +168,8 @@ public class McpUserServerService {
     }
 
     private void invalidate() {
-        McpThirdPartyConfigInvalidator invalidator = configInvalidators.getIfAvailable();
-        if (invalidator != null) {
-            invalidator.invalidateThirdPartyConfigs();
-        }
+        configInvalidators.orderedStream()
+                .forEach(McpThirdPartyConfigInvalidator::invalidateThirdPartyConfigs);
     }
 
     /** 应用级治理表(无 tenant_id 列)读取的系统模式包裹(免疫租户上下文注入)。 */

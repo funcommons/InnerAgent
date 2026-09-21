@@ -51,7 +51,8 @@ class McpThirdPartyServerServiceTests {
         invalidator = Mockito.mock(McpThirdPartyConfigInvalidator.class);
         ObjectProvider<McpThirdPartyConfigInvalidator> invalidators =
                 Mockito.mock(ObjectProvider.class);
-        lenient().when(invalidators.getIfAvailable()).thenReturn(invalidator);
+        lenient().when(invalidators.orderedStream())
+                .thenAnswer(invocation -> java.util.stream.Stream.of(invalidator));
         lenient().doNothing().when(auditService).append(any());
         // 冲突域缺省:各表均无同键行
         lenient().when(appMapper.selectCount(any())).thenReturn(0L);
@@ -270,7 +271,7 @@ class McpThirdPartyServerServiceTests {
 
         // invalidator 缺席(裁剪部署):静默跳过不抛
         ObjectProvider<McpThirdPartyConfigInvalidator> absent = Mockito.mock(ObjectProvider.class);
-        when(absent.getIfAvailable()).thenReturn(null);
+        when(absent.orderedStream()).thenReturn(java.util.stream.Stream.empty());
         McpAppServerService bare = new McpAppServerService(
                 appMapper, userMapper, registryMapper, auditService, absent);
         bare.setEnabled(1L, 9L, true);

@@ -28,10 +28,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * P1 遗留台账④:ia_storage_config 表迁移 + 工作区存储配置从表加载。
  * <p>
- * 在真实 PostgreSQL 17 上经 Spring 装配(Flyway 含 V5)验证:存储配置
- * 经 StorageConfigService 落库/回读(options JSONB 经 JsonbTypeHandler 往返)、
- * 默认配置互斥、以及 AgentWorkspaceConfigService.validateTarget 面向
- * object_storage 后端从表加载并校验配置。</p>
+ * 在真实 PostgreSQL 17 上经 Spring 装配(Flyway 含 V5/V22)验证:存储配置
+ * 经 StorageConfigService 落库/回读(options 为 TEXT 列,实体纯 String
+ * 往返,V22 DEF-08 同族修复)、默认配置互斥、以及
+ * AgentWorkspaceConfigService.validateTarget 面向 object_storage 后端
+ * 从表加载并校验配置。</p>
+ *
+ * <p>本类连接串仍经 {@code postgresJdbcUrl} 追加 stringtype=unspecified
+ * (历史形态,现已无害);<strong>运行态同形连接串的写路径守卫</strong>见
+ * {@code StorageConfigWritePathsIT}(DEF-08 同族,刻意不加该参数)。</p>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
@@ -46,7 +51,7 @@ class StorageConfigServiceIT {
 
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry properties) {
-        // stringtype=unspecified:JsonbTypeHandler 以字符串写 JSONB 列
+        // stringtype=unspecified:V22 前为 JsonbTypeHandler 写 JSONB 所需(现列已 TEXT,历史形态保留)
         properties.add("spring.datasource.url",
                 () -> AgentRuntimeContainersJdbcUrl.postgresJdbcUrl(POSTGRES));
         properties.add("spring.datasource.username", POSTGRES::getUsername);
@@ -88,7 +93,7 @@ class StorageConfigServiceIT {
                 .build();
         Long s3Id = storageConfigService.create(s3);
 
-        // 从表回读(工作区/媒体链路的加载路径):列映射与 JSONB 往返
+        // 从表回读(工作区/媒体链路的加载路径):列映射与 JSON 文本往返
         StorageConfig loadedLocal = storageConfigService.getById(localId);
         assertThat(loadedLocal.getName()).isEqualTo("本地工作区存储");
         assertThat(loadedLocal.getType()).isEqualTo("local");
@@ -100,7 +105,7 @@ class StorageConfigServiceIT {
         assertThat(loadedS3.getProvider()).isEqualTo("generic_s3");
         assertThat(loadedS3.getEndpoint()).isEqualTo("http://127.0.0.1:9000");
         assertThat(loadedS3.getBucketName()).isEqualTo("inneragent-workspace");
-        // jsonb 列会规范化键序与空格,按语义断言
+        // V22 起为 TEXT 列(逐字节往返),按语义断言兼容两种历史形态
         assertThat(new com.fasterxml.jackson.databind.ObjectMapper()
                 .readTree(loadedS3.getOptions())
                 .get("pathStyleAccessEnabled").asBoolean()).isTrue();

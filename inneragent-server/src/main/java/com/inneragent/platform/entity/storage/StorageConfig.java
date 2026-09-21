@@ -1,11 +1,9 @@
 package com.inneragent.platform.entity.storage;
 
 import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.inneragent.platform.common.BaseEntity;
-import com.inneragent.platform.common.handler.JsonbTypeHandler;
 import lombok.*;
 
 /**
@@ -13,6 +11,11 @@ import lombok.*;
  * <p>
  * 对应数据库表：ia_storage_config
  * 管理文件存储后端配置，支持本地存储和 OSS 等多种类型。
+ *
+ * <p>V22:{@code options} 为纯文本列(TEXT,照 V15 先例)——本行共享实体,
+ * INSERT/整行 UPDATE 均携该列,JSONB+MySQL 形 JsonbTypeHandler 在运行态
+ * 连接串(无 stringtype=unspecified)下致全部写路径失败(DEF-08 同族);
+ * JSON 序列化/解析收敛在服务层 StorageConfigOptions/S3StorageConfigResolver。
  */
 @TableName(value = "ia_storage_config", autoResultMap = true)
 @Data
@@ -57,8 +60,7 @@ public class StorageConfig extends BaseEntity {
     /** 自定义域名（CDN 域名等） */
     private String customDomain;
 
-    /** 厂商扩展配置 JSON */
-    @TableField(typeHandler = JsonbTypeHandler.class)
+    /** 厂商扩展配置 JSON 文本(V22 起 TEXT 列,实体纯 String,JSON 语义在服务层) */
     private String options;
 
     /** 是否为默认存储配置 */

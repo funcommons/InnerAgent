@@ -56,8 +56,9 @@ public class AdminCircuitBreakerController {
     }
 
     @PostMapping("/emergency-stop")
-    @Operation(summary = "紧急停用(应用级总开关;新 run 403,进行中 run 需逐个终止)")
-    public CommonResult<CircuitEventView> emergencyStop(
+    @Operation(summary = "紧急停用(应用级总开关;新 run 403;在途 run 批量发起取消,"
+            + "counts.cancelInitiated 为已发起取消数,异步尽力而为)")
+    public CommonResult<CircuitBreakerAdminService.EmergencyStopView> emergencyStop(
             @RequestParam(defaultValue = "1") long appId,
             @RequestBody EmergencyStopReq request) {
         return success(circuitService.emergencyStop(appId, request.reason()));

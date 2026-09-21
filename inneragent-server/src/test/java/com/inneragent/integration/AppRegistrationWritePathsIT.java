@@ -202,11 +202,13 @@ class AppRegistrationWritePathsIT {
     void emergencyStopAndResumeUpdateAppRowAndGuardRunStart() {
         AppRegistration app = registerProbeApp("it-stop");
 
-        CircuitBreakerAdminService.CircuitEventView stop = AppContext.runInApp(
+        CircuitBreakerAdminService.EmergencyStopView stop = AppContext.runInApp(
                 app.getId(),
                 () -> circuitService.emergencyStop(app.getId(), "IT 紧急停用探针"));
-        // IT 无管理会话:引导通道缺省 admin(V14 DDL operator 口径)
+        // IT 无管理会话:引导通道缺省 admin(V14 DDL operator 口径);探针应用无在途运行
         assertThat(stop.operator()).isEqualTo("admin");
+        assertThat(stop.type()).isEqualTo("emergency-stop");
+        assertThat(stop.counts().cancelInitiated()).isZero();
         AppRegistration stopped = appMapper.selectById(app.getId());
         assertThat(stopped.getCircuitStopped()).isTrue();
         assertThat(stopped.getCircuitStopReason()).isEqualTo("IT 紧急停用探针");

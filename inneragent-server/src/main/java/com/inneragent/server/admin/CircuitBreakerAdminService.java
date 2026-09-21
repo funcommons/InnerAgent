@@ -11,6 +11,7 @@ import com.inneragent.platform.circuit.CircuitBreakerLimits;
 import com.inneragent.platform.circuit.CircuitEvent;
 import com.inneragent.platform.circuit.mapper.CircuitEventMapper;
 import com.inneragent.platform.common.BusinessException;
+import com.inneragent.platform.context.AppContext;
 import com.inneragent.platform.enums.ai.AgentRunStatus;
 import com.inneragent.platform.toolhub.ToolAuditService;
 import com.inneragent.platform.toolhub.ToolDecisionSource;
@@ -30,15 +31,20 @@ import java.util.Objects;
  * 熔断与资源上限 admin 服务(优化建议 #2 服务端半,V14;mock 契约
  * handlers.ts circuitHandlers 为产品契约锚点)。
  *
- * <p><strong>紧急停用最小实现语义</strong>:
+ * <p><strong>紧急停用语义(收尾批次收口「批量取消在途运行」缺口)</strong>:
  * <ul>
  *   <li>停用后<strong>新 run 403</strong>:{@link #assertRunStartAllowed} 挂在
  *       run 发起唯一入口({@code AgentScopePipelineRunService} prepare 阶段,
  *       SDK 对话链/续跑全覆盖),文案「应用已紧急停用」;</li>
- *   <li><strong>进行中 run 不自动终止</strong>:mock 契约的紧急停用仅翻转
- *       总开关 + 记事件,无批量取消语义;进行中 run 由管理员用
- *       terminate-run 逐个强制终止(复用 {@link CancellationCoordinator}
- *       既有 cancel 基建:置 CANCEL_REQUESTED → Redis 取消信号 → 中断)。</li>
+ *   <li><strong>在途 run 批量取消</strong>:停用动作触发时对该应用全部活跃
+ *       运行(RUNNING/WAITING_CONFIRMATION/WAITING_EXTERNAL/CANCEL_REQUESTED)
+ *       发起取消——复用 {@link CancellationCoordinator} 既有取消链
+ *       (置 CANCEL_REQUESTED → Redis 取消信号 → 中断/终态化,级联子运行、
+ *       失败由既有兜底扫描收敛),<strong>异步尽力而为</strong>:接口同步返回
+ *       停用成功 + 已发起取消数({@code counts.cancelInitiated});逐 run 审计
+ *       沿用 terminate-run 既有码值(decision=run-terminated、
+ *       decision_source=forced-policy),不私加新码;</li>
+ *   <li>恢复(resume)仅翻回总开关,不追回已取消的运行。</li>
  * </ul>
  *
  * <p>terminate-run 审计照 T2a 形态落 ia_audit_log(decision=run-terminated、
@@ -118,7 +124,7 @@ public class CircuitBreakerAdminService {
     // 紧急停用 / 恢复(应用级总开关)
     // ------------------------------------------------------------------
 
-    public CircuitEventView emergencyStop(long appId, String reason) {
+    public EmergencyStopView emergencyStop(long appId, String reason) {
         if (reason == null || reason.isBlank()) {
             throw new BusinessException(400, "reason 不能为空");
         }
@@ -127,8 +133,68 @@ public class CircuitBreakerAdminService {
         app.setCircuitStoppedAt(LocalDateTime.now(ZoneOffset.UTC));
         app.setCircuitStopReason(reason.trim());
         appMapper.updateById(app);
-        log.warn("应用紧急停用: appId={}, reason={}", appId, reason.trim());
-        return insertEvent(appId, CircuitEvent.TYPE_EMERGENCY_STOP, null, reason.trim(), currentOperator());
+        String operator = currentOperator();
+        log.warn("应用紧急停用: appId={}, reason={}, operator={}", appId, reason.trim(), operator);
+        CircuitEventView event = insertEvent(
+                appId, CircuitEvent.TYPE_EMERGENCY_STOP, null, reason.trim(), operator);
+        int cancelInitiated = cancelActiveRuns(appId, reason.trim(), operator);
+        return EmergencyStopView.of(event, new EmergencyStopView.Counts(cancelInitiated));
+    }
+
+    /**
+     * 批量取消在途运行(P2 缺口收口):停用即对该应用全部活跃运行发起取消。
+     * <strong>异步尽力而为</strong>——取消链在 journal 调度器上 fire-and-forget,
+     * 不阻塞停用响应;单 run 失败(竞态终态化 404/信号发布抖动等)仅告警,
+     * 由既有取消重试/孤儿扫描兜底收敛。显式包 {@link AppContext#runInApp}:
+     * 行级拦截器对注解 SQL 追加的 app_id 条件与本查询显式条件对齐(多应用
+     * 管理通道上下文缺省 1 时同值无害)。
+     *
+     * @return 已发起取消的运行数(接口同步口径;取消结果异步收敛)
+     */
+    private int cancelActiveRuns(long appId, String reason, String operator) {
+        List<AgentRun> activeRuns = AppContext.runInApp(
+                appId, () -> runMapper.selectActiveRunsByApp(appId));
+        for (AgentRun run : activeRuns) {
+            try {
+                cancellations.request(run.getRunId())
+                        .then(Mono.fromRunnable(() ->
+                                appendBatchStopAudit(appId, run, reason, operator)))
+                        .subscribeOn(schedulers.journal())
+                        .subscribe(null, failure -> log.warn(
+                                "紧急停用批量取消失败(由兜底扫描收敛): appId={}, runId={}",
+                                appId, run.getRunId(), failure));
+            } catch (RuntimeException submissionFailure) {
+                log.warn("紧急停用批量取消提交失败(由兜底扫描收敛): appId={}, runId={}",
+                        appId, run.getRunId(), submissionFailure);
+            }
+        }
+        if (!activeRuns.isEmpty()) {
+            log.warn("紧急停用已发起在途运行批量取消: appId={}, runs={}",
+                    appId, activeRuns.size());
+        }
+        return activeRuns.size();
+    }
+
+    /**
+     * 逐 run 审计:沿用 terminate-run 既有码值(decision=run-terminated、
+     * decision_source=forced-policy),不私加新码;V12 列宽兼容。
+     */
+    private void appendBatchStopAudit(
+            long appId, AgentRun run, String reason, String operator) {
+        auditService.append(new ToolAuditService.ToolAuditEntry(
+                appId,
+                null,
+                run.getUserId(),
+                run.getConversationId(),
+                run.getRunId(),
+                null,
+                "run-terminated",
+                ToolDecisionSource.FORCED_POLICY.code(),
+                null,
+                null,
+                "紧急停用批量终止(" + operator + "): " + reason,
+                null,
+                null));
     }
 
     public CircuitEventView resume(long appId) {
@@ -292,6 +358,31 @@ public class CircuitBreakerAdminService {
             String reason,
             String operator,
             String occurredAt) {
+    }
+
+    /**
+     * 紧急停用响应(mock 契约 CircuitBreakerEvent 形 + {@code counts} 扩展,
+     * StateView.activeRuns 附加参数先例):事件字段平铺保持 web 消费兼容,
+     * 追加批量取消计数。web/src/mocks 镜像不含 counts 属无害差异。
+     */
+    public record EmergencyStopView(
+            Long id,
+            String type,
+            String runId,
+            String reason,
+            String operator,
+            String occurredAt,
+            Counts counts) {
+
+        /** 批量取消计数:已发起取消的在途运行数(异步尽力而为,失败由兜底扫描收敛)。 */
+        public record Counts(int cancelInitiated) {
+        }
+
+        public static EmergencyStopView of(CircuitEventView event, Counts counts) {
+            return new EmergencyStopView(
+                    event.id(), event.type(), event.runId(), event.reason(),
+                    event.operator(), event.occurredAt(), counts);
+        }
     }
 
     /** 熔断状态视图(mock 契约 CircuitBreakerState 形 + activeRuns 扩展)。 */

@@ -54,6 +54,17 @@ export {
   setAssistantToolDisplayNames,
   setSubAgentToolNames,
   setAssistantEventHooks,
-  IframeModeNotImplementedError,
   IA_THEME_TOKENS,
+} from '@inneragent/sdk-core'
+
+// ---- [new] P4/W15 配置视图 headless API (用户级 Skill/MCP; WC view="config" 消费同源) ----
+export {
+  mcpUserServersApi,
+  meApi,
+  getAssistantReferenceOptions,
+  type McpUserServer,
+  type McpUserServerSaveReq,
+  type AssistantReferenceOptions,
+  type AssistantSkillReferenceOption,
+  type AssistantMcpToolReferenceOption,
 } from '@inneragent/sdk-core'

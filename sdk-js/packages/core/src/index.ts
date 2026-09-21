@@ -16,7 +16,6 @@ export {
   getSdkConfig,
   getBaseURL,
   applyTheme,
-  IframeModeNotImplementedError,
   IA_THEME_TOKENS,
   type SdkInitOptions,
   type SdkRuntimeConfig,
@@ -81,6 +80,13 @@ export { aiModelApi, meApi, type AiModel, type MultimodalInputType, type Multimo
 export { uploadAttachment, type AttachmentTransport } from './attachments'
 export { resolveMediaUrl } from './mediaUrl'
 
+// ---- 用户级三方 MCP (P4/W15 SDK 配置视图; 契约 McpUserServerController) ----
+export {
+  mcpUserServersApi,
+  type McpUserServer,
+  type McpUserServerSaveReq,
+} from './mcpServers'
+
 // ---- 页面上下文 ----
 export {
   setAssistantPageContext,
@@ -128,7 +134,7 @@ export {
 } from './displayNames'
 
 // ---- 事件钩子注入 ----
-export { setAssistantEventHooks, type AssistantEventHooks } from './store/assistantEvents'
+export { setAssistantEventHooks, getAssistantEventHooks, type AssistantEventHooks } from './store/assistantEvents'
 
 // ---- 约束范围([new] P2-scope 任务 #15:确认等待事件 scope 解析/提取) ----
 export {

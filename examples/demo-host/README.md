@@ -37,5 +37,6 @@ cd examples/demo-host && pnpm install && pnpm dev
 
 ## iframe 模式说明
 
-`init({ mode: 'iframe' })` 当前抛出 `IframeModeNotImplementedError` 占位
-(P4/W15 实现 postMessage 桥, 见《02-技术方案》§8.1)。
+P4/W15 起 `init({ mode: 'iframe' })` 为宿主侧声明(不再抛错); 实际桥接在
+`@inneragent/sdk-iframe` 的 `createIframeEmbed` / `mountIframeAgent`, 可运行
+演示见 `../iframe-host/`(严格 CSP 宿主 + 被嵌页, token 只走 postMessage)。

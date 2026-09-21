@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!--
+    [new] 被嵌页 (运行于宿主 iframe 内) —— 与宿主页同等严格 CSP。
+    页面自身零业务代码: 仅加载自包含产物 iframe-child.js 并调用
+    mountIframeAgent(); appKey/token 等全部来自宿主的 postMessage 消息,
+    **URL 上没有任何凭证**。
+  -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'" />
+  <title>InnerAgent 助手 (被嵌页)</title>
+  <script type="module" src="./frame.js"></script>
+  <style>
+    body { margin: 0; height: 100vh; }
+    #ia-target { height: 100%; }
+    inneragent-chat { display: block; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="ia-target"></div>
+</body>
+</html>

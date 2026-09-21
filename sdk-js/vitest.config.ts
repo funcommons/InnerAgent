@@ -13,7 +13,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@inneragent/sdk-core': fileURLToPath(new URL('./packages/core/src', import.meta.url)),
-      '@inneragent/sdk-components': fileURLToPath(new URL('./packages/components/src', import.meta.url)),
+      // components 入口是 inneragent-chat.ts (无 index.ts), 别名须指到文件
+      '@inneragent/sdk-components': fileURLToPath(new URL('./packages/components/src/inneragent-chat.ts', import.meta.url)),
     },
   },
   test: {

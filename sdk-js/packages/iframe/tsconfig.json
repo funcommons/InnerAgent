@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@inneragent/sdk-core": ["../core/src/index.ts"],
+      "@inneragent/sdk-core/*": ["../core/src/*"],
+      "@inneragent/sdk-components": ["../components/src/inneragent-chat.ts"],
+      "@inneragent/sdk-components/*": ["../components/src/*"]
+    },
+    "baseUrl": "."
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]
+}

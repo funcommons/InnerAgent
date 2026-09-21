@@ -126,11 +126,11 @@ class FlywayMigrationSmokeIT {
 
         // V16:工具体检 v1 三列(结论/时间/明细;明细为 TEXT 存 JSON,R3 DEF-08 教训)
         assertEquals("character varying", columnType("ia_tool_registry", "health_status"),
-                "ia_tool_registry.health_status 应为 VARCHAR(16)(V16 体检结论)");
+                "ia_tool_registry.health_status 应为 VARCHAR(16)(V17 体检结论)");
         assertEquals(16, columnCharLength("ia_tool_registry", "health_status"),
                 "ia_tool_registry.health_status 列宽应为 16(ok/degraded/unreachable,V16)");
         assertEquals("timestamp without time zone", columnType("ia_tool_registry", "last_checked_at"),
-                "ia_tool_registry.last_checked_at 应为 TIMESTAMP(V16 体检时间)");
+                "ia_tool_registry.last_checked_at 应为 TIMESTAMP(V17 体检时间)");
         assertEquals("text", columnType("ia_tool_registry", "health_detail_json"),
                 "ia_tool_registry.health_detail_json 应为 TEXT(V16;不用 JSONB——R3 DEF-08 教训)");
         assertTrue(columnExists("ia_tool_grant", "invalidated"),

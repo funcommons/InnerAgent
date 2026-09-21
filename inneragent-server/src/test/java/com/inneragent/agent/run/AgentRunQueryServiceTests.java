@@ -212,6 +212,45 @@ class AgentRunQueryServiceTests {
                 .verify();
     }
 
+    /**
+     * [adapt] P4-W14 子运行事件携带父层级(03-开发计划 §7.3 验收 4「前端父子
+     * 层级渲染」的服务端数据支撑):子运行自身事件流投影出 parentRunId;
+     * 镜像进父运行事件流的子事件透出 childRunId——两者均为新增可选字段,
+     * 不破既有消费者。
+     */
+    @Test
+    void projectsChildRunHierarchyFields() {
+        AgentRun child = run();
+        child.setParentRunId("parent-run-1");
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("delta", "child content");
+        CommittedAgentEvent event = committed(
+                9, "CONTENT", "TEXT_BLOCK_DELTA", null, payload);
+
+        StepVerifier.create(service.project(child, event))
+                .assertNext(projected -> {
+                    assertThat(projected.getParentRunId()).isEqualTo("parent-run-1");
+                    assertThat(projected.getChildRunId()).isNull();
+                })
+                .verifyComplete();
+
+        AgentRun parent = run();
+        ObjectNode mirrored = JsonNodeFactory.instance.objectNode()
+                .put("delta", "child content")
+                .put("_platformMirroredChildEvent", true)
+                .put("childRunId", "child-run-9")
+                .put("childSequence", 9L);
+        CommittedAgentEvent mirrorEvent = committed(
+                12, "CONTENT", "TEXT_BLOCK_DELTA", null, mirrored);
+
+        StepVerifier.create(service.project(parent, mirrorEvent))
+                .assertNext(projected -> {
+                    assertThat(projected.getParentRunId()).isNull();
+                    assertThat(projected.getChildRunId()).isEqualTo("child-run-9");
+                })
+                .verifyComplete();
+    }
+
     private AgentRun run() {
         return AgentRun.builder()
                 .runId("run-1")

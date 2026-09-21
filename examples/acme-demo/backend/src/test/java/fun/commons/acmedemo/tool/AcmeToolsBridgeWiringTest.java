@@ -17,7 +17,7 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 
 /**
  * starter 工具桥接线测试:
- * 1) 自动装配扫描到 DEMO 的 3 个 @IaTool 工具并注册进进程内 MCP server;
+ * 1) 自动装配扫描到 DEMO 的 4 个 @IaTool 工具并注册进进程内 MCP server;
  * 2) tools.include / tools.exclude 开关(include 白名单、exclude 优先、前缀通配)。
  * 不触达 InnerAgent server:JWKS 拉取是惰性行为,启动仅依赖配置。
  */
@@ -30,19 +30,21 @@ class AcmeToolsBridgeWiringTest {
     };
 
     @Test
-    void 自动装配_扫描到demo三个工具并注册进桥() {
+    void 自动装配_扫描到demo四个工具并注册进桥() {
         bridgeRunner().withPropertyValues(BASE_PROPS).run(context -> {
             assertThat(context).hasSingleBean(IaMcpServerBridge.class);
             IaMcpServerBridge bridge = context.getBean(IaMcpServerBridge.class);
             assertThat(bridge.registeredTools())
-                    .containsExactlyInAnyOrder("create_ticket", "list_tickets", "resolve_scope");
+                    .containsExactlyInAnyOrder(
+                            "create_ticket", "list_tickets", "resolve_scope", "query_sales");
             // 风险级如实声明(影响确认策略:WRITE 先确认,READ 自动执行)
             List<IaToolDefinition> definitions = context.getBean(IaToolScanner.class).scan();
             assertThat(definitions).extracting(IaToolDefinition::name, IaToolDefinition::riskLevel)
                     .containsExactlyInAnyOrder(
                             Tuple.tuple("create_ticket", ToolRiskLevel.WRITE),
                             Tuple.tuple("list_tickets", ToolRiskLevel.READ),
-                            Tuple.tuple("resolve_scope", ToolRiskLevel.READ));
+                            Tuple.tuple("resolve_scope", ToolRiskLevel.READ),
+                            Tuple.tuple("query_sales", ToolRiskLevel.READ));
         });
     }
 
@@ -82,7 +84,8 @@ class AcmeToolsBridgeWiringTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(IaMcpServerBridge.class);
                     assertThat(context.getBean(IaMcpServerBridge.class).registeredTools())
-                            .containsExactlyInAnyOrder("create_ticket", "list_tickets", "resolve_scope");
+                            .containsExactlyInAnyOrder(
+                                    "create_ticket", "list_tickets", "resolve_scope", "query_sales");
                 });
     }
 
@@ -99,6 +102,6 @@ class AcmeToolsBridgeWiringTest {
     private WebApplicationContextRunner bridgeRunner() {
         return new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(IaBridgeAutoConfiguration.class))
-                .withUserConfiguration(AcmeTicketTools.class);
+                .withUserConfiguration(AcmeTicketTools.class, AcmeSalesTools.class);
     }
 }

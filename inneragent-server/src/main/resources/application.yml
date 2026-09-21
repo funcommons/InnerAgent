@@ -96,8 +96,14 @@ fusion:
         fail-fast: true
         display-names: {}
         repositories:
+          # 内核静态仓库(缺省空目录;历史锚点保留)
           bundled:
             location: classpath:agentscope/skills
+            lazy: false
+          # P4-W13 内置 Skill 库(平台随版本发布;与 zip 导入器同构:
+          # skill.json + SKILL.md + references/,启动校验由单测锁定)
+          builtin:
+            location: classpath:skills/builtin
             lazy: false
       mcp:
         enabled: ${AGENTSCOPE_MCP_ENABLED:false}
@@ -207,6 +213,17 @@ inneragent:
       # span 自动生效,缺省 GlobalOpenTelemetry noop。
       capture-content: false
       content-max-chars: 512
+  skillhub:
+    # 应用级 Skill 体系(P4-W13 PRD M4;/ia/api/v1/admin/skills/**)。
+    # 缺省值:zip 上传 20MB/解压总量 10MB/条目 200/压缩比 100(zip bomb)/
+    # 单 Skill 内容 128KB(PRD)/激活上限 8(PRD §6.4)——全部可配。
+    max-upload-bytes: 20971520
+    max-total-bytes: 10485760
+    max-entries: 200
+    max-compression-ratio: 100
+    max-skill-content-bytes: 131072
+    # PRD §6.4「激活:用户每轮可激活的 Skill 数量有上限(默认 8)」
+    max-active-per-app: 8
 
 logging:
   level:

@@ -61,6 +61,10 @@ class AgentScopePipelineRunServiceTests {
 
     private final AgentRuntimeSchedulers schedulers = schedulers();
 
+    /** P4-W13:应用级激活 Skill 目录端口(mock 缺省返回空目录=未激活)。 */
+    private final com.inneragent.agent.skill.AppSkillCatalogPort appSkillCatalog =
+            mock(com.inneragent.agent.skill.AppSkillCatalogPort.class);
+
     @AfterEach
     void closeSchedulers() {
         schedulers.close();
@@ -155,6 +159,7 @@ class AgentScopePipelineRunServiceTests {
                 new ObjectMapper(),
                 skillRegistry,
                 userSkillService,
+                appSkillCatalog,
                 org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class),
                 safetyGate);
         AiChatReqVO request = new AiChatReqVO()
@@ -197,6 +202,129 @@ class AgentScopePipelineRunServiceTests {
     }
 
     @Test
+    void appActivatedSkillEntersPromptWhileUnactivatedIsUnavailable() {
+        // P4-W13 内核接线:已激活应用级 Skill 可被 enabledSkills 激活并进
+        // 系统提示词(随内核快照固化);未激活(目录空)→ 明确 400 不可用
+        AiModelService models = mock(AiModelService.class);
+        AiAgentService agents = mock(AiAgentService.class);
+        AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
+        AgentUserSkillService userSkillService = mock(AgentUserSkillService.class);
+        AgentConversationService conversations = mock(AgentConversationService.class);
+        AgentMessageService persistedMessages = mock(AgentMessageService.class);
+        AgentKernelSpecFactory specs = mock(AgentKernelSpecFactory.class);
+        AgentKernelSnapshotBuilder snapshots = mock(AgentKernelSnapshotBuilder.class);
+        AgentRunCoordinator coordinator = mock(AgentRunCoordinator.class);
+        AgentExecutionRuntimeContextRequests runtimeContexts =
+                mock(AgentExecutionRuntimeContextRequests.class);
+        AgentExecutionFactory executionFactory = mock(AgentExecutionFactory.class);
+        RunExecutionSupervisor supervisor = mock(RunExecutionSupervisor.class);
+        AgentRunQueryService queries = mock(AgentRunQueryService.class);
+        AgentRunReplayService replay = mock(AgentRunReplayService.class);
+        AgentRuntimeInstanceIdentity identity = mock(AgentRuntimeInstanceIdentity.class);
+        AiModel model = AiModel.builder()
+                .id(7L)
+                .code("model")
+                .status(1)
+                .supportReasoning(true)
+                .reasoningEffortLevels(List.of("high", "low"))
+                .build();
+        AgentKernelSpec spec = mock(AgentKernelSpec.class);
+        AgentScopeRuntimeContextRequest runtime = mock(AgentScopeRuntimeContextRequest.class);
+        AgentKernelSnapshot snapshot = snapshot();
+
+        when(models.getDefaultByType(1)).thenReturn(model);
+        when(skillRegistry.skills()).thenReturn(List.of());
+        when(userSkillService.list(42L)).thenReturn(List.of());
+        when(appSkillCatalog.activated(anyLong())).thenReturn(List.of(
+                new com.inneragent.agent.skill.AppSkillCatalogPort.ActivatedAppSkill(
+                        9L, "doc-summary", "文档摘要", "文档摘要能力",
+                        "按流程完成文档摘要:先通读,再提炼要点。",
+                        "import")));
+        when(specs.createRoot(any(AiChatReqVO.class), any(AiModel.class), any(String.class), eq(42L)))
+                .thenReturn(spec);
+        when(spec.agentDefinitionStableKey()).thenReturn("ai_assistant_agent");
+        when(snapshots.build(spec)).thenReturn(snapshot);
+        when(identity.value()).thenReturn("node-app-skill");
+        when(coordinator.start(any(StartAgentRunCommand.class)))
+                .thenAnswer(invocation -> {
+                    StartAgentRunCommand command = invocation.getArgument(0);
+                    return Mono.just(new StartedAgentRun(
+                            command.runId(),
+                            command.conversationId(),
+                            command.stateSessionCandidate(),
+                            command.ownerInstanceId(),
+                            1L,
+                            command.deadline().minusSeconds(1),
+                            command.deadline(),
+                            snapshot,
+                            1L));
+                });
+        when(runtimeContexts.forRoot(
+                any(), eq("ai_assistant_agent"), isNull(), eq(ToolExecutionMode.DEFAULT)))
+                .thenReturn(Mono.just(runtime));
+        when(supervisor.start(any(StartAgentExecutionCommand.class))).thenReturn(Mono.empty());
+        com.inneragent.platform.safety.ContentSafetyGate safetyGate =
+                mock(com.inneragent.platform.safety.ContentSafetyGate.class);
+        when(safetyGate.filterIngress(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+
+        AgentScopePipelineRunService service = new AgentScopePipelineRunService(
+                models,
+                agents,
+                conversations,
+                persistedMessages,
+                specs,
+                snapshots,
+                new AgentScopeMessageMapper(),
+                coordinator,
+                runtimeContexts,
+                executionFactory,
+                supervisor,
+                queries,
+                replay,
+                identity,
+                new AgentScopeV2Properties(),
+                schedulers,
+                new ObjectMapper(),
+                skillRegistry,
+                userSkillService,
+                appSkillCatalog,
+                org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class),
+                safetyGate);
+
+        ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
+        AiChatReqVO activated = new AiChatReqVO()
+                .setConversationId("conversation-app-skill")
+                .setMessage("帮我总结这份文档")
+                .setToolExecutionMode(ToolExecutionMode.DEFAULT.name())
+                .setEnabledSkills(List.of("doc-summary"));
+        StepVerifier.create(service.start(activated, 42L))
+                .assertNext(started -> assertThat(started.runId()).isNotBlank())
+                .verifyComplete();
+        verify(specs).createRoot(any(AiChatReqVO.class), any(AiModel.class),
+                systemPrompt.capture(), eq(42L));
+        assertThat(systemPrompt.getValue())
+                .contains("已主动激活的 Skills")
+                .contains("doc-summary")
+                .contains("按流程完成文档摘要");
+
+        // 未激活(目录为空)→ enabledSkills 指名直接 400「Skill 不可用」
+        when(appSkillCatalog.activated(anyLong())).thenReturn(List.of());
+        AiChatReqVO unactivated = new AiChatReqVO()
+                .setConversationId("conversation-app-skill-off")
+                .setMessage("帮我总结这份文档")
+                .setToolExecutionMode(ToolExecutionMode.DEFAULT.name())
+                .setEnabledSkills(List.of("doc-summary"));
+        StepVerifier.create(service.start(unactivated, 42L))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error)
+                            .isInstanceOf(com.inneragent.platform.common.BusinessException.class);
+                    assertThat(error.getMessage()).contains("Skill 不可用");
+                })
+                .verify();
+    }
+
+    @Test
     void emergencyStopRejectsNewRunsWith403BeforeAnyRunStarts() {
         // 优化建议 #2:紧急停用总开关在 run 发起入口(prepare 阶段)拦截,
         // 不触碰协调器/监督器(确认流与既有执行链只读不动)
@@ -227,6 +355,7 @@ class AgentScopePipelineRunServiceTests {
                 new ObjectMapper(),
                 mock(AgentScopeSkillRegistry.class),
                 mock(AgentUserSkillService.class),
+                null,
                 stopped,
                 mock(com.inneragent.platform.safety.ContentSafetyGate.class));
 
@@ -332,6 +461,7 @@ class AgentScopePipelineRunServiceTests {
                 new ObjectMapper(),
                 skillRegistry,
                 userSkillService,
+                appSkillCatalog,
                 org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class),
                 safetyGate);
 
@@ -398,6 +528,7 @@ class AgentScopePipelineRunServiceTests {
                 new ObjectMapper(),
                 mock(AgentScopeSkillRegistry.class),
                 mock(AgentUserSkillService.class),
+                null,
                 mock(com.inneragent.server.admin.CircuitBreakerAdminService.class),
                 mock(com.inneragent.platform.safety.ContentSafetyGate.class));
 

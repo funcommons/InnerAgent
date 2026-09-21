@@ -58,6 +58,10 @@ class AgentConfirmationExpiryCoordinatorTests {
     private RunTerminalCoordinator terminals;
     private AgentMessageProjectionService projections;
     private ToolAuditService audits;
+    /** IA-3 过期计数断言手柄(P4 差距收口)。 */
+    private final com.inneragent.platform.metrics.IaBusinessMetrics metrics =
+            new com.inneragent.platform.metrics.IaBusinessMetrics(
+                    new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     private AgentConfirmationExpiryCoordinator coordinator;
 
     @BeforeEach
@@ -82,7 +86,8 @@ class AgentConfirmationExpiryCoordinatorTests {
                 new AgentEventEnvelopeSanitizer(objectMapper),
                 schedulers,
                 audits,
-                toolCatalogs);
+                toolCatalogs,
+                metrics);
     }
 
     @Test
@@ -136,6 +141,11 @@ class AgentConfirmationExpiryCoordinatorTests {
         assertThat(row.toolFqn()).isEqualTo("save_storyboard_scene_shots");
         assertThat(row.paramsMaskedJson()).contains("shotId");
         assertThat(row.appId()).isEqualTo(1L);
+
+        // IA-3 过期终态业务计数与审计同点位:decision=expired/source=expired
+        assertThat(metrics.counterValue("ia.confirmation",
+                "app", "1", "decision", "expired", "source", "expired"))
+                .isEqualTo(1.0);
 
         verify(projections).projectThrough("run-1", 9);
     }

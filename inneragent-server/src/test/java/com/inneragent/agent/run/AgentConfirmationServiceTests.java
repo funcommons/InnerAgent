@@ -41,6 +41,10 @@ class AgentConfirmationServiceTests {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private final ToolAuditService audits = mock(ToolAuditService.class);
+    /** IA-3 计数断言手柄(SimpleMeterRegistry 支撑,值同 lifecycle 累积)。 */
+    private final com.inneragent.platform.metrics.IaBusinessMetrics metrics =
+            new com.inneragent.platform.metrics.IaBusinessMetrics(
+                    new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
     @SuppressWarnings("unchecked")
     private AgentConfirmationService service() {
@@ -62,7 +66,8 @@ class AgentConfirmationServiceTests {
                 properties,
                 objectMapper,
                 audits,
-                (ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog>) mock(ObjectProvider.class));
+                (ObjectProvider<com.inneragent.agent.mcp.McpToolCatalog>) mock(ObjectProvider.class),
+                metrics);
         return service;
     }
 
@@ -106,7 +111,8 @@ class AgentConfirmationServiceTests {
                 properties,
                 objectMapper,
                 audits,
-                mock(ObjectProvider.class));
+                mock(ObjectProvider.class),
+                metrics);
 
         ToolUseBlock toolCall = new ToolUseBlock(
                 "call-1",
@@ -229,6 +235,31 @@ class AgentConfirmationServiceTests {
         assertThat(row.toolFqn()).isEqualTo("update_script");
     }
 
+    @Test
+    void confirmationDecisionIncrementsBusinessCounterPerTool() throws Exception {
+        ResumedAgentRun resumed = resumedRun();
+        PendingConfirmation pending = pendingConfirmation();
+        RunExecutionSupervisor supervisor = mock(RunExecutionSupervisor.class);
+        when(supervisor.resume(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(serviceWith(
+                        waitingWith(pending, resumed), resumed, supervisor)
+                .respond(request(true), 42))
+                .verifyComplete();
+        StepVerifier.create(serviceWith(
+                        waitingWith(pending, resumed), resumed, supervisor)
+                .respond(request(false), 42))
+                .verifyComplete();
+
+        // IA-3 与审计同点位逐工具一比一:approved/rejected 各 1,source=live-confirm
+        assertThat(metrics.counterValue("ia.confirmation",
+                "app", "1", "decision", "approved", "source", "live-confirm"))
+                .isEqualTo(1.0);
+        assertThat(metrics.counterValue("ia.confirmation",
+                "app", "1", "decision", "rejected", "source", "live-confirm"))
+                .isEqualTo(1.0);
+    }
+
     // ------------------------------------------------------------------
     // fixtures
     // ------------------------------------------------------------------
@@ -307,7 +338,8 @@ class AgentConfirmationServiceTests {
                 properties,
                 objectMapper,
                 audits,
-                mock(ObjectProvider.class));
+                mock(ObjectProvider.class),
+                metrics);
     }
 
     private ToolConfirmationReqVO request(boolean approved) {

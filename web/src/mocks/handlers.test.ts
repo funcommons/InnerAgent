@@ -329,7 +329,7 @@ describe('mock 后端:模型配置(依赖并行任务,联调时核对)', () => {
   })
 })
 
-describe('mock 后端:熔断与 webhook(mock 域,服务端未实现)', () => {
+describe('mock 后端:熔断与 webhook(AdminCircuitBreakerController/WebhookConfig 契约形)', () => {
   beforeEach(() => setAdminKeyGetter(() => 'k'))
 
   it('上限默认值符合《02-技术方案》§4.7', async () => {
@@ -361,17 +361,14 @@ describe('mock 后端:熔断与 webhook(mock 域,服务端未实现)', () => {
     expect(limits.mcpQps).toBe(20)
   })
 
-  it('webhook 配置保存密钥掩码;deliveries(#18b 真路径)过滤失败投递', async () => {
+  it('webhook 配置保存密钥掩码;deliveries(#18b 真路径)按 status 过滤(契约偏差 #7)', async () => {
     const saved = await webhookAdminApi.saveConfig({ url: 'https://new.example.com/cb', secret: 'whsec-new-secret-9999' })
     expect(saved.secretMasked).toBe('whse••••9999')
-    const failed = await webhookAdminApi.deliveries({ success: false, pageSize: 10 })
-    // PENDING(待投递)与 FAILED(退避中)都属「未成功」;时间字段已归一为 ISO
-    expect(failed.total).toBe(2)
-    expect(failed.list.map(d => d.status)).toContain('FAILED')
-    expect(failed.list.map(d => d.status)).toContain('PENDING')
-    const backoff = failed.list.find(d => d.attempt === 3)!
-    expect(backoff.nextRetryAt).toBeTruthy()
-    expect(backoff.nextRetryAt!).toContain('T')
+    const failed = await webhookAdminApi.deliveries({ status: 'FAILED', pageSize: 10 })
+    expect(failed.total).toBe(1)
+    expect(failed.list[0]!.attempt).toBe(3)
+    expect(failed.list[0]!.nextRetryAt).toBeTruthy()
+    expect(failed.list[0]!.nextRetryAt!).toContain('T')
   })
 })
 

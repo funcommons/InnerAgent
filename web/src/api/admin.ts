@@ -8,9 +8,10 @@
  *   - AdminAuditController:/admin/audit-logs(分页/过滤/字典,W5)
  *   - AdminModelConfigController:/admin/model-configs(CRUD/连通性测试)
  *   - WebhookDeliveryAdminController:/admin/webhook-deliveries(分页/手动重投,#18b)
- * apps/tools/grants 列表为服务端全量数组(分页在管理站客户端完成);
- * circuit 与 /webhooks/config 管理端点待服务端落地(跟踪:99-优化建议.md #2),
- * api 层按契约形状调用,失败时由视图显「服务端能力未开通」占位。
+ *   - AdminWebhookConfigController:/admin/webhooks/config(配置/测试真实外呼)
+ *   - AdminCircuitBreakerController:/admin/circuit-breaker(状态/limits/紧急停用/
+ *     恢复/单运行终止;紧急停用仅翻转总开关不批量取消,limits 本版仅管理面读写)
+ * apps/tools/grants 列表为服务端全量数组(分页在管理站客户端完成)。
  */
 import { http } from './request'
 import type { IsoDateTime, PageResult } from './common'
@@ -44,6 +45,7 @@ import type {
   ToolUpdateReq,
   WebhookConfig,
   WebhookConfigSaveReq,
+  WebhookConfigTestResult,
   WebhookDelivery,
   WebhookDeliveryPageReq,
 } from './types'
@@ -145,22 +147,28 @@ export const modelConfigAdminApi = {
     http.post<ModelConnectivityResult>(`${BASE}/model-configs/${id}/test`),
 }
 
-// ==================== 熔断与资源上限(mock 域:服务端未实现,P2 后续) ====================
+// ==================== 熔断与资源上限(AdminCircuitBreakerController) ====================
 
 export const circuitAdminApi = {
+  /** 状态(total 开关/limits/activeRuns 活跃 run 数/最近 20 条事件) */
   getState: () => http.get<CircuitBreakerState>(`${BASE}/circuit-breaker`),
+  /** 更新资源上限(回全量;本版仅落库+管理面读写,内核强制执行后续接入) */
   updateLimits: (data: CircuitBreakerUpdateReq) =>
     http.put<ResourceLimits>(`${BASE}/circuit-breaker/limits`, data),
-  /** 紧急停用:应用级 Agent 总开关(≤5s 生效) */
+  /**
+   * 紧急停用:应用级 Agent 总开关(新运行拒绝接入)。
+   * 契约注记(2026-09-21 服务端批):仅翻转开关+记事件,不批量取消进行中
+   * run(无 Redis 广播/≤5s 生效语义);存量 run 由管理员逐个 terminate-run。
+   */
   emergencyStop: (data: EmergencyStopReq) =>
     http.post<CircuitBreakerEvent>(`${BASE}/circuit-breaker/emergency-stop`, data),
   resume: () => http.post<CircuitBreakerEvent>(`${BASE}/circuit-breaker/resume`),
-  /** 单运行终止 */
+  /** 单运行终止(runId 不存在 → 404;已终态 → 409) */
   terminateRun: (data: TerminateRunReq) =>
     http.post<CircuitBreakerEvent>(`${BASE}/circuit-breaker/terminate-run`, data),
 }
 
-// ==================== Webhook(deliveries 已落地任务 #18b;config 待服务端,见 #2) ====================
+// ==================== Webhook(deliveries=#18b;config=AdminWebhookConfigController) ====================
 
 /**
  * #18b 线上行形(DeliveryView):时间字段为 epoch 毫秒。
@@ -209,8 +217,8 @@ export const webhookAdminApi = {
    *  /webhooks/config 端点待服务端落地(跟踪:99-优化建议.md #2),失败时 UI 显占位 */
   getConfig: () => http.get<WebhookConfig>(`${BASE}/webhooks/config`),
   saveConfig: (data: WebhookConfigSaveReq) => http.put<WebhookConfig>(`${BASE}/webhooks/config`, data),
-  /** 发送测试回调(HMAC 签名可验;端点待服务端落地,同 #2) */
-  testConfig: () => http.post<{ ok: boolean; signatureValid: boolean }>(`${BASE}/webhooks/config/test`),
+  /** 发送测试回调(真实外呼;未配置 url → 400;响应含 httpStatus/error) */
+  testConfig: () => http.post<WebhookConfigTestResult>(`${BASE}/webhooks/config/test`),
   /** 投递记录分页(任务 #18b:GET /admin/webhook-deliveries;时间归一为 ISO) */
   deliveries: async (params: WebhookDeliveryPageReq = {}): Promise<PageResult<WebhookDelivery>> => {
     const page = await http.get<PageResult<RawDelivery>>(`${BASE}/webhook-deliveries${buildQuery({ ...params })}`)

@@ -1,12 +1,12 @@
 /**
  * [new] Webhook store(视图清单 #6)。
  * deliveries 域已接真实端点(任务 #18b:/admin/webhook-deliveries + redeliver);
- * config 域(/webhooks/config)端点待服务端落地(跟踪:99-优化建议.md #2),
- * 加载失败置 configUnavailable,视图显「服务端能力未开通」占位(衔接 #9)。
+ * config 域已落地 AdminWebhookConfigController(test 为真实外呼,未配置 url → 400)。
+ * 旧版占位兜底(configUnavailable)保留:对老版本服务端显「服务端能力未开通」。
  */
 import { defineStore } from 'pinia'
 import { webhookAdminApi } from '@/api/admin'
-import type { WebhookConfig, WebhookDelivery, WebhookEvent } from '@/api/types'
+import type { WebhookConfig, WebhookConfigTestResult, WebhookDelivery, WebhookDeliveryPageReq, WebhookEvent } from '@/api/types'
 import type { PageQuery } from '@/api/common'
 
 export const WEBHOOK_EVENTS: Array<{ value: WebhookEvent; label: string }> = [
@@ -26,19 +26,20 @@ export const DELIVERY_STATUS: Record<string, { label: string; tag: 'success' | '
 
 export interface DeliveryFilters extends PageQuery {
   event: WebhookEvent | ''
-  success: boolean | null
+  /** 契约偏差 #7:success 布尔过滤 → status 状态机过滤 */
+  status: WebhookDeliveryPageReq['status'] | ''
 }
 
 export const useWebhooksStore = defineStore('webhooks', {
   state: () => ({
     config: null as WebhookConfig | null,
     configForm: { url: '', secret: '', enabled: false, events: [] as WebhookEvent[] },
-    /** config 端点不可达/未落地 → 视图显「服务端能力未开通」占位 */
+    /** config 端点不可达(老版本服务端)→ 视图显「服务端能力未开通」占位 */
     configUnavailable: false,
     deliveries: [] as WebhookDelivery[],
     deliveriesTotal: 0,
     loading: false,
-    filters: { event: '', success: null, pageNo: 1, pageSize: 10 } as DeliveryFilters,
+    filters: { event: '', status: '', pageNo: 1, pageSize: 10 } as DeliveryFilters,
   }),
   actions: {
     async loadConfig() {
@@ -46,7 +47,7 @@ export const useWebhooksStore = defineStore('webhooks', {
       try {
         this.config = await webhookAdminApi.getConfig()
       } catch {
-        // 端点 404/未授权(待服务端落地)→ 占位态,不弹错误
+        // 端点 404/未授权(老版本服务端)→ 占位态,不弹错误
         this.configUnavailable = true
         return
       }
@@ -68,7 +69,7 @@ export const useWebhooksStore = defineStore('webhooks', {
       this.configForm.secret = ''
       return saved
     },
-    async testConfig() {
+    async testConfig(): Promise<WebhookConfigTestResult> {
       return webhookAdminApi.testConfig()
     },
     async loadDeliveries() {
@@ -77,7 +78,7 @@ export const useWebhooksStore = defineStore('webhooks', {
         const f = this.filters
         const page = await webhookAdminApi.deliveries({
           event: f.event || undefined,
-          success: f.success ?? undefined,
+          status: f.status || undefined,
           pageNo: f.pageNo,
           pageSize: f.pageSize,
         })

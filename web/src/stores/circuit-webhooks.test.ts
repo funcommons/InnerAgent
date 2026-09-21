@@ -15,12 +15,14 @@ describe('circuit store', () => {
     setAdminKeyGetter(() => 'k')
   })
 
-  it('load 拉取状态;§4.7 七参数默认值进表单', async () => {
+  it('load 拉取状态;§4.7 七参数默认值进表单;activeRuns 活跃运行数透出', async () => {
     const store = useCircuitStore()
     await store.load()
     expect(store.state).not.toBeNull()
     expect(store.limitsForm).toEqual(DEFAULT_LIMITS)
     expect(store.state!.recentEvents.length).toBeGreaterThan(0)
+    // 契约偏差 #2:activeRuns 引导管理员逐个 terminate-run
+    expect(store.state!.activeRuns).toBe(1)
   })
 
   it('saveLimits 部分更新回写状态', async () => {
@@ -95,19 +97,31 @@ describe('webhooks store', () => {
     expect(store.configForm.secret).toBe('')
   })
 
-  it('loadDeliveries 过滤失败投递(FAILED 退避中 + PENDING 待投递;#18b 真端点)', async () => {
+  it('loadDeliveries 按 status 过滤状态机(#18b 真端点;契约偏差 #7)', async () => {
     const store = useWebhooksStore()
-    store.filters.success = false
+    store.filters.status = 'FAILED'
     await store.loadDeliveries()
-    expect(store.deliveriesTotal).toBe(2)
-    const attemptRow = store.deliveries.find(d => d.attempt === 3)
-    expect(attemptRow!.status).toBe('FAILED')
-    expect(attemptRow!.nextRetryAt).toBeTruthy()
-    store.filters.success = null
+    expect(store.deliveriesTotal).toBe(1)
+    const failed = store.deliveries[0]!
+    expect(failed.attempt).toBe(3)
+    expect(failed.nextRetryAt).toBeTruthy()
+    store.filters.status = 'PENDING'
+    await store.loadDeliveries()
+    expect(store.deliveriesTotal).toBe(1)
+    store.filters.status = ''
     await store.loadDeliveries()
     expect(store.deliveriesTotal).toBe(4)
     // 线上时间字段(epoch 毫秒)已由 api 层归一为 ISO
     expect(store.deliveries.every(d => d.deliveredAt === null || d.deliveredAt.endsWith('Z'))).toBe(true)
+  })
+
+  it('testConfig 返回真实外呼形(httpStatus/error 扩展;契约偏差 #6)', async () => {
+    const store = useWebhooksStore()
+    await store.loadConfig()
+    const resp = await store.testConfig()
+    expect(resp.ok).toBe(true)
+    expect(resp.httpStatus).toBe(200)
+    expect(resp.error).toBeNull()
   })
 
   it('redeliver:PENDING 之外的投递重置回待投递;PENDING 重复重投 → 409', async () => {

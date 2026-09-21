@@ -38,7 +38,9 @@ async function emergencyStop() {
     return
   }
   const confirmed = await ElMessageBox.confirm(
-    '紧急停用后:该应用全部新运行拒绝接入、进行中运行收到取消信号(生效延迟 ≤5s)。确认执行?',
+    // 契约注记(2026-09-21 服务端批):紧急停用仅翻转总开关+记事件,
+    // 不批量取消进行中 run(无 ≤5s Redis 广播语义);存量 run 引导逐个终止
+    '紧急停用后:该应用拒绝接入新运行;已接入的进行中运行不受影响,可按需在「单运行终止」中逐个终止。确认执行?',
     '紧急停用',
     { type: 'error', confirmButtonText: '确认停用', cancelButtonText: '取消' },
   ).then(() => true).catch(() => false)
@@ -46,7 +48,7 @@ async function emergencyStop() {
   stopping.value = true
   try {
     await store.emergencyStop(stopForm.reason.trim())
-    ElMessage.success('已紧急停用(≤5s 生效)')
+    ElMessage.success('已紧急停用(新运行拒绝接入)')
     stopForm.reason = ''
   } catch (err) {
     ElMessage.error(apiErrorMessage(err, '停用失败'))
@@ -64,7 +66,8 @@ async function saveLimits() {
   savingLimits.value = true
   try {
     await store.saveLimits()
-    ElMessage.success('资源上限已更新(配置指纹使内核缓存失效)')
+    // limits 本版仅落库+管理面读写,内核并发/QPS 强制执行后续接入(不得宣称已强制生效)
+    ElMessage.success('资源上限已保存(本版为管理面配置;内核强制执行将在后续版本接入)')
   } catch (err) {
     ElMessage.error(apiErrorMessage(err, '保存失败'))
   } finally {
@@ -97,7 +100,7 @@ async function terminateRun() {
 </script>
 
 <template>
-  <IaPageContainer subtitle="应用级总开关、单运行终止与资源上限(≤5s 生效)">
+  <IaPageContainer subtitle="应用级总开关、单运行终止与资源上限配置">
     <div v-loading="store.loading">
     <!-- 服务端能力未开通占位(优化建议 #2/#9):不给可交互但必败的表单 -->
     <el-card v-if="store.unavailable" shadow="never" class="unavailable-card">
@@ -120,6 +123,9 @@ async function terminateRun() {
               </el-tag>
             </div>
           </template>
+          <div class="active-runs dim">
+            活跃运行:{{ store.state?.activeRuns ?? 0 }}(紧急停用不影响进行中运行;如需强制结束,请在下方按 runId 逐个终止)
+          </div>
           <template v-if="store.state?.emergencyStopped">
             <el-result icon="error" title="已紧急停用" :sub-title="`原因:${store.state.stopReason ?? '—'} · ${store.state.stoppedAt ?? ''}`">
               <template #extra>
@@ -198,6 +204,7 @@ async function terminateRun() {
 .view { display: flex; flex-direction: column; gap: 12px; }
 .unavailable-card :deep(.ia-empty) { padding: 40px 16px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.active-runs { font-size: 12px; margin-bottom: 12px; }
 .form-hint { color: #909399; font-size: 12px; width: 100%; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 .dim { color: #909399; font-size: 12px; }

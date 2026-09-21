@@ -2,8 +2,8 @@
  * [new] msw mock 数据种子与内存存储。
  * 时间锚定 2026-09-20(契约时间基线);动作类 handler 直接改写内存数组。
  * resetMockData() 在每条用例后恢复种子(setup.ts 调用)。
- * P2 对齐:种子形 = 服务端真实实体形(AppRegistration/ToolRegistryEntry/
- * ToolGrant/ia_audit_log 列);审计域端点服务端未实现,但行形已对齐真实列。
+ * 种子形 = 服务端真实响应视图形(AppRegistration/ToolRegistryEntry/
+ * ToolGrant/ia_audit_log 列);circuit/webhook 状态含 activeRuns 等扩展字段。
  */
 import type {
   CircuitBreakerEvent,
@@ -132,7 +132,7 @@ export const seedGrants: IaToolGrant[] = [
   { id: 25, appId: 1, userId: 30077, toolFqn: 'mcp__demo_host__export_users', scope: 'permanent', conversationId: null, riskAtGrant: 'medium', schemaSha256: 'sha256:0009fp', source: 'admin', invalidated: true, invalidatedReason: 'tool_disabled', decisionNote: '工具停用级联失效', tenantId: 0, createTime: '2026-09-05T09:00:00Z', updateTime: '2026-09-06T09:00:00Z', deleted: false },
 ]
 
-// ==================== 审计日志(ia_audit_log 真实列形;查询端点未实现,mock) ====================
+// ==================== 审计日志(ia_audit_log 真实列形,镜像 AdminAuditController) ====================
 
 function audit(partial: Partial<IaAuditLog> & Pick<IaAuditLog, 'id' | 'toolFqn' | 'decisionSource' | 'decision'>): IaAuditLog {
   return {
@@ -176,7 +176,7 @@ export const seedModelConfigs: IaModelApiConfig[] = [
   { id: 54, name: '本地 Ollama', platform: 'ollama', textProtocol: null, apiUrl: 'http://localhost:11434', autoAppendV1Path: false, proxyType: 'none', proxyHost: null, proxyPort: null, proxyUsername: null, apiKeyMasked: '', status: 0, remark: '私有化备用(停用中)', createTime: '2026-09-03T00:00:00Z', updateTime: '2026-09-03T00:00:00Z' },
 ]
 
-// ==================== 熔断与资源上限(§4.7 默认值;服务端未实现,mock) ====================
+// ==================== 熔断与资源上限(§4.7 默认值;镜像 AdminCircuitBreakerController) ====================
 
 export const seedLimits: ResourceLimits = {
   maxToolCallsPerRun: 32,
@@ -224,7 +224,7 @@ export interface MockStore {
   modelConfigs: IaModelApiConfig[]
   limits: ResourceLimits
   circuitEvents: CircuitBreakerEvent[]
-  circuitState: { emergencyStopped: boolean; stoppedAt: string | null; stopReason: string | null }
+  circuitState: { emergencyStopped: boolean; stoppedAt: string | null; stopReason: string | null; activeRuns: number }
   webhookConfig: WebhookConfig
   deliveries: WebhookDelivery[]
 }
@@ -238,7 +238,7 @@ export const store: MockStore = {
   modelConfigs: [],
   limits: { ...seedLimits },
   circuitEvents: [],
-  circuitState: { emergencyStopped: false, stoppedAt: null, stopReason: null },
+  circuitState: { emergencyStopped: false, stoppedAt: null, stopReason: null, activeRuns: 1 },
   webhookConfig: { ...seedWebhookConfig },
   deliveries: [],
 }
@@ -253,7 +253,7 @@ export function resetMockData(): void {
   store.modelConfigs = structuredClone(seedModelConfigs)
   store.limits = { ...seedLimits }
   store.circuitEvents = structuredClone(seedCircuitEvents)
-  store.circuitState = { emergencyStopped: false, stoppedAt: null, stopReason: null }
+  store.circuitState = { emergencyStopped: false, stoppedAt: null, stopReason: null, activeRuns: 1 }
   store.webhookConfig = structuredClone(seedWebhookConfig)
   store.deliveries = structuredClone(seedDeliveries)
   nextId = 1000

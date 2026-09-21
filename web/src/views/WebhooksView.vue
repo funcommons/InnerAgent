@@ -59,8 +59,14 @@ async function sendTest() {
   testing.value = true
   try {
     const resp = await store.testConfig()
-    ElMessage.success(resp.signatureValid ? '测试回调已发送,签名验证通过' : '签名验证失败')
+    if (resp.ok) {
+      ElMessage.success(resp.signatureValid ? '测试回调已发送且宿主 2xx,签名验证通过' : '测试回调已发送,宿主已接收(未配置密钥,跳过验签)')
+    } else {
+      const detail = [resp.httpStatus ? `HTTP ${resp.httpStatus}` : null, resp.error].filter(Boolean).join(' · ')
+      ElMessage.error(`测试回调未成功${detail ? `:${detail}` : ''}`)
+    }
   } catch (err) {
+    // 未配置 url → 400(服务端可读文案透出)
     ElMessage.error(apiErrorMessage(err, '测试失败'))
   } finally {
     testing.value = false
@@ -118,7 +124,11 @@ async function redeliver(row: WebhookDelivery) {
             </el-form-item>
             <el-form-item label="订阅事件">
               <el-checkbox-group v-model="store.configForm.events">
-                <el-checkbox v-for="e in WEBHOOK_EVENTS" :key="e.value" :value="e.value">{{ e.label }}</el-checkbox>
+                <!-- run.resource-limit 可登记但服务端终态事件仅 finished/failed/cancelled,
+                     单独订阅不会产生投递(契约偏差 #8)→ 置灰并注释说明 -->
+                <el-checkbox v-for="e in WEBHOOK_EVENTS" :key="e.value" :value="e.value" :disabled="e.value === 'run.resource-limit'">
+                  {{ e.label }}{{ e.value === 'run.resource-limit' ? '(暂无终态投递)' : '' }}
+                </el-checkbox>
               </el-checkbox-group>
             </el-form-item>
             <el-form-item label="启用">
@@ -146,9 +156,8 @@ async function redeliver(row: WebhookDelivery) {
             <el-select v-model="store.filters.event" class="toolbar__event" placeholder="事件" clearable @change="search">
               <el-option v-for="e in WEBHOOK_EVENTS" :key="e.value" :label="e.label" :value="e.value" />
             </el-select>
-            <el-select v-model="store.filters.success" class="toolbar__status" placeholder="投递结果" clearable @change="search">
-              <el-option label="成功" :value="true" />
-              <el-option label="失败" :value="false" />
+            <el-select v-model="store.filters.status" class="toolbar__status" placeholder="投递状态" clearable @change="search">
+              <el-option v-for="(meta, code) in DELIVERY_STATUS" :key="code" :label="meta.label" :value="code" />
             </el-select>
             <el-button :icon="Refresh" @click="store.loadDeliveries()">刷新</el-button>
           </div>

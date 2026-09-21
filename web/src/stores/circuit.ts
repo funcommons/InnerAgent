@@ -1,7 +1,9 @@
 /**
- * [new] 熔断与资源上限 store(视图清单 #6;契约形状=方案 §4.7)。
- * 管理端点待服务端落地(跟踪:99-优化建议.md #2):加载失败置 unavailable,
- * 视图显「服务端能力未开通」占位(衔接 #9);api 层保持契约形状调用。
+ * [new] 熔断与资源上限 store(视图清单 #6;已落地 AdminCircuitBreakerController)。
+ * 契约注记(2026-09-21 服务端批):紧急停用仅翻转总开关+记事件,不批量取消
+ * 进行中 run(引导管理员按 activeRuns 逐个 terminate-run);limits 本版仅落库+
+ * 管理面读写,内核并发/QPS 强制执行后续接入(文案不得宣称「已强制生效」)。
+ * 老版本服务端无此端点时置 unavailable,视图显「服务端能力未开通」占位。
  * 上限默认值 = 《02-技术方案》§4.7。
  */
 import { defineStore } from 'pinia'
@@ -31,7 +33,7 @@ export const LIMIT_FIELDS: Array<{ key: keyof ResourceLimits; label: string; hin
 export const useCircuitStore = defineStore('circuit', {
   state: () => ({
     state: null as CircuitBreakerState | null,
-    /** GET /circuit-breaker 不可达/未落地 → 视图显「服务端能力未开通」占位 */
+    /** GET /circuit-breaker 不可达(老版本服务端)→ 视图显「服务端能力未开通」占位 */
     unavailable: false,
     loading: false,
     limitsForm: { ...DEFAULT_LIMITS } as ResourceLimits,
@@ -44,7 +46,7 @@ export const useCircuitStore = defineStore('circuit', {
         this.limitsForm = { ...this.state.limits }
         this.unavailable = false
       } catch {
-        // 端点 404/未授权(待服务端落地)→ 占位态,不弹错误
+        // 端点 404/未授权(老版本服务端)→ 占位态,不弹错误
         this.state = null
         this.unavailable = true
       } finally {

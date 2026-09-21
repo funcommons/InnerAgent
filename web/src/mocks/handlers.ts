@@ -700,6 +700,7 @@ const circuitHandlers = [
       stoppedAt: store.circuitState.stoppedAt,
       stopReason: store.circuitState.stopReason,
       limits: store.limits,
+      activeRuns: store.circuitState.activeRuns,
       recentEvents: store.circuitEvents.slice(0, 20),
     })
   }),
@@ -758,7 +759,16 @@ const webhookHandlers = [
   http.post('/ia/api/v1/admin/webhooks/config/test', ({ request }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied
-    return ok({ ok: true, signatureValid: true })
+    // 镜像 WebhookConfigAdminService.test:未配置 url → 400;响应含 httpStatus/error
+    if (!store.webhookConfig.url) {
+      return fail(400, '尚未配置 Webhook 回调地址,请先保存 url 后再测试')
+    }
+    return ok({
+      ok: true,
+      signatureValid: Boolean(store.webhookConfig.secretMasked),
+      httpStatus: 200,
+      error: null,
+    })
   }),
   // 镜像 WebhookDeliveryAdminController(GET /admin/webhook-deliveries):
   // 线上时间字段为 epoch 毫秒(web/api 层负责归一为 ISO)
@@ -767,12 +777,12 @@ const webhookHandlers = [
     if (denied) return denied
     const url = new URL(request.url)
     const event = url.searchParams.get('event')
-    const success = url.searchParams.get('success')
+    const status = url.searchParams.get('status')
     const byDeliveredDesc = (a: WebhookDelivery, b: WebhookDelivery) =>
       String(b.deliveredAt ?? b.nextRetryAt ?? '').localeCompare(String(a.deliveredAt ?? a.nextRetryAt ?? ''))
     let list = [...store.deliveries].sort(byDeliveredDesc)
     if (event) list = list.filter(d => d.event === event)
-    if (success !== null) list = list.filter(d => String(d.success) === success)
+    if (status) list = list.filter(d => d.status === status)
     const page = paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10))
     return ok({
       ...page,

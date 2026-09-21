@@ -225,7 +225,7 @@ describe('admin API 客户端', () => {
     })
   })
 
-  describe('审计查询(mock 域:服务端未实现)', () => {
+  describe('审计查询(AdminAuditController 契约形)', () => {
     it('page:decision/decisionSource/时间过滤进 query(字段名对齐 ia_audit_log 列)', async () => {
       const { state, respond } = capture([])
       server.use(mswHttp.get('/ia/api/v1/admin/audit-logs', respond))
@@ -276,7 +276,7 @@ describe('admin API 客户端', () => {
     })
   })
 
-  describe('熔断与资源上限(mock 域:服务端未实现)', () => {
+  describe('熔断与资源上限(AdminCircuitBreakerController 契约形)', () => {
     it('getState:GET /circuit-breaker 返回上限与事件', async () => {
       const { respond } = capture({
         emergencyStopped: false, stoppedAt: null, stopReason: null,
@@ -304,7 +304,7 @@ describe('admin API 客户端', () => {
   })
 
   describe('Webhook(deliveries=任务 #18b 真契约)', () => {
-    it('saveConfig:PUT /webhooks/config(端点待服务端,形状即未来契约)', async () => {
+    it('saveConfig:PUT /webhooks/config;test 返回真实外呼形(契约偏差 #6)', async () => {
       const { state, respond } = capture({ appId: 1, url: 'https://host/callback', secretMasked: '••••', enabled: true, events: ['run.finished'] })
       server.use(mswHttp.put('/ia/api/v1/admin/webhooks/config', respond))
       const resp = await webhookAdminApi.saveConfig({ url: 'https://host/callback', secret: 's3cret', events: ['run.finished'] })
@@ -322,11 +322,11 @@ describe('admin API 客户端', () => {
         total: 1, pageNo: 1, pageSize: 10,
       })
       server.use(mswHttp.get('/ia/api/v1/admin/webhook-deliveries', respond))
-      const page = await webhookAdminApi.deliveries({ event: 'run.failed', success: false, pageNo: 1, pageSize: 10 })
+      const page = await webhookAdminApi.deliveries({ event: 'run.failed', status: 'EXHAUSTED', pageNo: 1, pageSize: 10 })
       const url = new URL(state.req!.url)
       expect(url.pathname).toBe('/ia/api/v1/admin/webhook-deliveries')
       expect(url.searchParams.get('event')).toBe('run.failed')
-      expect(url.searchParams.get('success')).toBe('false')
+      expect(url.searchParams.get('status')).toBe('EXHAUSTED')
       expect(page.list[0]!.deliveredAt).toBe(new Date(1758350315000).toISOString())
       expect(page.list[0]!.status).toBe('SUCCESS')
     })

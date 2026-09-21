@@ -427,9 +427,10 @@ export interface ModelConnectivityResult {
   testedAt: IsoDateTime
 }
 
-// ==================== 熔断与资源上限(方案 §4.7) ====================
-// 管理端点待服务端落地(跟踪:test-report/2026-09-21-02/99-优化建议.md #2);
-// api 层按下方形状调用真端点,联调 404 时 UI 显「服务端能力未开通」占位。
+// ==================== 熔断与资源上限(已落地 AdminCircuitBreakerController) ====================
+// 契约对齐注记(2026-09-21 服务端批):紧急停用仅翻转总开关+记事件,不批量取消
+// 进行中 run(需逐个 terminate-run);limits 本版仅落库+管理面读写,内核并发/QPS
+// 强制执行后续接入(UI 文案不得宣称「已强制生效」)。
 
 /** 单运行/宿主 MCP 资源上限(§4.7 全套默认值) */
 export interface ResourceLimits {
@@ -464,6 +465,8 @@ export interface CircuitBreakerState {
   stoppedAt: IsoDateTime | null
   stopReason: string | null
   limits: ResourceLimits
+  /** 活跃运行数(紧急停用不批量取消,引导管理员按此逐个 terminate-run) */
+  activeRuns: number
   recentEvents: CircuitBreakerEvent[]
 }
 
@@ -483,9 +486,11 @@ export interface TerminateRunReq {
 }
 
 // ==================== Webhook(终态通知,方案 §7.1/Q5) ====================
-// deliveries 已落地(WebhookDeliveryAdminController,任务 #18b):分页形见下,
-// 时间字段为 epoch 毫秒(api 层归一为 ISO);config 端点待服务端落地
-// (跟踪:99-优化建议.md #2),配置本体在 ia_app(webhookUrl/webhookSecret,apps 域)。
+// 已落地(WebhookDeliveryAdminController + AdminWebhookConfigController):
+// deliveries 分页形见下(时间字段为 epoch 毫秒,api 层归一为 ISO;status 过滤);
+// 配置本体在 ia_app(webhookUrl/webhookSecret,apps 域)。
+// 订阅注记:run.resource-limit 可登记订阅,但服务端终态事件仅
+// finished/failed/cancelled,单独订阅不会产生投递(UI 置灰提示)。
 
 export interface WebhookConfig {
   appId: number
@@ -535,5 +540,16 @@ export interface WebhookDelivery {
 
 export interface WebhookDeliveryPageReq extends PageQuery {
   event?: WebhookEvent
-  success?: boolean
+  /** 投递状态过滤(契约偏差 #7:success 布尔过滤已由 status 取代) */
+  status?: WebhookDelivery['status']
+}
+
+/** 连通性测试结果(真实外呼;未配置 url → 400,响应含 httpStatus/error 扩展) */
+export interface WebhookConfigTestResult {
+  ok: boolean
+  signatureValid: boolean
+  /** 宿主响应 HTTP 状态码(传输异常为 null) */
+  httpStatus: number | null
+  /** 失败原因摘要(ok=true 时为 null) */
+  error: string | null
 }

@@ -21,6 +21,44 @@ import com.inneragent.platform.tenant.TenantContext;
  */
 public final class AgentRuntimeSchedulers implements AutoCloseable {
 
+    /**
+     * Reactor 全局调度器(parallel/boundedElastic/single 等)的上下文
+     * 捕获-恢复挂钩键(onScheduleHook 按 key 幂等替换)。
+     */
+    public static final String CONTEXT_SCHEDULE_HOOK_KEY = "inneragent.tenant-app-context";
+
+    /**
+     * 任务包装:提交线程捕获租户/应用上下文,任务线程恢复。
+     *
+     * <p>恢复采用快照精确还原(runInTenant/runAsSystem/runInApp 语义):
+     * 池线程上等价于 finally 清理(前一状态恒为空);同步执行类调度器
+     * (如 immediate)上则不打扰调用线程既有上下文。
+     */
+    private static final java.util.function.Function<Runnable, Runnable> CONTEXT_PROPAGATOR =
+            task -> {
+                Long tenantId = TenantContext.getTenantId();
+                boolean ignoreTenant = TenantContext.isIgnored();
+                Long appId = AppContext.getAppId();
+                Runnable tenantScoped = (ignoreTenant || tenantId == null)
+                        ? () -> TenantContext.runAsSystem(task)
+                        : () -> TenantContext.runInTenant(tenantId, task);
+                if (appId == null) {
+                    return tenantScoped;
+                }
+                return () -> AppContext.runInApp(appId, tenantScoped);
+            };
+
+    static {
+        // 四个自有线程池由下方 execute 覆盖捕获恢复;但运行链在自有池之外
+        // 还有经 Reactor 内建调度器的 hop(如 ReplayWakeGate 的 Mono.delay →
+        // Schedulers.parallel()、agentscope 内核内部调度),这些线程提交
+        // 后续任务时同样丢失 ThreadLocal——多应用(app≠1)下后续按行级
+        // 拦截器缺省回落 app_id=1 查数,产生「Agent run does not exist」。
+        // 全局挂钩对所有经 Schedulers 工厂创建的调度器任务做捕获-恢复,
+        // 与 execute 覆盖形成分层互补(双重包装幂等无害)。
+        Schedulers.onScheduleHook(CONTEXT_SCHEDULE_HOOK_KEY, CONTEXT_PROPAGATOR);
+    }
+
     public static final int STATE_QUEUE_CAPACITY = 512;
     public static final int JOURNAL_QUEUE_CAPACITY = 2048;
     public static final int MODEL_QUEUE_CAPACITY = 256;
@@ -107,6 +145,8 @@ public final class AgentRuntimeSchedulers implements AutoCloseable {
                 }) {
             // Reactor 跨调度器 hop 不传播 ThreadLocal：提交任务时捕获租户/应用上下文，
             // 在工作线程内恢复，保证 Agent 运行链路按发起请求的租户与应用过滤 SQL。
+            // 本覆盖只挡四个自有线程池;Reactor 内建调度器上的 hop 由类初始化注册的
+            // onScheduleHook 全局捕获-恢复(CONTEXT_PROPAGATOR)分层互补。
             // Agent 运行边界的阻塞操作均以全局唯一 runId 定位数据且入口已鉴权，
             // 提交线程自身已丢失租户上下文（如 agentscope 内部线程）时按系统模式执行；
             // app_id 无系统模式，缺省按单应用默认 1 注入（[adapt] P1-T1 双列隔离）

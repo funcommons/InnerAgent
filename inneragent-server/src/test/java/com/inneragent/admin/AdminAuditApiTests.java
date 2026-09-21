@@ -126,11 +126,11 @@ class AdminAuditApiTests {
     }
 
     @Test
-    @DisplayName("未知 decisionSource → 400(值域见 dictionary);decision 自由过滤不校验")
+    @DisplayName("未知 decisionSource → 400(值域见 dictionary;P2-W5 起含 admin);decision 自由过滤不校验")
     void unknownDecisionSourceReturns400() throws Exception {
         mockMvcWithKey.perform(get("/ia/api/v1/admin/audit-logs")
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY)
-                        .param("decisionSource", "admin"))
+                        .param("decisionSource", "not-a-source"))
                 .andExpect(status().isBadRequest());
         // 设置桩避免后续调用 NPE(校验失败不会触达服务)
         when(auditQueryService.page(any(ToolAuditQueryService.AuditLogFilter.class)))
@@ -142,16 +142,17 @@ class AdminAuditApiTests {
     }
 
     @Test
-    @DisplayName("字典端点:decision_source 含 expired(V8)与六值全集;decision 九值")
+    @DisplayName("字典端点:decision_source 含 expired(V8)/admin(P2-W5)七值全集;decision 十一值")
     void dictionaryEndpointExposesActualDomains() throws Exception {
         when(auditQueryService.page(any(ToolAuditQueryService.AuditLogFilter.class)))
                 .thenReturn(new PageResult<>(List.of(), 0L, 1, 10));
         mockMvcWithKey.perform(get("/ia/api/v1/admin/audit-logs/dictionary")
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.decisionSources.length()").value(6))
+                .andExpect(jsonPath("$.data.decisionSources.length()").value(7))
                 .andExpect(jsonPath("$.data.decisionSources[4].code").value("expired"))
-                .andExpect(jsonPath("$.data.decisions.length()").value(9))
+                .andExpect(jsonPath("$.data.decisionSources[6].code").value("admin"))
+                .andExpect(jsonPath("$.data.decisions.length()").value(11))
                 .andExpect(jsonPath("$.data.decisionSources[0].description").isNotEmpty());
     }
 }

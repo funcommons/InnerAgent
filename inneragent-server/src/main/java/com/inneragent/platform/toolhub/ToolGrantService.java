@@ -1,6 +1,7 @@
 package com.inneragent.platform.toolhub;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.context.AppContext;
 import com.inneragent.platform.toolhub.mapper.ToolGrantMapper;
@@ -35,6 +36,9 @@ public class ToolGrantService {
     private static final Set<String> SCOPES = Set.of(SCOPE_PERMANENT, SCOPE_CONVERSATION);
 
     public static final String SOURCE_ADMIN = "admin";
+
+    /** 分页每页上限(对齐 PageParam/审计检索惯例)。 */
+    static final int MAX_PAGE_SIZE = 100;
 
     static final String REASON_RISK_UPGRADE = "risk_upgrade";
     static final String REASON_SCHEMA_BREAKING = "schema_breaking";
@@ -178,6 +182,39 @@ public class ToolGrantService {
                                 && !Boolean.TRUE.equals(row.getInvalidated()))
                         .toList()
                 : rows;
+    }
+
+    /**
+     * 授权列表分页(P2-W5:与 {@link #list} 同过滤同排序;activeOnly 下推为
+     * SQL 条件 invalidated=FALSE(deleted 由 @TableLogic 自动过滤),使分页
+     * 计数与内存过滤一致。端点缺省(无 pageNo/pageSize)仍走全量 list,
+     * 向后兼容)。
+     */
+    public Page<ToolGrant> page(Long userId, String toolName, String scope,
+                                boolean activeOnly, int pageNo, int pageSize) {
+        LambdaQueryWrapper<ToolGrant> query = new LambdaQueryWrapper<ToolGrant>()
+                .orderByDesc(ToolGrant::getId);
+        if (userId != null) {
+            query.eq(ToolGrant::getUserId, userId);
+        }
+        if (scope != null && !scope.isBlank()) {
+            query.eq(ToolGrant::getScope, normalizeScope(scope));
+        }
+        if (toolName != null && !toolName.isBlank()) {
+            ToolRegistryEntry tool = registryMapper.selectActiveByToolName(toolName.trim());
+            if (tool == null) {
+                // 与 list 同语义:工具未知=空结果(非错误)
+                return new Page<>(pageNo, pageSize);
+            }
+            query.eq(ToolGrant::getToolFqn, tool.getFqn());
+        }
+        if (activeOnly) {
+            query.eq(ToolGrant::getInvalidated, false);
+        }
+        return grantMapper.selectPage(
+                new Page<>(Math.max(pageNo, 1),
+                        Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE)),
+                query);
     }
 
     private ToolRegistryEntry requireActiveTool(String toolName) {

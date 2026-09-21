@@ -210,6 +210,37 @@ class AdminToolApiTests {
     }
 
     @Test
+    @DisplayName("列表分页:pageNo/pageSize 出现 → PageResult 形;均缺省 → 旧全量 List 形")
+    void listPagingContract() throws Exception {
+        ToolRegistryEntry paged = entry(9L);
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<ToolRegistryEntry> page =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(2, 50);
+        page.setRecords(List.of(paged));
+        page.setTotal(21);
+        when(registryService.page(Mockito.isNull(), Mockito.isNull(),
+                Mockito.eq(2), Mockito.eq(50))).thenReturn(page);
+        when(registryService.list(Mockito.isNull(), Mockito.isNull()))
+                .thenReturn(List.of(entry(9L)));
+
+        // 分页形(与 audit-logs PageResult 一致)
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("pageNo", "2")
+                        .param("pageSize", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.list[0].toolName").value("list_users"))
+                .andExpect(jsonPath("$.data.total").value(21))
+                .andExpect(jsonPath("$.data.pageNo").value(2))
+                .andExpect(jsonPath("$.data.pageSize").value(50));
+
+        // 向后兼容:无分页参数 = 全量数组形
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].toolName").value("list_users"));
+    }
+
+    @Test
     @DisplayName("更新:强制高危不可下调 400 透传")
     void updateRiskDowngradeRejected() throws Exception {
         when(registryService.update(eq(9L), any()))

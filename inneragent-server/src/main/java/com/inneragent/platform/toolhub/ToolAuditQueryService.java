@@ -94,7 +94,7 @@ public class ToolAuditQueryService {
 
     /**
      * decision_source 字典(W5「decision_source 过滤」前端下拉;实际值域以
-     * {@link ToolDecisionSource} 为准,含 V8 增补的 expired)。
+     * {@link ToolDecisionSource} 为准,含 V8 增补的 expired、P2-W5 增补的 admin)。
      */
     public static List<DictionaryEntry> decisionSourceDictionary() {
         return List.of(
@@ -103,13 +103,15 @@ public class ToolAuditQueryService {
                 new DictionaryEntry(ToolDecisionSource.FORCED_POLICY.code(), "管理员强制策略"),
                 new DictionaryEntry(ToolDecisionSource.LIVE_CONFIRM.code(), "确认流实弹批准"),
                 new DictionaryEntry(ToolDecisionSource.EXPIRED.code(), "确认超时系统裁决(过期=denied)"),
-                new DictionaryEntry(ToolDecisionSource.FULL_ACCESS.code(), "FULL_ACCESS 全开放"));
+                new DictionaryEntry(ToolDecisionSource.FULL_ACCESS.code(), "FULL_ACCESS 全开放"),
+                new DictionaryEntry(ToolDecisionSource.ADMIN.code(), "管理面定义变更(提示词编辑/导入导出)"));
     }
 
     /**
      * decision 字典(实际写入码值:工具调用 allowed/denied;授权生命周期
      * granted/revoked/invalidated;注册分诊 schema_compatible/schema_breaking;
-     * 级联 risk_upgraded/tool_disabled)。
+     * 级联 risk_upgraded/tool_disabled;P2-W5 定义管理 definition-updated/
+     * definition-imported)。
      */
     public static List<DictionaryEntry> decisionDictionary() {
         return List.of(
@@ -121,7 +123,9 @@ public class ToolAuditQueryService {
                 new DictionaryEntry("schema_compatible", "schema 纯增量变更自动接受"),
                 new DictionaryEntry("schema_breaking", "schema 安全相关差异强确认"),
                 new DictionaryEntry("risk_upgraded", "风险级人工上调"),
-                new DictionaryEntry("tool_disabled", "工具停用"));
+                new DictionaryEntry("tool_disabled", "工具停用"),
+                new DictionaryEntry("definition-updated", "Agent 定义变更(提示词编辑/覆盖导入)"),
+                new DictionaryEntry("definition-imported", "Agent 定义导入新建"));
     }
 
     /** 字典项(code + 中文说明)。 */

@@ -32,6 +32,26 @@ import java.util.Set;
 /**
  * Owns application-level MCP clients and exposes their discovered tools to immutable AgentScope
  * kernels. Clients are shared between cached kernels and closed once during application shutdown.
+ *
+ * <p><strong>[P2-W5 裁决] yml 静态 MCP 双通道保留(去留结论,落码存证)</strong>:
+ * 系统级 MCP 现有两条来源通道,二者<strong>并集</strong>为内核可用 MCP 工具面
+ * (并集装配点 {@code AgentKernelSpecFactory}:yml 静态工具以裸工具名、
+ * 目录条目以 FQN 命名,重名以静态通道优先):
+ * <ul>
+ *   <li><strong>静态通道(本类,AgentScopeV2Properties.Mcp,yml 配置)</strong>:
+ *       部署期固定宿主——由部署清单/运维掌控,启动即连(fail-fast 可配),
+ *       无库依赖、无管理面入口,变更需重新部署;适合平台级基础设施型
+ *       MCP(如内置检索/文件桥),其工具面是部署拓扑的一部分;</li>
+ *   <li><strong>运行期通道(McpToolCatalog,ia_tool_registry 聚合视图)</strong>:
+ *       管理面/宿主动态注册——应用级(app_id 归属)、带风险级与授权治理、
+ *       schema 指纹分诊与启停即时生效;适合业务宿主经管理 API 挂接的工具。</li>
+ * </ul>
+ * 裁决:<strong>两条通道都保留,不归并</strong>。理由:职责域不同(部署期
+ * 运维资产 vs 运行期治理资产),归并任一方都会劣化另一方——静态并入注册表
+ * 会让部署拓扑依赖 DB 可用性且失去 fail-fast;注册表并入静态则管理面动态
+ * 挂接/治理(风险级/授权/分诊)全部落空。本类因此不迁移为库驱动,继续以
+ * 配置驱动持有真实 MCP 客户端;运行期管理一律走 ia_tool_registry +
+ * {@link McpToolCatalog}。
  */
 @Component
 public final class AgentScopeMcpRegistry implements DisposableBean {

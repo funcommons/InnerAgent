@@ -6,6 +6,7 @@ import com.inneragent.server.admin.AdminWebhookConfigController;
 import com.inneragent.server.admin.AppRegistration;
 import com.inneragent.server.admin.WebhookConfigAdminService;
 import com.inneragent.server.admin.mapper.AppRegistrationMapper;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,9 +46,22 @@ class WebhookConfigAdminApiTests {
     private WebhookConfigAdminService service;
     private RecordingSender sender;
 
+    @BeforeAll
+    static void initLambdaColumnCache() {
+        // 定向 UPDATE 的 sqlSet 片段断言需 MP 列缓存(Spring 装配下由 mapper
+        // 初始化,切片测试手动补 TableInfo,口径同 CircuitBreakerAdminServiceTests)
+        com.baomidou.mybatisplus.core.metadata.TableInfoHelper.initTableInfo(
+                new org.apache.ibatis.builder.MapperBuilderAssistant(
+                        new com.baomidou.mybatisplus.core.MybatisConfiguration(), ""),
+                AppRegistration.class);
+    }
+
     @BeforeEach
     void setUp() {
         appMapper = mock(AppRegistrationMapper.class);
+        // 定向 UPDATE 缺省命中 1 行(0 行→404 语义在 save 内,单测不模拟并发删除)
+        when(appMapper.update(org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(1);
         service = new WebhookConfigAdminService(appMapper, new com.inneragent.platform.webhook.WebhookDeliveryProperties());
         sender = new RecordingSender();
         service.setSenderForTest(sender);
@@ -109,9 +123,14 @@ class WebhookConfigAdminApiTests {
     }
 
     @Test
-    @DisplayName("PUT 保存:url/启用/事件落库;secret 非空重置、空白不改;响应掩码")
+    @DisplayName("PUT 保存:定向 SET(url/enabled/events 落列);secret 空白不进 SET;"
+            + "响应回读掩码")
     void savePersistsAndMasksSecret() throws Exception {
-        when(appMapper.selectById(1L)).thenReturn(app());
+        AppRegistration saved = app();
+        saved.setWebhookUrl("https://new.example/cb");
+        saved.setWebhookEnabled(false);
+        saved.setWebhookEvents("run.finished,run.failed");
+        when(appMapper.selectById(1L)).thenReturn(app(), saved);
 
         mockMvcWithKey.perform(put("/ia/api/v1/admin/webhooks/config")
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY)
@@ -123,26 +142,61 @@ class WebhookConfigAdminApiTests {
                 .andExpect(jsonPath("$.data.enabled").value(false))
                 .andExpect(jsonPath("$.data.events.length()").value(2));
 
-        ArgumentCaptor<AppRegistration> captor = ArgumentCaptor.forClass(AppRegistration.class);
-        verify(appMapper).updateById(captor.capture());
-        AppRegistration saved = captor.getValue();
-        assertThat(saved.getWebhookUrl()).isEqualTo("https://new.example/cb");
-        // secret 空白 = 不修改(write-only 铁律)
-        assertThat(saved.getWebhookSecret()).isEqualTo(SECRET);
-        assertThat(saved.getWebhookEnabled()).isFalse();
-        assertThat(saved.getWebhookEvents()).isEqualTo("run.finished,run.failed");
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.Wrapper<AppRegistration>> captor =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.Wrapper.class);
+        verify(appMapper).update(org.mockito.ArgumentMatchers.isNull(), captor.capture());
+        @SuppressWarnings("unchecked")
+        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppRegistration> wrapper =
+                (com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppRegistration>)
+                        captor.getValue();
+        String sqlSet = wrapper.getSqlSet();
+        assertThat(sqlSet).contains("webhook_url").contains("webhook_enabled")
+                .contains("webhook_events").contains("update_time")
+                .doesNotContain("webhook_secret");
 
-        // secret 非空 = 重置
+        // secret 非空 = 重置(进 SET)
         Mockito.clearInvocations(appMapper);
-        when(appMapper.selectById(1L)).thenReturn(app());
+        when(appMapper.selectById(1L)).thenReturn(app(), saved);
         mockMvcWithKey.perform(put("/ia/api/v1/admin/webhooks/config")
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"secret\":\"whsec-new\"}"))
                 .andExpect(status().isOk());
-        ArgumentCaptor<AppRegistration> rotate = ArgumentCaptor.forClass(AppRegistration.class);
-        verify(appMapper).updateById(rotate.capture());
-        assertThat(rotate.getValue().getWebhookSecret()).isEqualTo("whsec-new");
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.Wrapper<AppRegistration>> rotate =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.Wrapper.class);
+        verify(appMapper).update(org.mockito.ArgumentMatchers.isNull(), rotate.capture());
+        @SuppressWarnings("unchecked")
+        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppRegistration> rotateWrapper =
+                (com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppRegistration>)
+                        rotate.getValue();
+        assertThat(rotateWrapper.getSqlSet()).contains("webhook_secret");
+    }
+
+    @Test
+    @DisplayName("PUT 保存:空串 url 显式 SET webhook_url=NULL(OBS-R4-1 清空语义落库)")
+    void saveClearsUrlWithExplicitSetNull() throws Exception {
+        AppRegistration cleared = app();
+        cleared.setWebhookUrl(null);
+        when(appMapper.selectById(1L)).thenReturn(app(), cleared);
+
+        mockMvcWithKey.perform(put("/ia/api/v1/admin/webhooks/config")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"url\":\"\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.url")
+                        .value(org.hamcrest.Matchers.nullValue()));
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.Wrapper<AppRegistration>> captor =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.Wrapper.class);
+        verify(appMapper).update(org.mockito.ArgumentMatchers.isNull(), captor.capture());
+        @SuppressWarnings("unchecked")
+        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppRegistration> wrapper =
+                (com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppRegistration>)
+                        captor.getValue();
+        // sqlSegment 断言:webhook_url 在 SET 子句且绑定值为 null(显式 SET NULL)
+        assertThat(wrapper.getSqlSet()).contains("webhook_url");
+        assertThat(wrapper.getParamNameValuePairs()).containsValue(null);
     }
 
     @Test
@@ -159,9 +213,11 @@ class WebhookConfigAdminApiTests {
                 .andExpect(jsonPath("$.msg").value(
                         org.hamcrest.Matchers.containsString("run.exploded")));
 
-        // 预留值域 run.resource-limit 可订阅
+        // 预留值域 run.resource-limit 可订阅(响应回读库行,与定向 SET 后状态一致)
         Mockito.clearInvocations(appMapper);
-        when(appMapper.selectById(1L)).thenReturn(app());
+        AppRegistration subscribed = app();
+        subscribed.setWebhookEvents("run.resource-limit");
+        when(appMapper.selectById(1L)).thenReturn(app(), subscribed);
         mockMvcWithKey.perform(put("/ia/api/v1/admin/webhooks/config")
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY)
                         .contentType(MediaType.APPLICATION_JSON)

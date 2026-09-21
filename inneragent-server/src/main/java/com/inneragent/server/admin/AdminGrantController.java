@@ -1,6 +1,8 @@
 package com.inneragent.server.admin;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.inneragent.platform.common.CommonResult;
+import com.inneragent.platform.common.PageResult;
 import com.inneragent.platform.toolhub.ToolGrant;
 import com.inneragent.platform.toolhub.ToolGrantService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,6 +38,9 @@ import static com.inneragent.platform.common.CommonResult.success;
 @Validated
 public class AdminGrantController {
 
+    /** 分页模式下单页缺省条数(pageNo/pageSize 任一出现即切分页形)。 */
+    static final int DEFAULT_PAGE_SIZE = 100;
+
     private final ToolGrantService toolGrantService;
 
     public record GrantToolReqVO(
@@ -60,15 +65,33 @@ public class AdminGrantController {
                 request.decisionNote()));
     }
 
+    /**
+     * 授权列表(P2-W5 增分页):pageNo/pageSize 均缺省 → 旧全量 List 形
+     * (向后兼容,web 既有调用不破);任一出现 → PageResult 形(与
+     * audit-logs 一致:list/total/pageNo/pageSize,缺省 1/100)。
+     */
     @GetMapping
-    @Operation(summary = "授权列表(userId/toolName/scope/activeOnly 过滤)")
-    public CommonResult<List<ToolGrant>> list(
+    @Operation(summary = "授权列表(userId/toolName/scope/activeOnly 过滤;"
+            + "pageNo/pageSize 可选分页,缺省=全量)")
+    public CommonResult<?> list(
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) String toolName,
             @RequestParam(required = false) String scope,
             @RequestParam(name = "activeOnly", required = false, defaultValue = "true")
-            boolean activeOnly) {
-        return success(toolGrantService.list(userId, toolName, scope, activeOnly));
+            boolean activeOnly,
+            @RequestParam(required = false) Integer pageNo,
+            @RequestParam(required = false) Integer pageSize) {
+        if (pageNo == null && pageSize == null) {
+            return success(toolGrantService.list(userId, toolName, scope, activeOnly));
+        }
+        Page<ToolGrant> page = toolGrantService.page(
+                userId, toolName, scope, activeOnly,
+                pageNo == null ? 1 : pageNo,
+                pageSize == null ? DEFAULT_PAGE_SIZE : pageSize);
+        PageResult<ToolGrant> result = new PageResult<>(page.getRecords(), page.getTotal());
+        result.setPageNo((int) page.getCurrent());
+        result.setPageSize((int) page.getSize());
+        return success(result);
     }
 
     @DeleteMapping("/{id}")

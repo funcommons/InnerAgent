@@ -1,6 +1,7 @@
 package com.inneragent.platform.toolhub;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inneragent.agent.tool.ToolExecutorRegistry;
 import com.inneragent.platform.common.BusinessException;
@@ -38,6 +39,9 @@ public class ToolRegistryService {
     public static final String SOURCE_THIRD_PARTY = "third_party";
     private static final Set<String> SOURCES = Set.of(SOURCE_HOST_APP, SOURCE_THIRD_PARTY);
     private static final Set<String> ADMIN_POLICIES = Set.of("force-ask", "force-allow", "deny");
+
+    /** 分页每页上限(对齐 PageParam/审计检索惯例)。 */
+    static final int MAX_PAGE_SIZE = 100;
 
     /** FQN 形态:mcp__&lt;serverKey&gt;__&lt;toolName&gt;(V25;serverKey 避用下划线)。 */
     static final String FQN_PREFIX = "mcp__";
@@ -465,6 +469,27 @@ public class ToolRegistryService {
             query.eq(ToolRegistryEntry::getEnabled, enabled);
         }
         return registryMapper.selectList(query);
+    }
+
+    /**
+     * 工具列表分页(P2-W5:与 {@link #list} 同过滤同排序;PageResult 形与
+     * audit-logs 一致。端点缺省(无 pageNo/pageSize)仍走全量 list,向后兼容)。
+     */
+    public Page<ToolRegistryEntry> page(String serverKey, Boolean enabled,
+                                        int pageNo, int pageSize) {
+        LambdaQueryWrapper<ToolRegistryEntry> query = new LambdaQueryWrapper<ToolRegistryEntry>()
+                .orderByAsc(ToolRegistryEntry::getServerKey)
+                .orderByAsc(ToolRegistryEntry::getToolName);
+        if (serverKey != null && !serverKey.isBlank()) {
+            query.eq(ToolRegistryEntry::getServerKey, serverKey.trim());
+        }
+        if (enabled != null) {
+            query.eq(ToolRegistryEntry::getEnabled, enabled);
+        }
+        return registryMapper.selectPage(
+                new Page<>(Math.max(pageNo, 1),
+                        Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE)),
+                query);
     }
 
     public List<ToolRegistryEntry> listEnabled() {

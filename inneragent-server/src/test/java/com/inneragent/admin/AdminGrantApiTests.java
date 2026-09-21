@@ -104,6 +104,30 @@ class AdminGrantApiTests {
     }
 
     @Test
+    @DisplayName("列表分页:pageNo/pageSize 出现 → PageResult 形;均缺省 → 旧全量 List 形")
+    void listPagingContract() throws Exception {
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<com.inneragent.platform.toolhub.ToolGrant> page =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20);
+        page.setRecords(List.of(grant(5L)));
+        page.setTotal(1);
+        when(grantService.page(12993L, "list_users", "permanent", true, 1, 20))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/ia/api/v1/admin/grants")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("userId", "12993")
+                        .param("toolName", "list_users")
+                        .param("scope", "permanent")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.list[0].id").value(5))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(20));
+    }
+
+    @Test
     @DisplayName("撤销:DELETE 路由透传决策记录;404 透传")
     void revokeGrant() throws Exception {
         mockMvc.perform(delete("/ia/api/v1/admin/grants/5")

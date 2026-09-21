@@ -30,7 +30,15 @@ public enum ToolDecisionSource {
     EXPIRED("expired"),
 
     /** FULL_ACCESS 全开放(平台管理员开启,审计一次性确认)。 */
-    FULL_ACCESS("full-access");
+    FULL_ACCESS("full-access"),
+
+    /**
+     * 管理面直接写操作(P2-W5:Agent 定义提示词编辑/导入导出落审计;
+     * decision 取 definition-updated/definition-imported)。与
+     * forced-policy(运行期强制策略裁决)区分:admin 指「管理面对定义
+     * 本体的变更」这一动作来源,而非对某次工具调用的放行裁决。
+     */
+    ADMIN("admin");
 
     private final String code;
 

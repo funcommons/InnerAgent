@@ -1,5 +1,6 @@
 package com.inneragent.server.admin;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.webhook.WebhookSigner;
 import com.inneragent.server.admin.mapper.AppRegistrationMapper;
@@ -13,6 +14,7 @@ import org.springframework.web.client.RestClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +34,10 @@ import java.util.UUID;
  * 「停用 = 不再新增」,不做 destructive 清队)。run.resource-limit 为 web
  * 契约预留值域,服务端终态事件集当前为 run.finished/failed/cancelled
  * (02-技术方案 §7.1),可订阅但不会产生投递。
+ *
+ * <p>[R4-obs 修复] 保存路径为定向 UPDATE(LambdaUpdateWrapper 显式 SET):
+ * url 传空串即库层清空(整行 updateById 会因 MP NOT_NULL 字段策略跳过
+ * null 列,清空语义静默失效——OBS-R4-1,与 b04b4fa resume 清空同族)。
  */
 @Service
 @Slf4j
@@ -69,28 +75,59 @@ public class WebhookConfigAdminService {
     // PUT /admin/webhooks/config(body {url, secret?, enabled?, events?})
     // ------------------------------------------------------------------
 
+    /**
+     * 保存配置(OBS-R4-1 修复):传了什么 SET 什么——<strong>定向 UPDATE</strong>
+     * ({@code LambdaUpdateWrapper} 显式 SET 列),不再整行 {@code updateById}。
+     *
+     * <p>根因:整行更新走 MP 缺省字段策略(NOT_NULL),实体置 null 的列被
+     * 从 SET 子句剔除——{@code url:""} 清空语义在库层静默失效(响应称已清,
+     * GET 回读旧值;与 b04b4fa 修复的 resume 清空缺陷同族)。现 url 传空串
+     * 即显式 {@code SET webhook_url = NULL};未传(url=null)不动该列。
+     *
+     * <p>secret 维持 <strong>write-only 铁律</strong>:空/缺省 = 不修改,
+     * 非空 = 重置——不提供「清空」语义(误触代价高于收益,轮换即重置),
+     * 与 AdminModelConfigService 的密钥 write-only 口径一致。缺省字段
+     * (enabled/events)不修改;update_time 因无实体填充需显式 SET。
+     */
     public ConfigView save(long appId, SaveReq request) {
         if (request == null) {
             throw new BusinessException(400, "请求体不能为空");
         }
-        AppRegistration app = requireApp(appId);
+        requireApp(appId);
+        LambdaUpdateWrapper<AppRegistration> update =
+                new LambdaUpdateWrapper<AppRegistration>().eq(AppRegistration::getId, appId);
+        boolean hasChange = false;
         if (request.url() != null) {
-            app.setWebhookUrl(request.url().isBlank() ? null : request.url().trim());
+            String url = request.url().trim();
+            // 空串 = 显式清空(SET NULL);非空 = 落 trimmed 值
+            update.set(AppRegistration::getWebhookUrl, url.isEmpty() ? null : url);
+            hasChange = true;
         }
         // write-only:空/缺省 = 不修改;非空 = 重置(与 apps 域 webhookSecret 同款)
         if (request.secret() != null && !request.secret().isBlank()) {
-            app.setWebhookSecret(request.secret().trim());
+            update.set(AppRegistration::getWebhookSecret, request.secret().trim());
+            hasChange = true;
         }
         if (request.enabled() != null) {
-            app.setWebhookEnabled(request.enabled());
+            update.set(AppRegistration::getWebhookEnabled, request.enabled());
+            hasChange = true;
         }
         if (request.events() != null) {
-            app.setWebhookEvents(normalizeEvents(request.events()));
+            update.set(AppRegistration::getWebhookEvents, normalizeEvents(request.events()));
+            hasChange = true;
         }
-        appMapper.updateById(app);
-        log.info("Webhook 配置已保存: appId={}, enabled={}, events={}",
-                appId, app.getWebhookEnabled(), app.getWebhookEvents());
-        return toView(appId, app);
+        // 无实体参与(MetaHandler 不触发):update_time 显式维护
+        update.set(AppRegistration::getUpdateTime, LocalDateTime.now());
+        int changed = appMapper.update(null, update);
+        if (changed == 0) {
+            // requireApp 已验存在:0 行=并发删除等竞态,按 404 处理
+            throw new BusinessException(404, "应用不存在: " + appId);
+        }
+        AppRegistration reloaded = requireApp(appId);
+        log.info("Webhook 配置已保存: appId={}, enabled={}, events={}, urlCleared={}",
+                appId, reloaded.getWebhookEnabled(), reloaded.getWebhookEvents(),
+                request.url() != null && request.url().isBlank());
+        return toView(appId, reloaded);
     }
 
     // ------------------------------------------------------------------

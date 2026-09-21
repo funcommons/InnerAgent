@@ -1,6 +1,8 @@
 package com.inneragent.server.admin;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.inneragent.platform.common.CommonResult;
+import com.inneragent.platform.common.PageResult;
 import com.inneragent.platform.toolhub.ToolRegistryEntry;
 import com.inneragent.platform.toolhub.ToolRegistryService;
 import com.inneragent.platform.toolhub.ToolSchemaHistory;
@@ -36,6 +38,9 @@ import static com.inneragent.platform.common.CommonResult.success;
 @RequiredArgsConstructor
 @Validated
 public class AdminToolController {
+
+    /** 分页模式下单页缺省条数(pageNo/pageSize 任一出现即切分页形)。 */
+    static final int DEFAULT_PAGE_SIZE = 100;
 
     private final ToolRegistryService toolRegistryService;
 
@@ -113,12 +118,31 @@ public class AdminToolController {
                 request.enabled())));
     }
 
+    /**
+     * 工具列表(P2-W5 增分页):pageNo/pageSize 均缺省 → 旧全量 List 形
+     * (向后兼容,web 既有调用不破);任一出现 → PageResult 形(与
+     * audit-logs 一致:list/total/pageNo/pageSize,缺省 1/100)。
+     */
     @GetMapping
-    @Operation(summary = "工具列表(serverKey/enabled 过滤)")
-    public CommonResult<List<ToolRegistryEntry>> list(
+    @Operation(summary = "工具列表(serverKey/enabled 过滤;pageNo/pageSize 可选分页,"
+            + "缺省=全量)")
+    public CommonResult<?> list(
             @RequestParam(required = false) String serverKey,
-            @RequestParam(required = false) Boolean enabled) {
-        return success(toolRegistryService.list(serverKey, enabled));
+            @RequestParam(required = false) Boolean enabled,
+            @RequestParam(required = false) Integer pageNo,
+            @RequestParam(required = false) Integer pageSize) {
+        if (pageNo == null && pageSize == null) {
+            return success(toolRegistryService.list(serverKey, enabled));
+        }
+        Page<ToolRegistryEntry> page = toolRegistryService.page(
+                serverKey, enabled,
+                pageNo == null ? 1 : pageNo,
+                pageSize == null ? DEFAULT_PAGE_SIZE : pageSize);
+        PageResult<ToolRegistryEntry> result =
+                new PageResult<>(page.getRecords(), page.getTotal());
+        result.setPageNo((int) page.getCurrent());
+        result.setPageSize((int) page.getSize());
+        return success(result);
     }
 
     @GetMapping("/{id}")

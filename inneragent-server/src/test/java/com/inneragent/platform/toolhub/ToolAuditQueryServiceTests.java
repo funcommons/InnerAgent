@@ -112,20 +112,21 @@ class ToolAuditQueryServiceTests {
     }
 
     @Test
-    @DisplayName("字典完备:decision_source 六值(含 V8 expired);decision 九值与写入码值一致")
+    @DisplayName("字典完备:decision_source 七值(含 V8 expired、P2-W5 admin);decision 十一值与写入码值一致")
     void dictionariesCoverActualValueDomains() {
         List<ToolAuditQueryService.DictionaryEntry> sources =
                 ToolAuditQueryService.decisionSourceDictionary();
         assertThat(sources).extracting(ToolAuditQueryService.DictionaryEntry::code)
                 .containsExactly("mode-default", "user-grant", "forced-policy",
-                        "live-confirm", "expired", "full-access");
+                        "live-confirm", "expired", "full-access", "admin");
 
         List<ToolAuditQueryService.DictionaryEntry> decisions =
                 ToolAuditQueryService.decisionDictionary();
         assertThat(decisions).extracting(ToolAuditQueryService.DictionaryEntry::code)
                 .containsExactly("allowed", "denied", "granted", "revoked",
                         "invalidated", "schema_compatible", "schema_breaking",
-                        "risk_upgraded", "tool_disabled");
+                        "risk_upgraded", "tool_disabled",
+                        "definition-updated", "definition-imported");
         assertThat(decisions).allSatisfy(entry ->
                 assertThat(entry.description()).isNotBlank());
     }

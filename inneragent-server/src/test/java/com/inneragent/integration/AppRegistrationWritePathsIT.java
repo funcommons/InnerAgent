@@ -155,6 +155,49 @@ class AppRegistrationWritePathsIT {
         assertThat(reloaded.getWebhookSecret()).isEqualTo("whsec-it-1");
     }
 
+    /**
+     * OBS-R4-1 修复守卫(真库):PUT config 以 {@code url:""} 清空必须
+     * <strong>库层生效</strong>(定向 UPDATE 显式 SET webhook_url=NULL);
+     * 整行 updateById 会因 MP NOT_NULL 字段策略把 null 列剔出 SET,清空
+     * 语义静默失效——本用例在运行态同形连接串上锁死该回归面。
+     * 同时锁定:secret 维持 write-only(空串不修改、不提供清空语义),
+     * 未传字段(enabled/events)不被牵连。
+     */
+    @Test
+    void webhookConfigClearUrlPersistsNullOnRealDb() {
+        AppRegistration app = registerProbeApp("it-url-clear");
+
+        // 首设 url + secret + enabled/events
+        webhookConfigService.save(app.getId(),
+                new WebhookConfigAdminService.SaveReq(
+                        "https://hook.example/clear-me", "whsec-keep-me",
+                        false, List.of("run.failed")));
+        AppRegistration seeded = appMapper.selectById(app.getId());
+        assertThat(seeded.getWebhookUrl()).isEqualTo("https://hook.example/clear-me");
+
+        // 空串 = 显式清空:库层 SET NULL(OBS-R4-1 缺陷于此处显形)
+        WebhookConfigAdminService.ConfigView cleared = webhookConfigService.save(
+                app.getId(),
+                new WebhookConfigAdminService.SaveReq("", null, null, null));
+
+        assertThat(cleared.url()).isNull();
+        AppRegistration reloaded = appMapper.selectById(app.getId());
+        assertThat(reloaded.getWebhookUrl())
+                .as("url 空串必须在库层清空(定向 SET NULL)")
+                .isNull();
+        // secret write-only:未传不修改,且不被清空语义连坐
+        assertThat(reloaded.getWebhookSecret()).isEqualTo("whsec-keep-me");
+        // 未传字段不牵连
+        assertThat(reloaded.getWebhookEnabled()).isFalse();
+        assertThat(reloaded.getWebhookEvents()).isEqualTo("run.failed");
+
+        // 再改 url 非空 → 正常落值
+        webhookConfigService.save(app.getId(),
+                new WebhookConfigAdminService.SaveReq("https://hook.example/again", null, null, null));
+        assertThat(appMapper.selectById(app.getId()).getWebhookUrl())
+                .isEqualTo("https://hook.example/again");
+    }
+
     @Test
     void emergencyStopAndResumeUpdateAppRowAndGuardRunStart() {
         AppRegistration app = registerProbeApp("it-stop");

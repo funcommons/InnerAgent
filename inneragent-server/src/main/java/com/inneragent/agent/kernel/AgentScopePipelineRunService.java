@@ -102,6 +102,7 @@ public final class AgentScopePipelineRunService {
     private final AgentScopeSkillRegistry skillRegistry;
     private final AgentUserSkillService userSkillService;
     private final CircuitBreakerAdminService circuitBreakers;
+    private final com.inneragent.platform.safety.ContentSafetyGate safetyGate;
 
     public AgentScopePipelineRunService(
             AiModelService modelService,
@@ -123,7 +124,8 @@ public final class AgentScopePipelineRunService {
             ObjectMapper objectMapper,
             AgentScopeSkillRegistry skillRegistry,
             AgentUserSkillService userSkillService,
-            CircuitBreakerAdminService circuitBreakers) {
+            CircuitBreakerAdminService circuitBreakers,
+            com.inneragent.platform.safety.ContentSafetyGate safetyGate) {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
         this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
         this.conversations = Objects.requireNonNull(conversations, "conversations must not be null");
@@ -150,6 +152,8 @@ public final class AgentScopePipelineRunService {
                 userSkillService, "userSkillService must not be null");
         this.circuitBreakers = Objects.requireNonNull(
                 circuitBreakers, "circuitBreakers must not be null");
+        this.safetyGate = Objects.requireNonNull(
+                safetyGate, "safetyGate must not be null");
     }
 
     public Flux<AiChatStreamRespVO> stream(AiChatReqVO request, long userId) {
@@ -248,6 +252,16 @@ public final class AgentScopePipelineRunService {
         request.setEnabledSkills(activeSkills.stream().map(ActiveSkill::name).toList());
         Map<String, String> promptVariables = AgentPromptVariables.fromRequest(request);
         String visibleUserContent = userContent(request, definition, promptVariables);
+        // [adapt] P2-safety W6:内容安全 ingress 挂点——用户消息入库前过滤。
+        // 本方法是所有持久化路径的上游(会话标题/运行初始消息/内核输入均从
+        // visibleUserContent 派生),在此单点过滤即覆盖「用户消息入库前」;
+        // block → BusinessException(400, 固定安全文案),redact → 以脱敏文本
+        // 继续后续全部落库与执行路径。审计(block/redact)在 Gate 内落
+        // ia_audit_log(decision_source=safety)。runId 尚未生成,上下文为 null。
+        visibleUserContent = safetyGate.filterIngress(
+                new com.inneragent.platform.safety.ContentSafetyFilter.Context(
+                        AppContext.currentOrDefault(), userId, conversationId, null),
+                visibleUserContent);
         String input = input(request, visibleUserContent);
         String systemPrompt = systemPrompt(request, definition, promptVariables, activeSkills);
         AiModel model = AiModelRequestOptions.withReasoningEffort(

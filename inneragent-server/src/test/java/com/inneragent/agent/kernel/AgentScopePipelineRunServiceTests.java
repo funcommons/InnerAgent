@@ -129,6 +129,11 @@ class AgentScopePipelineRunServiceTests {
                 any(), eq("ai_assistant_agent"), isNull(), eq(ToolExecutionMode.DEFAULT)))
                 .thenReturn(Mono.just(runtime));
         when(supervisor.start(any(StartAgentExecutionCommand.class))).thenReturn(Mono.empty());
+        // P2-safety ingress 挂点:门面桩按 pass-through 回显文本
+        com.inneragent.platform.safety.ContentSafetyGate safetyGate =
+                mock(com.inneragent.platform.safety.ContentSafetyGate.class);
+        when(safetyGate.filterIngress(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
 
         AgentScopePipelineRunService service = new AgentScopePipelineRunService(
                 models,
@@ -150,7 +155,8 @@ class AgentScopePipelineRunServiceTests {
                 new ObjectMapper(),
                 skillRegistry,
                 userSkillService,
-                org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class));
+                org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class),
+                safetyGate);
         AiChatReqVO request = new AiChatReqVO()
                 .setConversationId("conversation-1")
                 .setMessage("hello harness")
@@ -221,7 +227,8 @@ class AgentScopePipelineRunServiceTests {
                 new ObjectMapper(),
                 mock(AgentScopeSkillRegistry.class),
                 mock(AgentUserSkillService.class),
-                stopped);
+                stopped,
+                mock(com.inneragent.platform.safety.ContentSafetyGate.class));
 
         AiChatReqVO request = new AiChatReqVO()
                 .setConversationId("conversation-stop")
@@ -299,6 +306,11 @@ class AgentScopePipelineRunServiceTests {
                 eq(ToolExecutionMode.FULL_ACCESS)))
                 .thenReturn(Mono.just(runtime));
         when(supervisor.start(any(StartAgentExecutionCommand.class))).thenReturn(Mono.empty());
+        // P2-safety ingress 挂点:门面桩按 pass-through 回显文本
+        com.inneragent.platform.safety.ContentSafetyGate safetyGate =
+                mock(com.inneragent.platform.safety.ContentSafetyGate.class);
+        when(safetyGate.filterIngress(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
 
         AgentScopePipelineRunService service = new AgentScopePipelineRunService(
                 models,
@@ -320,7 +332,8 @@ class AgentScopePipelineRunServiceTests {
                 new ObjectMapper(),
                 skillRegistry,
                 userSkillService,
-                org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class));
+                org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class),
+                safetyGate);
 
         StepVerifier.create(service.startContinuation("failed-run", 42L))
                 .assertNext(started -> assertThat(started.conversationId())
@@ -385,7 +398,8 @@ class AgentScopePipelineRunServiceTests {
                 new ObjectMapper(),
                 mock(AgentScopeSkillRegistry.class),
                 mock(AgentUserSkillService.class),
-                mock(com.inneragent.server.admin.CircuitBreakerAdminService.class));
+                mock(com.inneragent.server.admin.CircuitBreakerAdminService.class),
+                mock(com.inneragent.platform.safety.ContentSafetyGate.class));
 
         StepVerifier.create(service.startContinuation("completed-run", 42L))
                 .expectErrorSatisfies(error -> assertThat(error)

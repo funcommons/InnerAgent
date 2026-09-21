@@ -38,7 +38,15 @@ public enum ToolDecisionSource {
      * forced-policy(运行期强制策略裁决)区分:admin 指「管理面对定义
      * 本体的变更」这一动作来源,而非对某次工具调用的放行裁决。
      */
-    ADMIN("admin");
+    ADMIN("admin"),
+
+    /**
+     * 内容安全接入点干预(P2-safety W6;S7/PRD §6.9):过滤链对用户输入
+     * (ingress)或助手内容投递(egress)作出 block/redact 干预,
+     * decision=blocked/redacted。工具治理语义复用 ia_audit_log 单表
+     * (V12 列宽兼容:decision 8 字符、decision_source 6 字符)。
+     */
+    SAFETY("safety");
 
     private final String code;
 

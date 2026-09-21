@@ -312,6 +312,110 @@ export default {
     'docs-desc': 'InnerAgent 接入文档:快速开始、应用开通与公钥登记、embed token、前端嵌入、工具桥、Webhook 与安全清单。',
     'playground-desc': 'InnerAgent API 体验台:演示登录换取 embed token,可视化解码 JWT claims 并查看过期倒计时。',
   },
+  home: {
+    hero: {
+      badge: '应用内嵌智能体微服务',
+      title: '让你的用户,用一句话操控应用',
+      subtitle: 'InnerAgent 只服务宿主应用:后端用 @IaTool 把业务能力开放成 MCP 工具,前端引入 JS SDK 嵌入对话界面;双级令牌、确认流与审计脱敏开箱即用。',
+      'cta-docs': '查看文档',
+      'cta-demo': '进入 Demo',
+      'hero-note': '极简接入:开一个内部 MCP 服务 + 引入 SDK,不改业务代码即可获得 Agent 能力。',
+    },
+    features: {
+      title: '为「嵌入既有应用」而生',
+      subtitle: '能力内核来自经过工程验证的 Agent 工作区,安全边界由平台与宿主共同守护',
+      'learn-more': '了解更多',
+      items: {
+        'dual-token': {
+          title: '双级令牌',
+          desc: 'embed token 由宿主私钥签发(RS256);act token 由平台在每次工具调用时现签、60s 短时效,只在宿主桥内环。',
+        },
+        'mcp-hub': {
+          title: 'MCP 工具中枢',
+          desc: '宿主方法加 @IaTool 注解即成 MCP 工具,经 /ia-mcp 桥暴露;平台侧注册登记、指纹轮询感知清单。',
+        },
+        'confirm-flow': {
+          title: '确认流',
+          desc: 'WRITE 先确认后执行,确认卡支持本次/本会话/总是/拒绝四档授权;约束范围缺失时写操作一律确认。',
+        },
+        audit: {
+          title: '审计与脱敏',
+          desc: '每次工具调用落仅追加审计日志,参数读时按键名脱敏;确认卡与 OTel span 同口径默认脱敏。',
+        },
+        checkup: {
+          title: '工具体检',
+          desc: '接入总览实时自检:应用是否已注册、公钥指纹是否配对;对照接入核对清单逐项打勾。',
+        },
+        'kill-switch': {
+          title: '灰度开关',
+          desc: '桥装配与工具扫描一键开关(fail-fast);紧急停用总开关拒新运行,逐个终止在跑运行。',
+        },
+        safety: {
+          title: '内容安全接入点',
+          desc: '确认卡与链路追踪内容属性同口径默认脱敏,为内容审核 tripwire 预留建模位。',
+        },
+        'north-star': {
+          title: '用量北极星',
+          desc: '以「Agent 任务完成率」为北极星指标,运行成功与负反馈同口径度量;统一审计与用量口径。',
+        },
+      },
+    },
+    arch: {
+      title: '架构一图流',
+      subtitle: '宿主应用 ↔ InnerAgent ↔ 模型:业务能力不出宿主,智能体内嵌其中',
+      'host-app': '宿主应用',
+      'host-frontend': '宿主前端',
+      'host-frontend-desc': 'JS SDK + <inneragent-chat>',
+      'host-backend': '宿主后端',
+      'host-backend-desc': 'embed token 签发 · @IaTool 工具',
+      bridge: 'starter 桥',
+      'bridge-desc': '/ia-mcp · X-IA-Act 验签',
+      'ia-core': '运行内核',
+      'ia-core-desc': 'SSE 流式 · 确认流 · 授权判定',
+      'ia-admin': '管理面',
+      'ia-admin-desc': '应用/工具/授权/熔断/审计',
+      model: '模型服务',
+      'model-desc': 'OpenAI 兼容 / Anthropic / Gemini / 私有化',
+      'flow-embed': 'embed token(Bearer)',
+      'flow-act': 'X-IA-Act · 60s',
+      'flow-mcp': 'MCP tools/call',
+      'flow-model': '模型调用',
+    },
+    steps: {
+      title: '接入三步曲',
+      subtitle: '从零到可用对话 ≤ 2 人日',
+      'step-1': {
+        title: '引依赖',
+        desc: '引入 inneragent-spring-boot-starter,自动装配 /ia-mcp 桥与 act 验签,无需任何开启注解。',
+        code: 'inneragent-spring-boot-starter',
+      },
+      'step-2': {
+        title: '开通 + 签 token',
+        desc: '管理面注册应用并登记 RSA 公钥;宿主私钥自持,签发 embed token(iss=appKey、sub=用户 ID、exp 12h)。',
+        code: 'POST /ia/api/v1/admin/apps',
+      },
+      'step-3': {
+        title: '嵌入 WC',
+        desc: '前端 init({appKey, tokenGetter}) 并注册 <inneragent-chat> Web Component,对话能力即插即用。',
+        code: '<inneragent-chat view="chat">',
+      },
+      'go-docs': '查看接入文档',
+    },
+    about: {
+      title: '关于本 Demo',
+      'agent-scope': '开源内核移植自 AgentScope Java:持久化运行、事件日志、确认流与 MCP 客户端等内核,自经工程验证的 Agent 工作区剥离、通用化而来。',
+      compareSubtitle: '本站(acme-demo)是 InnerAgent 的第三方宿主接入参考实现;仓库自带的 examples/demo-host 为纯静态联调页。',
+      'compare-title-a': '能力',
+      'compare-title-b': '本 Demo(acme-demo)',
+      'compare-title-c': 'demo-host(联调页)',
+      compare: {
+        view: ['视角', '第三方宿主应用:自有登录态、后端与业务工具', 'InnerAgent 自带纯静态联调页'],
+        token: ['embed token', '宿主后端真签(RS256 私钥)', '依赖 local profile 匿名演示头'],
+        tools: ['工具', '宿主 @IaTool 业务工具经 /ia-mcp 桥暴露', '无宿主工具'],
+        usage: ['用途', '接入方照抄的实现骨架', 'server 侧快速冒烟'],
+      },
+    },
+  },
   ia: {
     overview: {
       title: 'InnerAgent 接入总览',

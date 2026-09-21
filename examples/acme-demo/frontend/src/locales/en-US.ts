@@ -312,6 +312,110 @@ export default {
     'docs-desc': 'InnerAgent integration docs: quick start, app registration & public key, embed token, frontend embed, tool bridge, webhook and the security checklist.',
     'playground-desc': 'InnerAgent API playground: sign in with the demo login to get an embed token, inspect the decoded JWT claims and watch the expiry countdown.',
   },
+  home: {
+    hero: {
+      badge: 'In-app AI agent microservice',
+      title: 'Let your users run the app with a single sentence',
+      subtitle: 'InnerAgent serves host applications only: annotate capabilities with @IaTool to expose MCP tools, embed the chat UI with a JS SDK — dual-token auth, confirmation flows and audit masking out of the box.',
+      'cta-docs': 'Read the docs',
+      'cta-demo': 'Open the demo',
+      'hero-note': 'Minimal integration: run an internal MCP service + drop in the SDK — no changes to business code.',
+    },
+    features: {
+      title: 'Built for embedding into existing apps',
+      subtitle: 'The kernel comes from a production-proven agent workspace; the security boundary is shared by platform and host',
+      'learn-more': 'Learn more',
+      items: {
+        'dual-token': {
+          title: 'Dual-token auth',
+          desc: 'embed token is signed by the host private key (RS256); act token is issued fresh per tool call, 60s TTL, and only ever loops inside the host bridge.',
+        },
+        'mcp-hub': {
+          title: 'MCP tool hub',
+          desc: 'Annotate methods with @IaTool and they become MCP tools over the /ia-mcp bridge; registered and fingerprint-polled from the admin plane.',
+        },
+        'confirm-flow': {
+          title: 'Confirmation flow',
+          desc: 'WRITE asks before it runs; the confirm card offers once / this-conversation / always / deny. Without a resolve_scope tool, writes always confirm.',
+        },
+        audit: {
+          title: 'Audit & masking',
+          desc: 'Every tool call lands in an append-only audit log; parameters are masked by key at read time, with the same rules on confirm cards and OTel spans.',
+        },
+        checkup: {
+          title: 'Integration checkup',
+          desc: 'The overview page self-checks live: is the app registered, does the key fingerprint match — plus a full integration checklist.',
+        },
+        'kill-switch': {
+          title: 'Toggles & kill switch',
+          desc: 'One switch wires the bridge on/off with fail-fast tool scanning; emergency stop rejects new runs and terminates running ones one by one.',
+        },
+        safety: {
+          title: 'Content-safety hooks',
+          desc: 'Confirm cards and trace content attributes share the same default masking, with a modeling slot reserved for moderation tripwires.',
+        },
+        'north-star': {
+          title: 'North-star usage metric',
+          desc: '"Agent task completion rate" is the north star: run success measured against negative feedback, with unified audit and usage accounting.',
+        },
+      },
+    },
+    arch: {
+      title: 'Architecture at a glance',
+      subtitle: 'Host app ↔ InnerAgent ↔ models: business capabilities stay in the host, the agent lives inside',
+      'host-app': 'Host app',
+      'host-frontend': 'Host frontend',
+      'host-frontend-desc': 'JS SDK + <inneragent-chat>',
+      'host-backend': 'Host backend',
+      'host-backend-desc': 'embed-token issuing · @IaTool tools',
+      bridge: 'starter bridge',
+      'bridge-desc': '/ia-mcp · X-IA-Act verify',
+      'ia-core': 'Run kernel',
+      'ia-core-desc': 'SSE streaming · confirmations · grants',
+      'ia-admin': 'Admin plane',
+      'ia-admin-desc': 'apps / tools / grants / breaker / audit',
+      model: 'Model providers',
+      'model-desc': 'OpenAI-compatible / Anthropic / Gemini / private',
+      'flow-embed': 'embed token (Bearer)',
+      'flow-act': 'X-IA-Act · 60s',
+      'flow-mcp': 'MCP tools/call',
+      'flow-model': 'model calls',
+    },
+    steps: {
+      title: 'Three steps to integrate',
+      subtitle: 'From zero to a working conversation in ≤ 2 person-days',
+      'step-1': {
+        title: 'Add the starter',
+        desc: 'Drop in inneragent-spring-boot-starter — the /ia-mcp bridge and act verification are auto-wired, no annotations needed.',
+        code: 'inneragent-spring-boot-starter',
+      },
+      'step-2': {
+        title: 'Onboard + sign tokens',
+        desc: 'Register the app and its RSA public key in the admin plane; the host private key never leaves home and signs embed tokens (iss=appKey, sub=user ID, exp 12h).',
+        code: 'POST /ia/api/v1/admin/apps',
+      },
+      'step-3': {
+        title: 'Embed the Web Component',
+        desc: 'init({appKey, tokenGetter}) on the frontend and register <inneragent-chat> — conversational power plugs straight in.',
+        code: '<inneragent-chat view="chat">',
+      },
+      'go-docs': 'Open the integration guide',
+    },
+    about: {
+      title: 'About this demo',
+      'agent-scope': 'The open-source kernel is ported from AgentScope Java: persistent runs, event logs, confirmation flows and the MCP client were stripped out of a production-proven agent workspace and generalized.',
+      compareSubtitle: 'This site (acme-demo) is the third-party host integration reference for InnerAgent; examples/demo-host in the repo is a plain static smoke-test page.',
+      'compare-title-a': 'Capability',
+      'compare-title-b': 'This demo (acme-demo)',
+      'compare-title-c': 'demo-host (smoke page)',
+      compare: {
+        view: ['Perspective', 'Third-party host app: own login, backend and business tools', 'Static smoke-test page bundled with InnerAgent'],
+        token: ['embed token', 'Really signed by the host backend (RS256 private key)', 'Relies on the local-profile anonymous demo header'],
+        tools: ['Tools', 'Host @IaTool business tools exposed via the /ia-mcp bridge', 'No host tools'],
+        usage: ['Purpose', 'A skeleton integrators can copy', 'Quick server-side smoke checks'],
+      },
+    },
+  },
   ia: {
     overview: {
       title: 'InnerAgent Integration Overview',

@@ -38,6 +38,41 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'Agent 定义', domain: '定义中心', page: '定义与提示词' },
       },
       {
+        path: 'mcp-servers',
+        name: 'McpServers',
+        component: () => import('@/views/McpServersView.vue'),
+        // P4-W13 三方 MCP 服务器(AdminMcpServerController,应用级)
+        meta: { title: '三方 MCP', domain: '集成中心', page: 'MCP 服务器' },
+      },
+      {
+        path: 'skills',
+        name: 'Skills',
+        component: () => import('@/views/SkillsView.vue'),
+        // P4-W13 Skill 目录(AdminSkillController,zip 导入/激活上限 8)
+        meta: { title: 'Skill 管理', domain: '集成中心', page: 'Skill 目录' },
+      },
+      {
+        path: 'kb',
+        name: 'Kb',
+        component: () => import('@/views/KbView.vue'),
+        // P4-W14 mini 知识库(AdminKbController)
+        meta: { title: '知识库', domain: '知识中心', page: '知识库文档' },
+      },
+      {
+        path: 'usage',
+        name: 'Usage',
+        component: () => import('@/views/UsageView.vue'),
+        // W15 用量统计(AdminUsageController)
+        meta: { title: '用量统计', domain: '数据洞察', page: '用量概览' },
+      },
+      {
+        path: 'feedbacks',
+        name: 'Feedbacks',
+        component: () => import('@/views/FeedbacksView.vue'),
+        // W15 用户反馈(AdminFeedbackController)+ 北极星卡片
+        meta: { title: '用户反馈', domain: '数据洞察', page: '反馈明细' },
+      },
+      {
         path: 'audit',
         name: 'Audit',
         component: () => import('@/views/AuditView.vue'),

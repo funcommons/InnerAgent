@@ -13,6 +13,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Connection, Delete, EditPen } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
+import IaPagination from '@/components/IaPagination.vue'
 import { useModelsStore } from '@/stores/models'
 import { apiErrorMessage } from '@/stores/apps'
 import {
@@ -175,12 +176,12 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination
-        v-model:current-page="store.filters.pageNo"
-        v-model:page-size="store.filters.pageSize"
-        class="pager" layout="total, sizes, prev, pager, next"
-        :total="store.total" :page-sizes="[10, 20, 50]"
-        @current-change="store.load()" @size-change="search"
+      <IaPagination
+        v-model:page="store.filters.pageNo"
+        v-model:size="store.filters.pageSize"
+        :total="store.total"
+        @page-change="store.load()"
+        @size-change="search"
       />
     </el-card>
 
@@ -281,7 +282,6 @@ const statusTag: Record<number, 'success' | 'info'> = { 1: 'success', 0: 'info' 
 .toolbar__platform { width: 200px; }
 .toolbar__status { width: 100px; }
 .toolbar__spacer { flex: 1; }
-.pager { margin-top: 12px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 .dim { color: #c0c4cc; }
 .presets { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -10,6 +10,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, RefreshRight } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
+import IaPagination from '@/components/IaPagination.vue'
 import { useWebhooksStore, WEBHOOK_EVENTS, DELIVERY_STATUS } from '@/stores/webhooks'
 import { apiErrorMessage } from '@/stores/apps'
 import type { WebhookDelivery } from '@/api/types'
@@ -199,12 +200,12 @@ async function redeliver(row: WebhookDelivery) {
               </template>
             </el-table-column>
           </el-table>
-          <el-pagination
-            v-model:current-page="store.filters.pageNo"
-            v-model:page-size="store.filters.pageSize"
-            class="pager" layout="total, sizes, prev, pager, next"
-            :total="store.deliveriesTotal" :page-sizes="[10, 20, 50]"
-            @current-change="store.loadDeliveries()" @size-change="store.loadDeliveries()"
+          <IaPagination
+            v-model:page="store.filters.pageNo"
+            v-model:size="store.filters.pageSize"
+            :total="store.deliveriesTotal"
+            @page-change="store.loadDeliveries()"
+            @size-change="store.loadDeliveries()"
           />
         </el-card>
       </el-col>
@@ -221,6 +222,5 @@ async function redeliver(row: WebhookDelivery) {
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 .dim { color: #909399; font-size: 12px; }
 .mt12 { margin-top: 12px; }
-.pager { margin-top: 12px; justify-content: flex-end; }
 .retry { color: #e6a23c; font-size: 12px; }
 </style>

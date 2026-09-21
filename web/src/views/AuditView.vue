@@ -12,6 +12,7 @@ import { Download, Refresh, Search } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaListPage, { type IaListColumnDef } from '@/components/IaListPage.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
+import IaPagination from '@/components/IaPagination.vue'
 import { useAuditStore, DECISION_SOURCES, AUDIT_DECISIONS } from '@/stores/audit'
 import type { IaAuditLog } from '@/api/types'
 
@@ -201,14 +202,12 @@ async function exportCsv() {
         <el-table-column v-if="!visibleColumns.length || visibleColumns.includes('appId')" prop="appId" label="应用" width="70" align="right" />
         <el-table-column v-if="!visibleColumns.length || visibleColumns.includes('durationMs')" prop="durationMs" label="耗时(ms)" width="95" align="right" />
       </el-table>
-      <el-pagination
-        v-model:current-page="store.filters.pageNo"
-        v-model:page-size="store.filters.pageSize"
-        class="pager"
-        layout="total, sizes, prev, pager, next"
+      <!-- 统一分页器(#20):总数/pageSize 切换/快速跳页 -->
+      <IaPagination
+        v-model:page="store.filters.pageNo"
+        v-model:size="store.filters.pageSize"
         :total="store.total"
-        :page-sizes="[10, 20, 50]"
-        @current-change="store.load()"
+        @page-change="store.load()"
         @size-change="search"
       />
     </IaListPage>
@@ -250,7 +249,6 @@ async function exportCsv() {
 .filter-hints { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
 .hint-chip { color: #909399; font-size: 12px; }
 .range-chip { font-family: ui-monospace, Menlo, Consolas, monospace; }
-.pager { margin-top: 12px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 .dim { color: #909399; font-size: 12px; }
 .err { color: #c45656; }

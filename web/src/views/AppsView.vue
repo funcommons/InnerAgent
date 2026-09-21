@@ -12,6 +12,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Key, EditPen, CopyDocument } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
+import IaPagination from '@/components/IaPagination.vue'
 import { useAppsStore, apiErrorMessage, isValidPemPublicKey } from '@/stores/apps'
 import type { IaApp } from '@/api/types'
 
@@ -214,14 +215,11 @@ async function saveKey() {
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination
-        v-model:current-page="store.filters.pageNo"
-        v-model:page-size="store.filters.pageSize"
-        class="pager"
-        layout="total, sizes, prev, pager, next"
+      <IaPagination
+        v-model:page="store.filters.pageNo"
+        v-model:size="store.filters.pageSize"
         :total="store.total"
-        :page-sizes="[10, 20, 50]"
-        @current-change="store.load()"
+        @page-change="store.load()"
         @size-change="search"
       />
     </el-card>
@@ -334,10 +332,6 @@ async function saveKey() {
 }
 .toolbar__spacer {
   flex: 1;
-}
-.pager {
-  margin-top: 12px;
-  justify-content: flex-end;
 }
 .mono {
   font-family: ui-monospace, Menlo, Consolas, monospace;

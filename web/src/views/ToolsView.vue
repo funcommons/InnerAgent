@@ -17,6 +17,7 @@ import {
 import { apiErrorMessage } from '@/stores/apps'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
+import IaPagination from '@/components/IaPagination.vue'
 import type { GrantScope, IaToolGrant, IaToolRegistry, IaToolSchemaHistory, ToolRiskLevel } from '@/api/types'
 
 const store = useToolsStore()
@@ -361,12 +362,12 @@ function shortSha(sha: string): string {
               </template>
             </el-table-column>
           </el-table>
-          <el-pagination
-            v-model:current-page="store.toolFilters.pageNo"
-            v-model:page-size="store.toolFilters.pageSize"
-            class="pager" layout="total, sizes, prev, pager, next"
-            :total="store.toolsTotal" :page-sizes="[10, 20, 50]"
-            @current-change="store.loadTools()" @size-change="store.loadTools()"
+          <IaPagination
+            v-model:page="store.toolFilters.pageNo"
+            v-model:size="store.toolFilters.pageSize"
+            :total="store.toolsTotal"
+            @page-change="store.loadTools()"
+            @size-change="store.loadTools()"
           />
         </el-card>
       </el-tab-pane>
@@ -437,12 +438,12 @@ function shortSha(sha: string): string {
               </template>
             </el-table-column>
           </el-table>
-          <el-pagination
-            v-model:current-page="store.grantFilters.pageNo"
-            v-model:page-size="store.grantFilters.pageSize"
-            class="pager" layout="total, sizes, prev, pager, next"
-            :total="store.grantsTotal" :page-sizes="[10, 20, 50]"
-            @current-change="store.loadGrants()" @size-change="store.loadGrants()"
+          <IaPagination
+            v-model:page="store.grantFilters.pageNo"
+            v-model:size="store.grantFilters.pageSize"
+            :total="store.grantsTotal"
+            @page-change="store.loadGrants()"
+            @size-change="store.loadGrants()"
           />
         </el-card>
       </el-tab-pane>
@@ -587,7 +588,6 @@ function shortSha(sha: string): string {
 .toolbar__select { width: 120px; }
 .toolbar__select-sm { width: 100px; }
 .toolbar__spacer { flex: 1; }
-.pager { margin-top: 12px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 .fingerprint { font-size: 12px; color: #909399; }
 .dim { color: #c0c4cc; }

@@ -43,7 +43,7 @@ class AgentScopeMcpToolAdapterTests {
     }
 
     @Test
-    void callAsyncDelegatesToInvokerWithRegistryToolNameAndExplicitContext() {
+    void callAsyncDelegatesToInvokerWithCatalogFqnAndExplicitContext() {
         AtomicReference<Long> capturedAppId = new AtomicReference<>();
         AtomicReference<String> capturedToolName = new AtomicReference<>();
         AtomicReference<Map<String, Object>> capturedArgs = new AtomicReference<>();
@@ -62,8 +62,10 @@ class AgentScopeMcpToolAdapterTests {
         ToolResultBlock result = adapter.callAsync(param(Map.of("title", "U1验收"))).block();
 
         assertThat(capturedAppId.get()).isEqualTo(7L);
-        // 调用端口携带注册表工具名(FQN 由目录还原),显式 runId 供 act.sub 使用
-        assertThat(capturedToolName.get()).isEqualTo("create_host_record");
+        // [P4-W13] 调用端口携带目录 FQN(mcp__<serverKey>__<tool>):invoker 按
+        // 命名空间二分路由——宿主注册表(裸名还原)或三方服务器(应用级/用户级);
+        // callTool 阶段由 invoker 还原裸名,显式 runId 供 act.sub 使用
+        assertThat(capturedToolName.get()).isEqualTo("mcp__demo-spring-host__create_host_record");
         assertThat(capturedArgs.get()).containsEntry("title", "U1验收");
         assertThat(capturedContext.get().runId()).isEqualTo("run-1");
         // 适配器不注入租户上下文:ia_tool_registry 为 app 级治理表(无 tenant_id

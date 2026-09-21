@@ -91,9 +91,11 @@ public final class AgentScopeMcpToolAdapter extends AbstractPlatformAgentTool {
             // 注意不设租户上下文——ia_tool_registry 为 app 级治理表(无 tenant_id
             // 列),租户注入会让 invoker 的注册表定位 SQL 报错;act token 身份
             // (userId/tenantId/runId)经 actContext 显式传给调用端签发。
+            // [P4-W13] 传目录 FQN(mcp__<serverKey>__<tool>):invoker 按命名空间
+            // 二分路由——宿主注册表(裸名还原)或三方服务器(应用级/用户级)。
             Mono<McpToolInvocationResult> invocation = Mono.fromCallable(() ->
                             AppContext.runInApp(appId, () -> mcpToolInvoker.invoke(
-                                    appId, entry.toolName(), input, toolContext)))
+                                    appId, entry.fqn(), input, toolContext)))
                     .subscribeOn(toolScheduler);
             return cancellation.checkpoint()
                     .then(assertLease(run))

@@ -1,11 +1,17 @@
 package com.inneragent.agent.mcp;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.inneragent.agent.context.ToolExecutionContext;
+import com.inneragent.agent.entity.McpServerConfig;
+import com.inneragent.agent.entity.McpUserServer;
+import com.inneragent.agent.mapper.McpServerConfigMapper;
+import com.inneragent.agent.mapper.McpUserServerMapper;
 import com.inneragent.platform.toolhub.ToolRegistryEntry;
 import com.inneragent.platform.toolhub.mapper.ToolRegistryMapper;
+import com.inneragent.platform.tenant.TenantContext;
 import com.inneragent.server.auth.act.ActTokenIssuer;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -81,10 +87,20 @@ public class McpClientToolInvoker implements McpToolInvoker {
     private static final Pattern JSON_STATUS_40X =
             Pattern.compile("(?i)\"(?:status|statuscode)\"\\s*[:=]\\s*\"?(40[13])\"?");
 
+    /**
+     * [P4-W13] 目录 FQN 解析:{@code mcp__<serverKey>__<toolName>}(serverKey
+     * 字符集同注册口径,不含下划线 → 首个 {@code __} 段即 serverKey,确定性解析)。
+     */
+    private static final Pattern FQN = Pattern.compile("^mcp__([A-Za-z0-9-]{1,64})__(.+)$");
+
     private final ToolRegistryMapper registryMapper;
     private final ActTokenIssuer actTokenIssuer;
     private final ObjectMapper objectMapper;
     private final McpInvokerProperties properties;
+    /** [P4-W13] 三方服务器配置定位(应用级;null=传统构造,三方解析不可用)。 */
+    private final McpServerConfigMapper thirdPartyAppMapper;
+    /** [P4-W13] 三方服务器配置定位(用户级;行级 userId 隔离)。 */
+    private final McpUserServerMapper thirdPartyUserMapper;
 
     /** (appId + endpointUrl) → 客户端句柄(懒建懒连)。 */
     private final Cache<String, ClientHandle> clients;
@@ -107,6 +123,17 @@ public class McpClientToolInvoker implements McpToolInvoker {
                                 ObjectMapper objectMapper,
                                 McpInvokerProperties properties,
                                 com.inneragent.agent.observability.GenAiSpanFactory spanFactory) {
+        this(registryMapper, actTokenIssuer, objectMapper, properties, spanFactory, null, null);
+    }
+
+    /** [P4-W13] 生产装配:带三方服务器配置定位(应用级 + 用户级)。 */
+    public McpClientToolInvoker(ToolRegistryMapper registryMapper,
+                                ActTokenIssuer actTokenIssuer,
+                                ObjectMapper objectMapper,
+                                McpInvokerProperties properties,
+                                com.inneragent.agent.observability.GenAiSpanFactory spanFactory,
+                                McpServerConfigMapper thirdPartyAppMapper,
+                                McpUserServerMapper thirdPartyUserMapper) {
         this.registryMapper = Objects.requireNonNull(registryMapper, "registryMapper must not be null");
         this.actTokenIssuer = Objects.requireNonNull(actTokenIssuer, "actTokenIssuer must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
@@ -114,6 +141,8 @@ public class McpClientToolInvoker implements McpToolInvoker {
         this.spanFactory = spanFactory == null
                 ? com.inneragent.agent.observability.GenAiSpanFactory.noop()
                 : spanFactory;
+        this.thirdPartyAppMapper = thirdPartyAppMapper;
+        this.thirdPartyUserMapper = thirdPartyUserMapper;
         this.clients = Caffeine.newBuilder()
                 .maximumSize(properties.getMaxClients())
                 .expireAfterAccess(properties.getClientExpireAfterAccess())
@@ -130,9 +159,16 @@ public class McpClientToolInvoker implements McpToolInvoker {
     }
 
     /**
-     * 调用一次宿主 MCP 工具(tools/call)。
+     * 调用一次 MCP 工具(tools/call;宿主桥或三方,按名称解析路由)。
      *
-     * @throws McpToolCallException 未注册/端点未配置/宿主 401/超时/传输失败(细分子类)
+     * <p>[P4-W13] 名称形态二分:{@code mcp__<serverKey>__<tool>}(目录 FQN,
+     * AgentScopeMcpToolAdapter 下发)先查宿主注册表(裸名;host 语义零变化),
+     * 未命中则按 serverKey 定位三方服务器配置(应用级 → 用户级,行级 userId
+     * 隔离),静态头直连——<strong>三方调用不携带 X-IA-Act</strong>(act token
+     * 仅限宿主桥内环,02-技术方案 §6.1);裸名(宿主路径与存量调用方)行为
+     * 与 P4 前完全一致。
+     *
+     * @throws McpToolCallException 未注册/端点未配置/鉴权/超时/传输失败(细分子类)
      */
     @Override
     public McpToolInvocationResult invoke(
@@ -140,28 +176,45 @@ public class McpClientToolInvoker implements McpToolInvoker {
             String toolName,
             Map<String, Object> args,
             ToolExecutionContext actContext) {
-        ToolRegistryEntry entry = registryEntry(appId, toolName);
-        String endpointUrl = requireEndpoint(entry);
-        String clientKey = clientKey(appId, endpointUrl);
-        // act token 每次调用现签(audience=endpoint_url,exp 60s):先于客户端
-        // 获取(懒建客户端的 initialize 也要携带 X-IA-Act)经 ThreadLocal 传给
-        // transportContextProvider → httpRequestCustomizer 注入;重连发生在
-        // 调用线程内,同管线携带头(spike T03 挂点实证)
-        CALL_ACT_TOKEN.set(actTokenIssuer.issue(new ActTokenIssuer.ActTokenRequest(
-                actContext == null ? 0L : actContext.userId(),
-                actContext == null ? 0L : actContext.tenantId(),
-                null,
-                // [adapt] U1/D1:运行身份沿 ToolExecutionContext.runId 透传
-                // (act.sub=inneragent-run:{runId};内核工具适配器显式携带)
-                actContext == null ? null : actContext.runId(),
-                entry.getFqn(),
-                endpointUrl)));
-        // [adapt] 任务 #18b(W5):MCP client span(宿主 tools/call)。
+        ParsedName parsed = parseName(toolName);
+        ToolRegistryEntry entry = registryEntryOrNull(appId, parsed.toolName());
+        String serverKey;
+        String clientKey;
+        ClientHandle handle;
+        if (entry != null) {
+            String endpointUrl = requireEndpoint(entry);
+            serverKey = entry.getServerKey();
+            clientKey = clientKey(appId, endpointUrl);
+            // act token 每次调用现签(audience=endpoint_url,exp 60s):先于客户端
+            // 获取(懒建客户端的 initialize 也要携带 X-IA-Act)经 ThreadLocal 传给
+            // transportContextProvider → httpRequestCustomizer 注入;重连发生在
+            // 调用线程内,同管线携带头(spike T03 挂点实证)
+            CALL_ACT_TOKEN.set(actTokenIssuer.issue(new ActTokenIssuer.ActTokenRequest(
+                    actContext == null ? 0L : actContext.userId(),
+                    actContext == null ? 0L : actContext.tenantId(),
+                    null,
+                    // [adapt] U1/D1:运行身份沿 ToolExecutionContext.runId 透传
+                    // (act.sub=inneragent-run:{runId};内核工具适配器显式携带)
+                    actContext == null ? null : actContext.runId(),
+                    entry.getFqn(),
+                    endpointUrl)));
+            handle = clients.get(clientKey, key -> createClient(key, endpointUrl, entry));
+        } else {
+            ThirdPartyTarget target = thirdPartyTarget(appId, parsed, actContext, toolName);
+            serverKey = parsed.serverKey();
+            clientKey = target.clientKey();
+            // 三方:静态头在客户端构建时捕获,无 act token(见 ThirdPartyTarget)
+            handle = clients.get(clientKey, key -> createThirdPartyClient(
+                    key, target.endpointUrl(), target.headers(), target.timeoutSeconds()));
+        }
+        // [adapt] 任务 #18b(W5):MCP client span(tools/call)。
         com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan span =
-                startMcpClientSpan(entry, toolName, args, actContext);
+                startMcpClientSpan(serverKey, toolName, args, actContext);
         try {
-            ClientHandle handle = clients.get(clientKey, key -> createClient(key, endpointUrl, entry));
-            McpToolInvocationResult result = invokeWithReconnect(handle, clientKey, toolName, args);
+            // callTool 用裸工具名(FQN 只是目录/白名单命名空间;宿主与三方
+            // server 端注册的都是裸名)
+            McpToolInvocationResult result =
+                    invokeWithReconnect(handle, clientKey, parsed.toolName(), args);
             if (span != null) {
                 span.end();
             }
@@ -183,7 +236,7 @@ public class McpClientToolInvoker implements McpToolInvoker {
      * 入参 JSON 为内容属性,默认关)。
      */
     private com.inneragent.agent.observability.GenAiSpanFactory.GenAiSpan startMcpClientSpan(
-            ToolRegistryEntry entry,
+            String serverKey,
             String toolName,
             Map<String, Object> args,
             ToolExecutionContext actContext) {
@@ -200,7 +253,7 @@ public class McpClientToolInvoker implements McpToolInvoker {
                     .attr(com.inneragent.agent.observability.GenAiSemanticAttributes.TOOL_NAME,
                             toolName)
                     .attr(com.inneragent.agent.observability.GenAiSemanticAttributes.MCP_SERVER_KEY,
-                            entry.getServerKey())
+                            serverKey)
                     .attr(com.inneragent.agent.observability.GenAiSemanticAttributes.RUN_ID,
                             actContext == null ? null : actContext.runId())
                     .contentAttr(com.inneragent.agent.observability.GenAiSemanticAttributes.PROMPT,
@@ -263,8 +316,7 @@ public class McpClientToolInvoker implements McpToolInvoker {
                 reconnectSingleFlight(current, clientKey, attempt);
                 // 重连后取当前句柄(可能是重建的客户端;被并发清理则兜底重建)
                 ClientHandle previous = current;
-                current = clients.get(clientKey,
-                        key -> createClient(key, previous.endpointUrl(), previous.entry()));
+                current = clients.get(clientKey, key -> rebuild(clientKey, previous));
             }
         }
     }
@@ -299,7 +351,7 @@ public class McpClientToolInvoker implements McpToolInvoker {
                 // 对 session-not-found 自动复位)并发抢跑,后初始化通知会话缺失
                 // 报 400;重建是确定性恢复路径(见类注释偏差记录)。
                 closeAndRemove(clientKey);
-                ClientHandle rebuilt = createClient(clientKey, handle.endpointUrl(), handle.entry());
+                ClientHandle rebuilt = rebuild(clientKey, handle);
                 clients.put(clientKey, rebuilt);
                 handle.markRecovered();
                 log.info("宿主会话已恢复(重连编排:客户端重建): key={}, attempt={}", clientKey, attempt);
@@ -322,6 +374,15 @@ public class McpClientToolInvoker implements McpToolInvoker {
             value = Math.min(value * 2, capped);
         }
         return Duration.ofMillis(Math.min(value, capped));
+    }
+
+    /** 句柄重建(重连编排共用):三方(静态头)与宿主(注册表条目)分支。 */
+    private ClientHandle rebuild(String clientKey, ClientHandle previous) {
+        if (!previous.staticHeaders().isEmpty()) {
+            return createThirdPartyClient(clientKey, previous.endpointUrl(),
+                    previous.staticHeaders(), previous.timeoutSeconds());
+        }
+        return createClient(clientKey, previous.endpointUrl(), previous.entry());
     }
 
     // ------------------------------------------------------------------
@@ -385,6 +446,42 @@ public class McpClientToolInvoker implements McpToolInvoker {
         }
     }
 
+    /**
+     * [P4-W13] 三方客户端构建(protected seam,测试可桩):Streamable HTTP +
+     * 静态头逐请求注入(httpRequestCustomizer 捕获常量映射;<strong>不带
+     * X-IA-Act</strong>——act token 仅限宿主桥内环)。凭据值不落日志。
+     */
+    protected ClientHandle createThirdPartyClient(
+            String clientKey, String endpointUrl, Map<String, String> staticHeaders,
+            int timeoutSeconds) {
+        URI uri = URI.create(endpointUrl);
+        String base = uri.getScheme() + "://" + uri.getRawAuthority();
+        String path = uri.getRawPath() == null || uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
+        HttpClientStreamableHttpTransport transport = HttpClientStreamableHttpTransport.builder(base)
+                .endpoint(path)
+                .resumableStreams(false)
+                .openConnectionOnStartup(false)
+                .httpRequestCustomizer((builder, method, requestUri, body, context) ->
+                        staticHeaders.forEach(builder::header))
+                .build();
+        McpSyncClient client = McpClient.sync(transport)
+                .requestTimeout(Duration.ofSeconds(timeoutSeconds))
+                .build();
+        try {
+            client.initialize();
+        } catch (Exception initializeFailure) {
+            try {
+                client.close();
+            } catch (RuntimeException ignored) {
+                // 首次初始化失败为主因,close 失败不吞
+            }
+            throw mapFailure(initializeFailure);
+        }
+        log.info("三方 MCP 客户端已建立: key={}, endpoint={}, staticHeaders={}(值不落日志)",
+                clientKey, endpointUrl, staticHeaders.isEmpty() ? 0 : staticHeaders.keySet());
+        return new ClientHandle(client, endpointUrl, null, Map.copyOf(staticHeaders), timeoutSeconds);
+    }
+
     private McpToolInvocationResult callTool(McpSyncClient client, String toolName, Map<String, Object> args) {
         McpSchema.CallToolResult result = client.callTool(McpSchema.CallToolRequest.builder()
                 .name(toolName)
@@ -425,22 +522,112 @@ public class McpClientToolInvoker implements McpToolInvoker {
     }
 
     // ------------------------------------------------------------------
-    // 注册表定位 / 错误细分
+    // 注册表 / 三方服务器定位(P4-W13 二分路由)
     // ------------------------------------------------------------------
 
-    private ToolRegistryEntry registryEntry(long appId, String toolName) {
+    /** FQN 解析:mcp__<serverKey>__<tool> → (serverKey, 裸名);裸名 → (null, 原样)。 */
+    static ParsedName parseName(String toolName) {
+        if (toolName == null) {
+            return new ParsedName(null, "");
+        }
+        Matcher matcher = FQN.matcher(toolName.trim());
+        if (matcher.matches()) {
+            return new ParsedName(matcher.group(1), matcher.group(2));
+        }
+        return new ParsedName(null, toolName.trim());
+    }
+
+    /** 三方调用定位结果(clientKey/端点/静态头/超时;headers 已捕获,凭据不落日志)。 */
+    private record ThirdPartyTarget(
+            String clientKey,
+            String endpointUrl,
+            Map<String, String> headers,
+            int timeoutSeconds) {
+    }
+
+    record ParsedName(String serverKey, String toolName) {
+    }
+
+    /**
+     * 三方服务器定位:应用级(ia_mcp_server_config,系统模式)优先,用户级
+     * (ia_mcp_user_server,行级 userId 隔离)殿后;serverKey 为空或两级皆未
+     * 命中 → 未注册异常(消息沿用宿主路径口径)。OAUTH 配置:501 语义
+     * (注册层已拦截,此处防御性兜底)。
+     */
+    private ThirdPartyTarget thirdPartyTarget(
+            long appId, ParsedName parsed, ToolExecutionContext actContext, String originalName) {
+        if (parsed.serverKey() == null || thirdPartyAppMapper == null) {
+            throw new McpToolCallException(
+                    "工具未注册或未启用(appId=" + appId + "): " + originalName);
+        }
+        McpServerConfig appServer = TenantContext.runAsSystem(() ->
+                thirdPartyAppMapper.selectList(new LambdaQueryWrapper<McpServerConfig>()
+                                .eq(McpServerConfig::getAppId, appId)
+                                .eq(McpServerConfig::getServerKey, parsed.serverKey())
+                                .eq(McpServerConfig::getEnabled, true))
+                        .stream()
+                        .filter(row -> Boolean.TRUE.equals(row.getEnabled()))
+                        .findFirst()
+                        .orElse(null));
+        if (appServer != null) {
+            requireStaticHeaderApplicable(appServer.getAuthType(), parsed.serverKey());
+            return new ThirdPartyTarget(
+                    "tp|app|" + appId + "|" + parsed.serverKey(),
+                    appServer.getEndpointUrl(),
+                    staticHeaders(appServer.getHeaderName(), appServer.getCredentials()),
+                    appServer.getTimeoutSeconds() == null ? 30 : appServer.getTimeoutSeconds());
+        }
+        Long userId = actContext == null ? null : actContext.userId();
+        if (userId != null && thirdPartyUserMapper != null) {
+            McpUserServer userServer = thirdPartyUserMapper.selectList(
+                            new LambdaQueryWrapper<McpUserServer>()
+                                    .eq(McpUserServer::getAppId, appId)
+                                    .eq(McpUserServer::getUserId, userId)
+                                    .eq(McpUserServer::getServerKey, parsed.serverKey())
+                                    .eq(McpUserServer::getEnabled, true))
+                    .stream()
+                    .filter(row -> Boolean.TRUE.equals(row.getEnabled()))
+                    .findFirst()
+                    .orElse(null);
+            if (userServer != null) {
+                requireStaticHeaderApplicable(userServer.getAuthType(), parsed.serverKey());
+                return new ThirdPartyTarget(
+                        "tp|user|" + appId + "|" + userId + "|" + parsed.serverKey(),
+                        userServer.getEndpointUrl(),
+                        staticHeaders(userServer.getHeaderName(), userServer.getCredentials()),
+                        userServer.getTimeoutSeconds() == null ? 30 : userServer.getTimeoutSeconds());
+            }
+        }
+        throw new McpToolCallException(
+                "工具未注册或未启用(appId=" + appId + "): " + originalName);
+    }
+
+    /** OAUTH 配置到达调用层:501 语义(注册层已拦截,防御性兜底)。 */
+    private static void requireStaticHeaderApplicable(String authType, String serverKey) {
+        if (McpThirdPartyServerSupport.AUTH_OAUTH.equals(authType)) {
+            throw new McpToolCallException(
+                    "三方 MCP OAuth(CIMD/DCR + RFC 8707)暂未实现(501 Not Implemented"
+                            + " 语义): serverKey=" + serverKey);
+        }
+    }
+
+    private static Map<String, String> staticHeaders(String headerName, String credentials) {
+        if (headerName == null || headerName.isBlank()
+                || credentials == null || credentials.isBlank()) {
+            return Map.of();
+        }
+        return Map.of(headerName, credentials);
+    }
+
+    private ToolRegistryEntry registryEntryOrNull(long appId, String toolName) {
         if (toolName == null || toolName.isBlank()) {
-            throw new McpToolCallException("工具名为空,无法定位注册表条目");
+            return null;
         }
         // [adapt] U1/D1:注册表定位按租户系统模式执行——ia_tool_registry 为
         // app 级治理表(V2 DDL 无 tenant_id 列),租户上下文存在时行级拦截器
         // 注入 tenant_id 条件会导致 SQL 报错;隔离维度是 app_id(显式携带)。
-        ToolRegistryEntry entry = com.inneragent.platform.tenant.TenantContext.runAsSystem(
+        return TenantContext.runAsSystem(
                 () -> registryMapper.selectActiveByToolName(toolName.trim()));
-        if (entry == null) {
-            throw new McpToolCallException("工具未注册或未启用(appId=" + appId + "): " + toolName);
-        }
-        return entry;
     }
 
     private String requireEndpoint(ToolRegistryEntry entry) {
@@ -561,6 +748,9 @@ public class McpClientToolInvoker implements McpToolInvoker {
         private final McpSyncClient client;
         private final String endpointUrl;
         private final ToolRegistryEntry entry;
+        /** [P4-W13] 三方静态头(非空 = 三方客户端,重建按此分支);凭据值不落日志。 */
+        private final Map<String, String> staticHeaders;
+        private final int timeoutSeconds;
         private volatile long lastRecoveredAtMillis;
 
         ClientHandle(McpSyncClient client) {
@@ -568,9 +758,16 @@ public class McpClientToolInvoker implements McpToolInvoker {
         }
 
         ClientHandle(McpSyncClient client, String endpointUrl, ToolRegistryEntry entry) {
+            this(client, endpointUrl, entry, Map.of(), 30);
+        }
+
+        ClientHandle(McpSyncClient client, String endpointUrl, ToolRegistryEntry entry,
+                     Map<String, String> staticHeaders, int timeoutSeconds) {
             this.client = Objects.requireNonNull(client, "client must not be null");
             this.endpointUrl = endpointUrl;
             this.entry = entry;
+            this.staticHeaders = staticHeaders == null ? Map.of() : staticHeaders;
+            this.timeoutSeconds = timeoutSeconds;
         }
 
         McpSyncClient client() {
@@ -583,6 +780,14 @@ public class McpClientToolInvoker implements McpToolInvoker {
 
         ToolRegistryEntry entry() {
             return entry;
+        }
+
+        Map<String, String> staticHeaders() {
+            return staticHeaders;
+        }
+
+        int timeoutSeconds() {
+            return timeoutSeconds;
         }
 
         long lastRecoveredAtMillis() {

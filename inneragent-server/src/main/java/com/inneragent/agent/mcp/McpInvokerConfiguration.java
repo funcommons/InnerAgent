@@ -35,9 +35,14 @@ public class McpInvokerConfiguration {
                                                      ActTokenIssuer actTokenIssuer,
                                                      ObjectMapper objectMapper,
                                                      McpInvokerProperties properties,
-                                                     org.springframework.beans.factory.ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories) {
-        // [adapt] 任务 #18b(W5):MCP client span 工厂随 Bean 下发(缺省 noop)
+                                                     org.springframework.beans.factory.ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories,
+                                                     org.springframework.beans.factory.ObjectProvider<com.inneragent.agent.mapper.McpServerConfigMapper> thirdPartyAppMappers,
+                                                     org.springframework.beans.factory.ObjectProvider<com.inneragent.agent.mapper.McpUserServerMapper> thirdPartyUserMappers) {
+        // [adapt] 任务 #18b(W5):MCP client span 工厂随 Bean 下发(缺省 noop);
+        // [P4-W13] 三方服务器配置定位(应用级 + 用户级)随 Bean 下发(ObjectProvider
+        // 韧性注入:最小上下文/裁剪部署缺 Mapper 时降级为仅宿主桥解析)。
         return new McpClientToolInvoker(registryMapper, actTokenIssuer, objectMapper,
-                properties, spanFactories.getIfAvailable());
+                properties, spanFactories.getIfAvailable(),
+                thirdPartyAppMappers.getIfAvailable(), thirdPartyUserMappers.getIfAvailable());
     }
 }

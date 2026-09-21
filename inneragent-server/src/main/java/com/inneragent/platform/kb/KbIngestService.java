@@ -81,7 +81,7 @@ public class KbIngestService {
                 ? properties.getChunkOverlap() : chunkOverlap;
         String safeTitle = requireTitle(title);
         String safeContent = requireContent(content);
-        long docCount = documentMapper.countActiveDocuments(appId);
+        long docCount = documentMapper.countDocuments(appId);
         if (docCount >= properties.getMaxDocumentsPerApp()) {
             throw new BusinessException(409, "单应用知识库文档数已达上限 "
                     + properties.getMaxDocumentsPerApp()

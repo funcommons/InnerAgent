@@ -25,7 +25,7 @@ public interface IaKbDocumentMapper extends BaseMapper<IaKbDocument> {
             WHERE app_id = #{appId}
               AND deleted = FALSE
             """)
-    long countActiveDocuments(@Param("appId") long appId);
+    long countDocuments(@Param("appId") long appId);
 
     /** 软删(恢复位复位不做:删除文档不可复活,重导即新文档)。 */
     @Update("""

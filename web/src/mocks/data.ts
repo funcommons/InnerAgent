@@ -4,17 +4,24 @@
  * resetMockData() 在每条用例后恢复种子(setup.ts 调用)。
  * 种子形 = 服务端真实响应视图形(AppRegistration/ToolRegistryEntry/
  * ToolGrant/ia_audit_log 列);circuit/webhook 状态含 activeRuns 等扩展字段。
+ * P4 批次扩档:三方 MCP 服务器 / Skill 目录 / mini 知识库 / 用量聚合 /
+ * 用户反馈(种子形逐列镜像对应 VO/record,见各段注释)。
  */
 import type {
   CircuitBreakerEvent,
   IaAgentDefinition,
   IaApp,
   IaAuditLog,
+  IaFeedback,
+  IaKbDocument,
+  IaMcpServer,
   IaModelApiConfig,
+  IaSkill,
   IaToolGrant,
   IaToolRegistry,
   IaToolSchemaHistory,
   ResourceLimits,
+  UsageSummaryRow,
   WebhookConfig,
   WebhookDelivery,
 } from '@/api/types'
@@ -288,6 +295,86 @@ export const seedDeliveries: WebhookDelivery[] = [
   { id: 74, appId: 1, event: 'run.finished', runId: 'run-2043', url: 'https://demo.example.com/ia/callback', success: false, status: 'PENDING', attempt: 0, maxAttempts: 5, httpStatus: null, responseSummary: null, nextRetryAt: null, deliveredAt: null },
 ]
 
+// ==================== 三方 MCP 服务器(ia_mcp_server_config,镜像 McpServerRespVO) ====================
+
+/** 种子覆盖:启用+静态头(打码)/停用(端点不可达演示)/展示名缺省行 */
+export const seedMcpServers: IaMcpServer[] = [
+  { id: 91, serverKey: 'crm-mcp', name: 'CRM 三方服务', endpointUrl: 'http://crm-mcp:9090/mcp', transport: 'streamable-http', authType: 'STATIC_HEADER', headerName: 'X-Api-Key', credentialsMasked: 'sk***', timeoutSeconds: 30, enabled: true, updateTime: '2026-09-18T10:00:00Z' },
+  { id: 92, serverKey: 'weather', name: '天气查询(三方)', endpointUrl: 'http://weather.internal:8080/mcp/down', transport: 'streamable-http', authType: 'STATIC_HEADER', headerName: 'Authorization', credentialsMasked: 'Be***', timeoutSeconds: 60, enabled: false, updateTime: '2026-09-17T09:00:00Z' },
+  { id: 93, serverKey: 'docs-search', name: null, endpointUrl: 'https://docs.example.com/mcp', transport: 'streamable-http', authType: 'STATIC_HEADER', headerName: 'X-Token', credentialsMasked: null, timeoutSeconds: 30, enabled: true, updateTime: '2026-09-19T14:00:00Z' },
+]
+
+// ==================== Skill 目录(ia_skill,镜像 AppSkillCatalogService.SkillView) ====================
+
+/**
+ * Skill 种子:应用内同时激活上限 8(PRD 缺省)——此处预置 8 个 active +
+ * 1 个 inactive,激活第 9 个时 handler 报 409(镜像 AppSkillCatalogService
+ * activate 的上限校验,管理站可呈现友好报错)。id 降序分页。
+ */
+function skill(partial: Pick<IaSkill, 'id' | 'name'> & Partial<IaSkill>): IaSkill {
+  return {
+    appId: 1,
+    displayName: null,
+    description: null,
+    version: '1.0.0',
+    status: 'active',
+    source: 'import',
+    contentSha256: `sha256:skill${String(partial.id).padStart(4, '0')}`,
+    active: true,
+    ...partial,
+  }
+}
+
+export const seedSkills: IaSkill[] = [
+  skill({ id: 111, name: 'week-report', displayName: '周报生成', description: '按模板聚合本周工作项生成周报', version: '1.2.0' }),
+  skill({ id: 112, name: 'sql-analyst', displayName: 'SQL 分析', description: '自然语言转 SQL 并解读查询结果' }),
+  skill({ id: 113, name: 'meeting-notes', displayName: '会议纪要', description: '会议录音转写稿提炼决议与待办' }),
+  skill({ id: 114, name: 'code-reviewer', displayName: '代码评审', description: '按团队规范输出评审意见' }),
+  skill({ id: 115, name: 'doc-writer', displayName: '文档撰写', description: '技术方案/接口文档骨架生成' }),
+  skill({ id: 116, name: 'data-cleanup', displayName: '数据清洗', description: '表格数据去重与格式归一' }),
+  skill({ id: 117, name: 'slide-maker', displayName: '幻灯片生成', description: '大纲转 PPT 结构' }),
+  skill({ id: 118, name: 'i18n-checker', displayName: '文案走查', description: '多语言文案缺翻检查' }),
+  skill({ id: 119, name: 'legacy-migrate', displayName: '迁移助手(停用)', description: '老系统数据迁移脚本生成', status: 'inactive', active: false }),
+]
+
+// ==================== mini 知识库(ia_kb_document,镜像 KbIngestService.KbDocumentView) ====================
+
+export const seedKbDocuments: IaKbDocument[] = [
+  { id: 121, appId: 1, title: '员工手册.md', source: 'upload', status: 'active', chunkCount: 42, active: true },
+  { id: 122, appId: 1, title: '产品 FAQ(9 月版)', source: 'api', status: 'active', chunkCount: 18, active: true },
+  { id: 123, appId: 1, title: '旧版退款政策(已失效)', source: 'upload', status: 'inactive', chunkCount: 7, active: false },
+]
+
+// ==================== 用量统计(ia_model_call 聚合,镜像 UsageSummaryRow) ====================
+
+/** 聚合种子:3 天 × 2 模型 × 2 用户(DAY 粒度),覆盖 FAILED 行 token 为空形 */
+export const seedUsageSummary: UsageSummaryRow[] = [
+  { appId: 1, userId: 12993, statDate: '2026-09-20', provider: 'deepseek', modelCode: 'deepseek-chat', calls: 23, inputTokens: 51_200, outputTokens: 8_640, reasoningTokens: 1_020, cacheTokens: 12_800 },
+  { appId: 1, userId: 20001, statDate: '2026-09-20', provider: 'deepseek', modelCode: 'deepseek-chat', calls: 11, inputTokens: 24_100, outputTokens: 3_120, reasoningTokens: 460, cacheTokens: 6_400 },
+  { appId: 1, userId: 12993, statDate: '2026-09-20', provider: 'anthropic', modelCode: 'claude-sonnet', calls: 4, inputTokens: 18_000, outputTokens: 2_400, reasoningTokens: 800, cacheTokens: 0 },
+  { appId: 1, userId: 30077, statDate: '2026-09-20', provider: 'dashscope', modelCode: 'qwen-plus', calls: 6, inputTokens: 12_000, outputTokens: 1_800, reasoningTokens: 0, cacheTokens: 0 },
+  { appId: 1, userId: 12993, statDate: '2026-09-19', provider: 'deepseek', modelCode: 'deepseek-chat', calls: 31, inputTokens: 66_400, outputTokens: 9_800, reasoningTokens: 1_640, cacheTokens: 18_200 },
+  { appId: 1, userId: 20001, statDate: '2026-09-19', provider: 'anthropic', modelCode: 'claude-sonnet', calls: 2, inputTokens: 9_600, outputTokens: 1_100, reasoningTokens: 300, cacheTokens: 0 },
+  { appId: 1, userId: 30077, statDate: '2026-09-19', provider: 'dashscope', modelCode: 'qwen-plus', calls: 3, inputTokens: 5_400, outputTokens: 620, reasoningTokens: 0, cacheTokens: 0 },
+  { appId: 1, userId: 12993, statDate: '2026-09-19', provider: 'deepseek', modelCode: 'deepseek-reasoner', calls: 1, inputTokens: 3_200, outputTokens: 900, reasoningTokens: 2_100, cacheTokens: 0 },
+  { appId: 1, userId: 20001, statDate: '2026-09-18', provider: 'deepseek', modelCode: 'deepseek-chat', calls: 17, inputTokens: 33_500, outputTokens: 5_400, reasoningTokens: 780, cacheTokens: 9_600 },
+  { appId: 1, userId: 12993, statDate: '2026-09-18', provider: 'anthropic', modelCode: 'claude-sonnet', calls: 1, inputTokens: 4_800, outputTokens: 520, reasoningTokens: 120, cacheTokens: 0 },
+  { appId: 1, userId: 30077, statDate: '2026-09-18', provider: 'ollama', modelCode: 'qwen2.5:14b', calls: 5, inputTokens: 7_700, outputTokens: 1_050, reasoningTokens: 0, cacheTokens: 0 },
+  // FAILED 行:仅计入调用次数,token 列为空(镜像聚合口径)
+  { appId: 1, userId: 20001, statDate: '2026-09-18', provider: 'deepseek', modelCode: 'deepseek-chat', calls: 9, inputTokens: null, outputTokens: null, reasoningTokens: null, cacheTokens: null },
+]
+
+// ==================== 用户反馈(ia_agent_feedback,镜像 FeedbackRespVO) ====================
+
+export const seedFeedbacks: IaFeedback[] = [
+  { id: 141, appId: 1, userId: 12993, conversationId: 'conv-1001', runId: 'run-2001', messageId: 'msg-3001', rating: 'UP', comment: '查询结果准确,直接可用', createTime: '2026-09-20T07:50:00Z', updateTime: '2026-09-20T07:50:00Z' },
+  { id: 142, appId: 1, userId: 20001, conversationId: 'conv-1002', runId: 'run-2002', messageId: null, rating: 'DOWN', comment: '改错了字段,把昵称当成了姓名', createTime: '2026-09-19T18:30:00Z', updateTime: '2026-09-19T18:30:00Z' },
+  { id: 143, appId: 1, userId: 30077, conversationId: 'conv-1003', runId: 'run-2003', messageId: 'msg-3003', rating: 'UP', comment: '周报结构很清晰', createTime: '2026-09-19T16:10:00Z', updateTime: '2026-09-19T16:10:00Z' },
+  { id: 144, appId: 1, userId: 12993, conversationId: 'conv-1001', runId: 'run-2001', messageId: null, rating: 'UP', comment: null, createTime: '2026-09-19T10:00:00Z', updateTime: '2026-09-20T07:49:30Z' },
+  { id: 145, appId: 1, userId: 20001, conversationId: 'conv-1004', runId: 'run-2004', messageId: 'msg-3004', rating: 'DOWN', comment: '等了很久超时了,也没提示重试', createTime: '2026-09-18T14:20:00Z', updateTime: '2026-09-18T14:20:00Z' },
+  { id: 146, appId: 1, userId: 30077, conversationId: 'conv-1005', runId: 'run-2005', messageId: null, rating: 'UP', comment: '能正确引用知识库条目', createTime: '2026-09-18T09:05:00Z', updateTime: '2026-09-18T09:05:00Z' },
+]
+
 // ==================== 内存存储与重置 ====================
 
 export interface MockStore {
@@ -305,6 +392,16 @@ export interface MockStore {
   circuitState: { emergencyStopped: boolean; stoppedAt: string | null; stopReason: string | null; activeRuns: number }
   webhookConfig: WebhookConfig
   deliveries: WebhookDelivery[]
+  /** 三方 MCP 服务器(P4-W13) */
+  mcpServers: IaMcpServer[]
+  /** Skill 目录(P4-W13) */
+  skills: IaSkill[]
+  /** mini 知识库文档(P4-W14) */
+  kbDocuments: IaKbDocument[]
+  /** 用量聚合行(W15) */
+  usageSummary: UsageSummaryRow[]
+  /** 用户反馈(W15) */
+  feedbacks: IaFeedback[]
 }
 
 export const store: MockStore = {
@@ -320,6 +417,11 @@ export const store: MockStore = {
   circuitState: { emergencyStopped: false, stoppedAt: null, stopReason: null, activeRuns: 1 },
   webhookConfig: { ...seedWebhookConfig },
   deliveries: [],
+  mcpServers: [],
+  skills: [],
+  kbDocuments: [],
+  usageSummary: [],
+  feedbacks: [],
 }
 
 /** 深拷贝种子 → 内存存储(每条用例后调用,保证确定性) */
@@ -336,6 +438,11 @@ export function resetMockData(): void {
   store.circuitState = { emergencyStopped: false, stoppedAt: null, stopReason: null, activeRuns: 1 }
   store.webhookConfig = structuredClone(seedWebhookConfig)
   store.deliveries = structuredClone(seedDeliveries)
+  store.mcpServers = structuredClone(seedMcpServers)
+  store.skills = structuredClone(seedSkills)
+  store.kbDocuments = structuredClone(seedKbDocuments)
+  store.usageSummary = structuredClone(seedUsageSummary)
+  store.feedbacks = structuredClone(seedFeedbacks)
   nextId = 1000
 }
 

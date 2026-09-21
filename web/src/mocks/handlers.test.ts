@@ -4,18 +4,27 @@
  * 信封 msg 字段、错误语义 409/400/404);每域含「请求形=真实契约」断言。
  */
 import { describe, expect, it, beforeEach } from 'vitest'
+import { http as mswHttp, HttpResponse } from 'msw'
+import { server } from '@/mocks/server'
 import { setAdminKeyGetter } from '@/api/request'
 import {
   appAdminApi,
   auditAdminApi,
   circuitAdminApi,
   definitionAdminApi,
+  feedbackAdminApi,
+  kbAdminApi,
+  mcpServerAdminApi,
   modelConfigAdminApi,
+  skillAdminApi,
   toolAdminApi,
   toolGrantAdminApi,
+  usageAdminApi,
   webhookAdminApi,
 } from '@/api/admin'
 import { ApiError } from '@/api/errorCodes'
+import type { CommonResult } from '@/api/common'
+import type { IaSkill, SkillPreviewView } from '@/api/types'
 
 describe('mock 后端:认证守卫', () => {
   it('缺少 X-IA-Admin-Key → 403(对齐 AdminTokenFilter 缺省封闭,msg 透出)', async () => {
@@ -602,5 +611,355 @@ describe('mock 后端:Agent 定义管理域(P2-W5)', () => {
       .rejects.toMatchObject({ status: 400 })
     await expect(definitionAdminApi.import({ bundle, conflictPolicy: 'merge' as never }))
       .rejects.toMatchObject({ status: 400 })
+  })
+})
+
+// ==================== P4 批次(2026-09-21 web 接线):五域契约镜像 ====================
+
+/** 构造 mock Skill 包文本(演示层:JSON 文本承载包结构,真实端点为 multipart zip) */
+function skillZipText(manifest: Record<string, unknown>, files: Array<{ path: string; content?: string }> = []): string {
+  return JSON.stringify({
+    manifest,
+    files: files.map(f => ({ path: f.path, encoding: 'utf-8', content: f.content ?? '' })),
+  })
+}
+
+/**
+ * 手工构造 multipart 请求(测试环境 jsdom File 字节经 undici 序列化会丢失,
+ * api 层 FormData 组装另有捕获式断言;此处直接以合法 multipart 字节走线上形)。
+ * 返回原始信封 {status, body}。
+ */
+async function postMultipart(
+  path: string,
+  fileName: string,
+  content: string,
+  query = '',
+): Promise<{ status: number; body: CommonResult<unknown> }> {
+  const boundary = `----iatest-${Math.random().toString(16).slice(2)}`
+  const raw = [
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="file"; filename="${fileName}"`,
+    'Content-Type: application/zip',
+    '',
+    content,
+    `--${boundary}--`,
+    '',
+  ].join('\r\n')
+  const resp = await fetch(`/ia/api/v1/admin/skills${path}${query}`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'X-IA-Admin-Key': 'k' },
+    body: raw,
+  })
+  return { status: resp.status, body: await resp.json() as CommonResult<unknown> }
+}
+
+describe('mock 后端:三方 MCP 服务器(P4-W13 契约形)', () => {
+  beforeEach(() => setAdminKeyGetter(() => 'k'))
+
+  it('list:数组形含停用;credentialsMasked 打码形(前 2 字符+***)不回显明文', async () => {
+    const list = await mcpServerAdminApi.list()
+    expect(list.length).toBeGreaterThanOrEqual(3)
+    expect(list.map(s => s.serverKey)).toContain('crm-mcp')
+    expect(list.map(s => s.enabled)).toContain(false)
+    const masked = list.find(s => s.credentialsMasked)!
+    expect(masked.credentialsMasked).toMatch(/^\S{0,2}\*\*\*$/)
+    const raw = masked as unknown as Record<string, unknown>
+    expect(raw['credentials']).toBeUndefined()
+    expect(masked.transport).toBe('streamable-http')
+  })
+
+  it('register:serverKey 字符集校验 400(仅字母/数字/连字符);STATIC_HEADER 头名/值必填;OAUTH → 501', async () => {
+    const okRow = await mcpServerAdminApi.register({
+      serverKey: 'crm-mcp-2', name: 'CRM 备用', endpointUrl: 'https://mcp2.example.com/mcp',
+      authType: 'STATIC_HEADER', headerName: 'X-Api-Key', credentials: 'secret-value-9f', timeoutSeconds: 45,
+    })
+    expect(okRow.enabled).toBe(true)
+    expect(okRow.timeoutSeconds).toBe(45)
+    expect(okRow.credentialsMasked).toBe('se***')
+    // serverKey 字符集(下划线拒绝;镜像 SERVER_KEY Pattern)
+    await expect(mcpServerAdminApi.register({
+      serverKey: 'bad_key', name: 'x', endpointUrl: 'https://a.example.com/mcp',
+      headerName: 'h', credentials: 'v',
+    })).rejects.toMatchObject({ status: 400, message: expect.stringContaining('仅允许字母/数字/连字符') })
+    // OAUTH → 501(P4-W13 仅枚举位)
+    await expect(mcpServerAdminApi.register({
+      serverKey: 'oauth-srv', name: 'x', endpointUrl: 'https://a.example.com/mcp',
+      authType: 'OAUTH', headerName: 'h', credentials: 'v',
+    })).rejects.toMatchObject({ status: 501, message: expect.stringContaining('暂未实现') })
+    // STATIC_HEADER 头值缺失 → 400(整对象字面量缺 credentials 字段,断言走线上 400)
+    await expect(mcpServerAdminApi.register({
+      serverKey: 'no-cred', name: 'x', endpointUrl: 'https://a.example.com/mcp', headerName: 'h',
+    } as never)).rejects.toMatchObject({ status: 400, message: expect.stringContaining('静态头值') })
+    // timeoutSeconds 越界 → 400
+    await expect(mcpServerAdminApi.register({
+      serverKey: 'timeout-bad', name: 'x', endpointUrl: 'https://a.example.com/mcp',
+      headerName: 'h', credentials: 'v', timeoutSeconds: 601,
+    })).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('防遮蔽冲突域:本表唯一 409;与宿主注册表工具 serverKey 冲突 409', async () => {
+    await expect(mcpServerAdminApi.register({
+      serverKey: 'crm-mcp', name: '重复', endpointUrl: 'https://a.example.com/mcp', headerName: 'h', credentials: 'v',
+    })).rejects.toMatchObject({ status: 409, message: expect.stringContaining('已被应用级三方 MCP 服务占用') })
+    // 宿主注册表种子含 serverKey='crm'(mcp__crm__* 工具)
+    await expect(mcpServerAdminApi.register({
+      serverKey: 'crm', name: '遮蔽宿主', endpointUrl: 'https://a.example.com/mcp', headerName: 'h', credentials: 'v',
+    })).rejects.toMatchObject({ status: 409, message: expect.stringContaining('防遮蔽') })
+  })
+
+  it('update:credentials 空值语义 K③(空串=保持原值,非空=覆盖);启停/删除 404', async () => {
+    const before = (await mcpServerAdminApi.list()).find(s => s.serverKey === 'crm-mcp')!
+    // 覆盖:显式非空 → 新掩码
+    const updated = await mcpServerAdminApi.update(before.id, {
+      serverKey: before.serverKey, name: 'CRM 三方服务(改)', endpointUrl: 'https://crm-mcp.example.com/mcp',
+      headerName: 'X-Api-Key', credentials: 'brand-new-key', timeoutSeconds: 90,
+    })
+    expect(updated.name).toContain('改')
+    expect(updated.credentialsMasked).toBe('br***')
+    expect(updated.enabled).toBe(true)
+    // 保持原值:空串 = 不覆盖(镜像 K③ KEEP_IF_ABSENT;注册时才必填)
+    const keep = await mcpServerAdminApi.update(before.id, {
+      serverKey: before.serverKey, name: updated.name!, endpointUrl: updated.endpointUrl,
+      headerName: 'X-Api-Key', credentials: '', timeoutSeconds: 90,
+    })
+    expect(keep.credentialsMasked).toBe('br***')
+    const disabled = await mcpServerAdminApi.disable(before.id)
+    expect(disabled.enabled).toBe(false)
+    const enabled = await mcpServerAdminApi.enable(before.id)
+    expect(enabled.enabled).toBe(true)
+    await expect(mcpServerAdminApi.enable(999999)).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe('mock 后端:Skill 目录(P4-W13 契约形)', () => {
+  beforeEach(() => setAdminKeyGetter(() => 'k'))
+
+  it('api 层:preview/import 走 multipart 形(preview 无 query;import 带 overwrite/displayName)', async () => {
+    const seen: Array<{ url: string; method: string; multipart: boolean }> = []
+    server.use(
+      mswHttp.post('/ia/api/v1/admin/skills/import/preview', ({ request }) => {
+        seen.push({
+          url: new URL(request.url).pathname,
+          method: request.method,
+          multipart: (request.headers.get('content-type') ?? '').includes('multipart/form-data'),
+        })
+        return HttpResponse.json({ code: 0, msg: 'success', data: null })
+      }),
+      mswHttp.post('/ia/api/v1/admin/skills/import', ({ request }) => {
+        const url = new URL(request.url)
+        seen.push({
+          url: `${url.pathname}?${url.searchParams}`,
+          method: request.method,
+          multipart: (request.headers.get('content-type') ?? '').includes('multipart/form-data'),
+        })
+        return HttpResponse.json({ code: 0, msg: 'success', data: null })
+      }),
+    )
+    const file = new File([skillZipText({ name: 'api-shape' })], 'shape.zip')
+    await skillAdminApi.preview(file, 'shape.zip')
+    await skillAdminApi.importSkill({ file, fileName: 'shape.zip', displayName: '名', overwrite: true })
+    expect(seen).toEqual([
+      { url: '/ia/api/v1/admin/skills/import/preview', method: 'POST', multipart: true },
+      { url: '/ia/api/v1/admin/skills/import?displayName=%E5%90%8D&overwrite=true', method: 'POST', multipart: true },
+    ])
+  })
+
+  it('preview:dryRun 零落库;返回清单+文件+警告;invalid 仍 200(errors 非空)', async () => {
+    const totalBefore = (await skillAdminApi.page({ pageSize: 100 })).total
+    const previewResp = await postMultipart('/import/preview', 'preview-skill.zip',
+      skillZipText({ name: 'preview-skill', displayName: '预览技能', description: 'd', version: '1.0.0' },
+        [{ path: 'SKILL.md', content: '正文' }]))
+    expect(previewResp.status).toBe(200)
+    const preview = previewResp.body.data as SkillPreviewView
+    expect(preview.valid).toBe(true)
+    expect(preview.manifest!.name).toBe('preview-skill')
+    expect(preview.files.map(f => f.path)).toContain('SKILL.md')
+    // 预览零副作用:总数不变
+    expect((await skillAdminApi.page({ pageSize: 100 })).total).toBe(totalBefore)
+    // 无 SKILL.md → 警告不阻断;name 非法 → invalid(errors 非空,HTTP 仍 200)
+    const warned = (await postMultipart('/import/preview', 'x.zip', skillZipText({ name: 'no-doc-skill' }, [{ path: 'a.txt' }]))).body.data as SkillPreviewView
+    expect(warned.valid).toBe(true)
+    expect(warned.warnings.join()).toContain('SKILL.md')
+    const invalid = (await postMultipart('/import/preview', 'y.zip', skillZipText({ name: 'Bad_Name' }))).body.data as SkillPreviewView
+    expect(invalid.valid).toBe(false)
+    expect(invalid.errors.join()).toContain('仅允许小写字母/数字/连字符')
+    expect((await skillAdminApi.page({ pageSize: 100 })).total).toBe(totalBefore)
+  })
+
+  it('import:确认入库;同名活跃行缺省 409;inactive 同名按复活/覆盖;invalid → 400', async () => {
+    const createdResp = await postMultipart('/import', 'imported-skill.zip',
+      skillZipText({ name: 'imported-skill', displayName: '导入技能', description: 'd' }, [{ path: 'SKILL.md', content: 'x' }]))
+    expect(createdResp.status).toBe(200)
+    const created = createdResp.body.data as IaSkill
+    expect(created.name).toBe('imported-skill')
+    expect(created.status).toBe('inactive') // 导入后未激活
+    // 同名再导入(仍是 inactive → 复活/覆盖语义,非 409;镜像:同名活跃行才 409)
+    const again = (await postMultipart('/import', 'imported-skill.zip',
+      skillZipText({ name: 'imported-skill', displayName: '导入技能2' }, [{ path: 'SKILL.md', content: 'y' }]))).body.data as IaSkill
+    expect(again.displayName).toBe('导入技能2')
+    // 同名活跃种子行(week-report)缺省导入 → 409;overwrite=true → 覆盖
+    const conflict = await postMultipart('/import', 'imported-skill.zip',
+      skillZipText({ name: 'week-report' }, [{ path: 'SKILL.md', content: 'z' }]))
+    expect(conflict.status).toBe(409)
+    expect(conflict.body.msg).toContain('同名 Skill 已存在')
+    const overwrite = await postMultipart('/import', 'imported-skill.zip',
+      skillZipText({ name: 'imported-skill', displayName: '覆盖版' }, [{ path: 'SKILL.md', content: 'w' }]), '?overwrite=true')
+    expect(overwrite.status).toBe(200)
+    // 校验不过 → 400(服务端重校验,不信任客户端回显)
+    const bad = await postMultipart('/import', 'bad.zip', skillZipText({}))
+    expect(bad.status).toBe(400)
+    expect(bad.body.msg).toContain('未通过校验')
+  })
+
+  it('activate:上限 8(种子已 8 激活,再激活 → 409 友好文案);deactivate/删除', async () => {
+    const page = await skillAdminApi.page({ pageSize: 100 })
+    expect(page.pageNo).toBe(1)
+    expect(page.total).toBeGreaterThanOrEqual(9) // 8 active + 1 inactive
+    const inactive = page.list.find(s => s.status === 'inactive')!
+    // 种子 8 个 active 已达上限 → 激活第 9 个 409(错误文案与真实 service 一致)
+    const err = await skillAdminApi.activate(inactive.id).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).status).toBe(409)
+    expect((err as ApiError).message).toContain('已达上限 8')
+    // 停用一个 → 腾出名额 → 激活成功
+    await skillAdminApi.deactivate(inactive.id)
+    const anyActive = (await skillAdminApi.page({ pageSize: 100 })).list.find(s => s.status === 'active')!
+    const deactivated = await skillAdminApi.deactivate(anyActive.id)
+    expect(deactivated.active).toBe(false)
+    await skillAdminApi.activate(inactive.id)
+    expect((await skillAdminApi.get(inactive.id)).skill.status).toBe('active')
+    // 详情含文件清单
+    const detail = await skillAdminApi.get(inactive.id)
+    expect(detail.files.length).toBeGreaterThan(0)
+    // 删除(逻辑):列表不再返回
+    await skillAdminApi.remove(anyActive.id)
+    expect((await skillAdminApi.page({ pageSize: 100 })).list.find(s => s.id === anyActive.id)).toBeUndefined()
+  })
+})
+
+describe('mock 后端:mini 知识库(P4-W14 契约形)', () => {
+  beforeEach(() => setAdminKeyGetter(() => 'k'))
+
+  it('import:文本导入(标题/来源/分块参数);校验 400 语义齐全', async () => {
+    const doc = await kbAdminApi.importDocument({ title: '接入指南', source: 'upload', content: 'a'.repeat(1200), chunkSize: 500, chunkOverlap: 50 })
+    expect(doc.status).toBe('active')
+    expect(doc.chunkCount).toBe(3) // ceil(1200/500)
+    await expect(kbAdminApi.importDocument({ title: '', content: 'x' })).rejects.toMatchObject({ status: 400 })
+    await expect(kbAdminApi.importDocument({ title: 't', content: '  ' })).rejects.toMatchObject({ status: 400 })
+    await expect(kbAdminApi.importDocument({ title: 't', content: 'c', chunkSize: 100, chunkOverlap: 100 }))
+      .rejects.toMatchObject({ status: 400, message: expect.stringContaining('chunkOverlap') })
+    await expect(kbAdminApi.importDocument({ title: 't', content: 'c', metadata: '{bad' }))
+      .rejects.toMatchObject({ status: 400, message: expect.stringContaining('metadata') })
+    await expect(kbAdminApi.importDocument({ title: 't', content: 'c', metadata: '[1]' }))
+      .rejects.toMatchObject({ status: 400, message: expect.stringContaining('JSON 对象') })
+  })
+
+  it('search:检索调试(top-k/降级标记);空查询 → simple 降级空命中', async () => {
+    const result = await kbAdminApi.search({ q: '员工', topK: 2 })
+    expect(result.searchConfig).toBe('tsvector')
+    expect(result.degraded).toBe(false)
+    expect(result.hits.length).toBeLessThanOrEqual(2)
+    expect(result.hits[0]).toHaveProperty('documentTitle')
+    expect(result.hits[0]).toHaveProperty('anchor')
+    const degraded = await kbAdminApi.search({ q: '' })
+    expect(degraded.degraded).toBe(true)
+    expect(degraded.searchConfig).toBe('simple')
+    expect(degraded.hits).toHaveLength(0)
+  })
+
+  it('状态门控/inactive 不参与检索;rebuild-index;更新重分块;删除', async () => {
+    const doc = await kbAdminApi.importDocument({ title: '门控文档', content: 'x' })
+    // deactivate → 检索不再命中
+    const deactivated = await kbAdminApi.deactivate(doc.id)
+    expect(deactivated.status).toBe('inactive')
+    expect(deactivated.active).toBe(false)
+    const afterOff = await kbAdminApi.search({ q: '门控文档' })
+    expect(afterOff.hits.find(h => h.documentId === doc.id)).toBeUndefined()
+    // activate 恢复
+    const activated = await kbAdminApi.activate(doc.id)
+    expect(activated.active).toBe(true)
+    // 重建索引(回写行)
+    const rebuilt = await kbAdminApi.rebuildIndex(doc.id)
+    expect(rebuilt.id).toBe(doc.id)
+    // 更新带 content → 重分块
+    const updated = await kbAdminApi.update(doc.id, { title: '门控文档(改)', content: 'b'.repeat(900), chunkSize: 400 })
+    expect(updated.title).toContain('改')
+    expect(updated.chunkCount).toBe(3) // ceil(900/400)
+    await kbAdminApi.remove(doc.id)
+    await expect(kbAdminApi.get(doc.id)).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe('mock 后端:用量统计(W15 契约形)', () => {
+  beforeEach(() => setAdminKeyGetter(() => 'k'))
+
+  it('summary:分页聚合行(statDate/provider/modelCode/calls/token 列);DAY 缺省', async () => {
+    const page = await usageAdminApi.summary({ pageNo: 1, pageSize: 5 })
+    expect(page.total).toBe(12)
+    expect(page.list).toHaveLength(5)
+    const row = page.list[0]!
+    expect(row).toHaveProperty('statDate')
+    expect(row).toHaveProperty('provider')
+    expect(row).toHaveProperty('modelCode')
+    expect(row).toHaveProperty('calls')
+    // statDate 降序
+    expect(page.list[0]!.statDate >= page.list[4]!.statDate).toBe(true)
+    // FAILED 行 token 列为空形保留(种子 2026-09-18 deepseek-chat 行)
+    const full = await usageAdminApi.summary({ pageSize: 100 })
+    expect(full.list.some(r => r.inputTokens === null)).toBe(true)
+  })
+
+  it('summary:granularity=MONTH 聚合合并;非法 granularity → 400;userId 过滤', async () => {
+    const month = await usageAdminApi.summary({ granularity: 'MONTH', pageSize: 100 })
+    for (const row of month.list) expect(row.statDate).toBe('2026-09')
+    expect(month.total).toBeLessThan(12)
+    await expect(usageAdminApi.summary({ granularity: 'WEEK' as never })).rejects.toMatchObject({ status: 400 })
+    const userOnly = await usageAdminApi.summary({ userId: 12993, pageSize: 100 })
+    expect(userOnly.list.every(r => r.userId === 12993)).toBe(true)
+  })
+
+  it('north-star:好评率=👍÷(👍+👎);带反馈完成率;无样本 → null 不虚报', async () => {
+    const ns = await usageAdminApi.northStar()
+    // 种子 6 条反馈:4 UP / 2 DOWN
+    expect(ns.thumbsUp).toBe(4)
+    expect(ns.thumbsDown).toBe(2)
+    expect(ns.positiveRate).toBeCloseTo(4 / 6, 5)
+    expect(ns.feedbackLinkedCompletedRuns).toBeGreaterThan(0)
+    expect(ns.feedbackLinkedCompletionRate).toBeCloseTo(1, 5)
+    // 时间窗过滤到空 → 比率 null
+    const empty = await usageAdminApi.northStar({ from: '2020-01-01T00:00:00', to: '2020-01-02T00:00:00' })
+    expect(empty.thumbsUp).toBe(0)
+    expect(empty.positiveRate).toBeNull()
+    expect(empty.feedbackLinkedCompletionRate).toBeNull()
+  })
+})
+
+describe('mock 后端:用户反馈(W15 契约形)', () => {
+  beforeEach(() => setAdminKeyGetter(() => 'k'))
+
+  it('page:分页行形(维度锚点/rating/comment/双时间);rating 过滤', async () => {
+    const page = await feedbackAdminApi.page({ pageNo: 1, pageSize: 4 })
+    expect(page.total).toBe(6)
+    expect(page.list).toHaveLength(4)
+    const row = page.list[0]!
+    expect(['UP', 'DOWN']).toContain(row.rating)
+    expect(row).toHaveProperty('conversationId')
+    expect(row).toHaveProperty('runId')
+    expect(row).toHaveProperty('messageId')
+    expect(row).toHaveProperty('comment')
+    expect(row).toHaveProperty('createTime')
+    expect(row).toHaveProperty('updateTime')
+    // createTime 降序(最新在前)
+    expect(String(row.createTime) >= String(page.list[3]!.createTime)).toBe(true)
+    const downs = await feedbackAdminApi.page({ rating: 'DOWN' })
+    expect(downs.total).toBe(2)
+    expect(downs.list.every(f => f.rating === 'DOWN')).toBe(true)
+  })
+
+  it('page:rating 非法值 → 400(镜像 AdminFeedbackController);runId 锚点过滤', async () => {
+    await expect(feedbackAdminApi.page({ rating: 'LEFT' as never })).rejects.toMatchObject({ status: 400 })
+    const byRun = await feedbackAdminApi.page({ runId: 'run-2001' })
+    expect(byRun.total).toBe(2)
+    expect(byRun.list.every(f => f.runId === 'run-2001')).toBe(true)
   })
 })

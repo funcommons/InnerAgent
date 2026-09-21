@@ -32,14 +32,24 @@ import type {
   DefinitionBundleEntry,
   IaAgentDefinition,
   IaApp,
+  IaFeedback,
+  IaKbDocument,
+  IaMcpServer,
   IaModelApiConfig,
+  IaSkill,
   IaToolGrant,
   IaToolRegistry,
   IaToolSchemaHistory,
+  KbSearchHitView,
+  SkillDetailView,
+  SkillFileView,
+  SkillManifestView,
+  SkillPreviewView,
   ToolCheckResult,
   ToolHealthCheckItem,
   ToolHealthStatus,
   ToolRegisterReq,
+  UsageSummaryRow,
   WebhookDelivery,
   WebhookEvent,
 } from '@/api/types'
@@ -1192,6 +1202,667 @@ const webhookHandlers = [
   }),
 ]
 
+// ==================== 三方 MCP 服务器(镜像 AdminMcpServerController/McpAppServerService,P4-W13) ====================
+
+/**
+ * credentials 打码(镜像 McpServerRespVO.mask):null/空白 → null;
+ * ≤2 字符 → '***';否则前 2 字符 + '***'。明文永不回显。
+ */
+function maskCredentials(credentials: string | null | undefined): string | null {
+  if (credentials == null || credentials.trim() === '') return null
+  return credentials.length <= 2 ? '***' : credentials.slice(0, 2) + '***'
+}
+
+/** 应用级防遮蔽冲突域(镜像 McpAppServerService.requireServerKeyFree):
+ * ① 本表唯一;② 与宿主注册表工具的 serverKey 冲突(防遮蔽)→ 409 */
+function requireMcpServerKeyFree(serverKey: string): HttpResponse<DefaultBodyType> | null {
+  if (store.mcpServers.some(s => s.serverKey === serverKey)) {
+    return fail(409, `serverKey 已被应用级三方 MCP 服务占用: ${serverKey}`)
+  }
+  if (store.tools.some(t => !t.deleted && t.serverKey === serverKey)) {
+    return fail(409, `serverKey 与宿主注册表工具的 serverKey 冲突(防遮蔽): ${serverKey}`)
+  }
+  return null
+}
+
+/**
+ * 应用级注册/更新字段级校验+归一化(镜像 McpThirdPartyServerSupport.normalize,
+ * userFacing=false)。credentials 空值语义(P4 差距收口 K③):mode=REQUIRED
+ * (注册)必填;mode=KEEP_IF_ABSENT(更新)null/空串 → credentials=undefined
+ * (= 保持原值哨兵,handler 跳过掩码覆盖),非空 → 覆盖。
+ */
+function normalizeMcpUpsert(
+  body: Record<string, unknown>,
+  mode: 'REQUIRED' | 'KEEP_IF_ABSENT',
+): { error?: HttpResponse<DefaultBodyType> } & Partial<IaMcpServer> & { credentials?: string } {
+  const serverKey = typeof body.serverKey === 'string' ? body.serverKey.trim() : ''
+  if (!serverKey) return { error: fail(400, 'serverKey 不能为空') }
+  if (!/^[A-Za-z0-9-]{1,64}$/.test(serverKey)) {
+    return { error: fail(400, `serverKey 仅允许字母/数字/连字符(避用下划线,FQN 命名空间): ${serverKey}`) }
+  }
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  if (!name) return { error: fail(400, '名称不能为空') }
+  if (name.length > 128) return { error: fail(400, '名称超长(≤128)') }
+  const transport = typeof body.transport === 'string' && body.transport.trim()
+    ? body.transport.trim().toLowerCase()
+    : 'streamable-http'
+  if (transport !== 'streamable-http') {
+    return { error: fail(400, `三方 MCP 当前仅支持 streamable-http 传输: ${transport}`) }
+  }
+  const authType = typeof body.authType === 'string' && body.authType.trim()
+    ? body.authType.trim().toUpperCase()
+    : 'STATIC_HEADER'
+  if (authType === 'OAUTH') {
+    return { error: fail(501, '三方 MCP OAuth(CIMD/DCR + RFC 8707)暂未实现:当前仅支持 STATIC_HEADER 静态头鉴权') }
+  }
+  if (authType !== 'STATIC_HEADER') {
+    return { error: fail(400, `authType 仅支持 STATIC_HEADER/OAUTH: ${authType}`) }
+  }
+  const headerName = typeof body.headerName === 'string' ? body.headerName.trim() : ''
+  if (!headerName) return { error: fail(400, '静态头名不能为空') }
+  if (headerName.length > 128) return { error: fail(400, '静态头名超长(≤128)') }
+  // K③ 空值语义:更新 null/空串 = 保持原值(哨兵 undefined);注册必填
+  const rawCredentials = typeof body.credentials === 'string' ? body.credentials.trim() : ''
+  let credentials: string | undefined
+  if (mode === 'KEEP_IF_ABSENT' && !rawCredentials) {
+    credentials = undefined
+  } else {
+    if (!rawCredentials) return { error: fail(400, '静态头值不能为空') }
+    credentials = rawCredentials
+  }
+  const endpointUrl = typeof body.endpointUrl === 'string' ? body.endpointUrl.trim() : ''
+  if (!endpointUrl) return { error: fail(400, 'endpoint URL 不能为空') }
+  try {
+    const uri = new URL(endpointUrl)
+    if (uri.protocol !== 'http:' && uri.protocol !== 'https:') {
+      return { error: fail(400, 'endpoint URL 必须是有效的 HTTP(S) URL') }
+    }
+  } catch {
+    return { error: fail(400, 'endpoint URL 必须是有效的 HTTP(S) URL') }
+  }
+  const timeoutSeconds = typeof body.timeoutSeconds === 'number' ? body.timeoutSeconds : 30
+  if (timeoutSeconds < 1 || timeoutSeconds > 600) {
+    return { error: fail(400, `timeoutSeconds 须在 1-600 之间: ${timeoutSeconds}`) }
+  }
+  return {
+    serverKey,
+    name,
+    endpointUrl,
+    transport: 'streamable-http',
+    authType: 'STATIC_HEADER',
+    headerName,
+    credentials,
+    timeoutSeconds,
+    enabled: body.enabled === undefined ? true : body.enabled === true,
+  }
+}
+
+const mcpServerHandlers = [
+  http.get('/ia/api/v1/admin/mcp-servers', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    return ok(store.mcpServers) // 真实形:数组含停用,无分页
+  }),
+  http.get('/ia/api/v1/admin/mcp-servers/:id', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const s = store.mcpServers.find(x => x.id === Number(params.id))
+    return s ? ok(s) : fail(404, '三方 MCP 服务不存在')
+  }),
+  http.post('/ia/api/v1/admin/mcp-servers', async ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const body = (await request.json()) as Record<string, unknown>
+    const normalized = normalizeMcpUpsert(body, 'REQUIRED')
+    if (normalized.error) return normalized.error
+    const conflict = requireMcpServerKeyFree(normalized.serverKey!)
+    if (conflict) return conflict
+    const row: IaMcpServer = {
+      id: genId(),
+      serverKey: normalized.serverKey!,
+      name: normalized.name!,
+      endpointUrl: normalized.endpointUrl!,
+      transport: normalized.transport!,
+      authType: normalized.authType!,
+      headerName: normalized.headerName!,
+      credentialsMasked: maskCredentials(normalized.credentials),
+      timeoutSeconds: normalized.timeoutSeconds!,
+      enabled: normalized.enabled!,
+      updateTime: nowIso(),
+    }
+    store.mcpServers.unshift(row)
+    return ok(row)
+  }),
+  http.put('/ia/api/v1/admin/mcp-servers/:id', async ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const s = store.mcpServers.find(x => x.id === Number(params.id))
+    if (!s) return fail(404, '三方 MCP 服务不存在')
+    const body = (await request.json()) as Record<string, unknown>
+    // K③ 空值语义:更新 credentials null/空串 = 保持原值;显式非空 = 覆盖
+    const normalized = normalizeMcpUpsert(body, 'KEEP_IF_ABSENT')
+    if (normalized.error) return normalized.error
+    if (normalized.serverKey !== s.serverKey) {
+      const conflict = requireMcpServerKeyFree(normalized.serverKey!)
+      if (conflict) return conflict
+    }
+    Object.assign(s, {
+      serverKey: normalized.serverKey,
+      name: normalized.name,
+      endpointUrl: normalized.endpointUrl,
+      transport: normalized.transport,
+      authType: normalized.authType,
+      headerName: normalized.headerName,
+      timeoutSeconds: normalized.timeoutSeconds,
+      enabled: normalized.enabled,
+      updateTime: nowIso(),
+    })
+    if (normalized.credentials) s.credentialsMasked = maskCredentials(normalized.credentials)
+    return ok(s)
+  }),
+  http.post('/ia/api/v1/admin/mcp-servers/:id/enable', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const s = store.mcpServers.find(x => x.id === Number(params.id))
+    if (!s) return fail(404, '三方 MCP 服务不存在')
+    s.enabled = true
+    s.updateTime = nowIso()
+    return ok(s)
+  }),
+  http.post('/ia/api/v1/admin/mcp-servers/:id/disable', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const s = store.mcpServers.find(x => x.id === Number(params.id))
+    if (!s) return fail(404, '三方 MCP 服务不存在')
+    s.enabled = false
+    s.updateTime = nowIso()
+    return ok(s)
+  }),
+  http.delete('/ia/api/v1/admin/mcp-servers/:id', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const idx = store.mcpServers.findIndex(x => x.id === Number(params.id))
+    if (idx < 0) return fail(404, '三方 MCP 服务不存在')
+    store.mcpServers.splice(idx, 1)
+    return ok(true)
+  }),
+]
+
+// ==================== Skill 目录(镜像 AdminSkillController/AppSkillCatalogService,P4-W13) ====================
+
+/** 应用内同时激活上限(PRD 缺省 8,可配;镜像 SkillHubProperties.maxActivePerApp) */
+const SKILL_MAX_ACTIVE_PER_APP = 8
+
+/** mock zip 解析:测试/演示形态——由文本内容构造包(真实端点收 multipart zip)。 */
+interface MockSkillZip {
+  manifest: { name?: string; displayName?: string; description?: string; version?: string }
+  files: Array<{ path: string; encoding: 'utf-8' | 'base64'; content: string }>
+}
+
+/**
+ * multipart file 提取(镜像 @RequestPart("file") 语义):
+ * 最小 multipart 解析,仅取 name="file" 部件(演示层 zip 载荷为 UTF-8 文本;
+ * 不走 request.formData()——jsdom 与 undici 的 File 品牌不互认,解析器会
+ * 拒绝 jsdom File,逐字节手动解析对浏览器/测试环境行为一致)。
+ */
+async function extractMultipartFile(request: Request): Promise<{ name: string; text: string } | null> {
+  const contentType = request.headers.get('content-type') ?? ''
+  const match = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType)
+  if (!match) return null
+  const boundary = (match[1] ?? match[2] ?? '').trim()
+  const raw = new TextDecoder().decode(await request.arrayBuffer())
+  for (const part of raw.split(`--${boundary}`)) {
+    const nameMatch = /name="([^"]*)"/.exec(part)
+    if (!nameMatch || nameMatch[1] !== 'file') continue
+    const headerEnd = part.indexOf('\r\n\r\n')
+    if (headerEnd < 0) continue
+    const filenameMatch = /filename="([^"]*)"/.exec(part)
+    return {
+      name: filenameMatch?.[1] || 'upload.zip',
+      text: part.slice(headerEnd + 4).replace(/\r\n$/, ''),
+    }
+  }
+  return null
+}
+
+/** zip 字节 → mock 包结构(演示层不做真 zip 解包,内容为 JSON 形承载清单+文件) */
+function readMockSkillZip(text: string): MockSkillZip {
+  try {
+    const parsed = JSON.parse(text) as MockSkillZip
+    if (parsed && typeof parsed === 'object' && parsed.manifest) return parsed
+  } catch { /* 落到缺省空包 */ }
+  return { manifest: {}, files: [] }
+}
+
+/** 包校验(镜像 SkillPackageInspector:清单必填/文件清单/警告;errors 非空即 invalid) */
+function inspectMockSkillZip(pkg: MockSkillZip, fileName: string): SkillPreviewView {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const name = typeof pkg.manifest.name === 'string' ? pkg.manifest.name.trim() : ''
+  if (!name) errors.push('清单 name 不能为空(skill.json)')
+  if (name && !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+    errors.push(`清单 name 仅允许小写字母/数字/连字符: ${name}`)
+  }
+  if (typeof pkg.manifest.displayName === 'string' && pkg.manifest.displayName.length > 64) {
+    errors.push('清单 displayName 不能超过 64 个字符')
+  }
+  const files = pkg.files ?? []
+  if (name && !files.some(f => f.path === 'SKILL.md')) {
+    warnings.push('包内缺少 SKILL.md(技能正文将不可见)')
+  }
+  if (name && files.length === 0) {
+    errors.push('包内没有任何文件')
+  }
+  const manifest: SkillManifestView | null = name
+    ? {
+        name,
+        displayName: pkg.manifest.displayName ?? name,
+        description: pkg.manifest.description ?? null,
+        version: pkg.manifest.version ?? null,
+      }
+    : null
+  const fileViews: SkillFileView[] = files.map(f => ({
+    path: f.path,
+    encoding: f.encoding,
+    sizeBytes: f.content.length,
+    content: f.content,
+  }))
+  return {
+    fileName,
+    valid: errors.length === 0,
+    manifest,
+    files: fileViews,
+    warnings,
+    errors,
+    totalBytes: fileViews.reduce((sum, f) => sum + f.sizeBytes, 0),
+  }
+}
+
+function toSkillRow(preview: SkillPreviewView, appId = 1): IaSkill {
+  return {
+    id: genId(),
+    appId,
+    name: preview.manifest!.name,
+    displayName: preview.manifest!.displayName,
+    description: preview.manifest!.description,
+    version: preview.manifest!.version,
+    status: 'inactive',
+    source: 'import',
+    contentSha256: fakeSha256(preview.fileName + preview.totalBytes),
+    active: false,
+  }
+}
+
+const skillHandlers = [
+  // 预览(dryRun 零落库;校验不过仍 200,问题清单看 errors/warnings)
+  http.post('/ia/api/v1/admin/skills/import/preview', async ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const upload = await extractMultipartFile(request)
+    if (!upload) return fail(400, 'file 不能为空(multipart zip)')
+    const pkg = readMockSkillZip(upload.text)
+    return ok(inspectMockSkillZip(pkg, upload.name))
+  }),
+  // 确认导入(服务端重校验:invalid → 400;同名活跃行缺省 409,overwrite 覆盖;
+  // 软删同名行按复活处理;激活上限校验在 activate 端点)
+  http.post('/ia/api/v1/admin/skills/import', async ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const url = new URL(request.url)
+    const overwrite = url.searchParams.get('overwrite') === 'true'
+    const displayName = url.searchParams.get('displayName')
+    const upload = await extractMultipartFile(request)
+    if (!upload) return fail(400, 'file 不能为空(multipart zip)')
+    const pkg = readMockSkillZip(upload.text)
+    const preview = inspectMockSkillZip(pkg, upload.name)
+    if (!preview.valid) {
+      return fail(400, `Skill 包未通过校验:${preview.errors.join(';')}`)
+    }
+    const manifestName = preview.manifest!.name
+    const existing = store.skills.find(s => s.name === manifestName)
+    if (existing && existing.active && !overwrite) {
+      return fail(409, `同名 Skill 已存在且处于激活态: ${manifestName}(overwrite=true 可覆盖)`)
+    }
+    let row: IaSkill
+    if (existing) {
+      // 覆盖/复活:清单+内容整包替换(镜像 importSkill 的复活/覆盖语义)
+      existing.displayName = displayName?.trim() || preview.manifest!.displayName
+      existing.description = preview.manifest!.description
+      existing.version = preview.manifest!.version
+      existing.contentSha256 = fakeSha256(upload.name + preview.totalBytes)
+      existing.status = 'inactive'
+      existing.active = false
+      row = existing
+    } else {
+      row = toSkillRow(preview)
+      if (displayName?.trim()) row.displayName = displayName.trim()
+      store.skills.unshift(row)
+    }
+    return ok(row)
+  }),
+  // 分页列表(id 降序;含激活状态)
+  http.get('/ia/api/v1/admin/skills', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const url = new URL(request.url)
+    const list = [...store.skills].sort((a, b) => b.id - a.id)
+    return ok(paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10)))
+  }),
+  // 详情(含全部文件内容;mock 从包文本重读不可行,回演示文件清单)
+  http.get('/ia/api/v1/admin/skills/:id', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const s = store.skills.find(x => x.id === Number(params.id))
+    if (!s) return fail(404, `Skill 不存在: ${params.id}`)
+    const files: SkillFileView[] = [{
+      path: 'SKILL.md',
+      encoding: 'utf-8',
+      sizeBytes: s.description?.length ?? 0,
+      content: s.description ?? '',
+    }]
+    return ok({ skill: s, files } satisfies SkillDetailView)
+  }),
+  // 激活:应用内同时上限 8(镜像 activate:已达上限 → 409 明确报错)
+  http.post('/ia/api/v1/admin/skills/:id/activate', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const s = store.skills.find(x => x.id === Number(params.id))
+    if (!s) return fail(404, `Skill 不存在: ${params.id}`)
+    if (s.status !== 'active') {
+      const activeCount = store.skills.filter(x => x.appId === s.appId && x.status === 'active').length
+      if (activeCount >= SKILL_MAX_ACTIVE_PER_APP) {
+        return fail(409, `应用内同时激活的 Skill 已达上限 ${SKILL_MAX_ACTIVE_PER_APP},请先停用后再激活`)
+      }
+      s.status = 'active'
+      s.active = true
+    }
+    return ok(s)
+  }),
+  http.post('/ia/api/v1/admin/skills/:id/deactivate', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const s = store.skills.find(x => x.id === Number(params.id))
+    if (!s) return fail(404, `Skill 不存在: ${params.id}`)
+    s.status = 'inactive'
+    s.active = false
+    return ok(s)
+  }),
+  http.delete('/ia/api/v1/admin/skills/:id', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const idx = store.skills.findIndex(x => x.id === Number(params.id))
+    if (idx < 0) return fail(404, `Skill 不存在: ${params.id}`)
+    store.skills.splice(idx, 1) // 镜像逻辑删除:列表不再返回,同名再导入按复活
+    return ok(true)
+  }),
+]
+
+// ==================== mini 知识库(镜像 AdminKbController/KbIngestService,P4-W14) ====================
+
+/** 单 app 文档数上限(PRD 缺省 1000;mock 取小值便于演示) */
+const KB_MAX_DOCUMENTS_PER_APP = 1000
+
+function normalizeKbChunkParams(body: { chunkSize?: unknown; chunkOverlap?: unknown }): { chunkSize: number; chunkOverlap: number } | HttpResponse<DefaultBodyType> {
+  const chunkSize = typeof body.chunkSize === 'number' && body.chunkSize > 0 ? body.chunkSize : 500
+  const chunkOverlap = typeof body.chunkOverlap === 'number' && body.chunkOverlap >= 0 ? body.chunkOverlap : 50
+  if (chunkOverlap >= chunkSize) {
+    return fail(400, '分段参数不合法:chunkOverlap 须小于 chunkSize')
+  }
+  return { chunkSize, chunkOverlap }
+}
+
+function importKbDocument(body: {
+  title?: unknown; source?: unknown; content?: unknown; metadata?: unknown
+  chunkSize?: unknown; chunkOverlap?: unknown
+}): { document?: IaKbDocument; error?: HttpResponse<DefaultBodyType> } {
+  const title = typeof body.title === 'string' ? body.title.trim() : ''
+  if (!title) return { error: fail(400, '文档标题不能为空') }
+  if (title.length > 256) return { error: fail(400, '文档标题不能超过 256 个字符') }
+  const source = typeof body.source === 'string' ? body.source.trim() : ''
+  if (source.length > 256) return { error: fail(400, '来源标识不能超过 256 个字符') }
+  const content = typeof body.content === 'string' ? body.content : ''
+  if (!content.trim()) return { error: fail(400, '文档内容不能为空') }
+  if (typeof body.metadata === 'string' && body.metadata.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(body.metadata)
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { error: fail(400, 'metadata 必须是 JSON 对象') }
+      }
+    } catch {
+      return { error: fail(400, 'metadata 不是合法 JSON') }
+    }
+  }
+  const chunk = normalizeKbChunkParams(body)
+  if (chunk instanceof HttpResponse) return { error: chunk }
+  if (store.kbDocuments.length >= KB_MAX_DOCUMENTS_PER_APP) {
+    return { error: fail(409, `单应用知识库文档数已达上限 ${KB_MAX_DOCUMENTS_PER_APP},请清理后拆库再导入`) }
+  }
+  // 服务端分块语义(mock 近似:按 chunkSize 切片计数,空内容已在上面拦截)
+  const chunkCount = Math.max(1, Math.ceil(content.length / chunk.chunkSize))
+  const row: IaKbDocument = {
+    id: genId(),
+    appId: 1,
+    title,
+    source: source || null,
+    status: 'active',
+    chunkCount,
+    active: true,
+  }
+  store.kbDocuments.unshift(row)
+  return { document: row }
+}
+
+const kbHandlers = [
+  http.post('/ia/api/v1/admin/kb/documents/import', async ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const body = (await request.json()) as Record<string, unknown>
+    const result = importKbDocument(body)
+    return result.error ?? ok(result.document)
+  }),
+  http.get('/ia/api/v1/admin/kb/documents/search', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const url = new URL(request.url)
+    const q = (url.searchParams.get('q') ?? '').trim()
+    if (!q) return ok({ query: q, searchConfig: 'simple', degraded: true, hits: [] })
+    const topK = Math.min(Math.max(Number(url.searchParams.get('topK') ?? 5), 1), 50)
+    const sourceFilter = url.searchParams.get('source')
+    // 检索语义(mock 近似服务端 tsvector 检索):标题/来源词包含匹配 active 文档,
+    // 命中按标题前缀优先排序,内容片段为演示形
+    const candidates = store.kbDocuments
+      .filter(d => d.active && (!sourceFilter || d.source === sourceFilter))
+      .filter(d => d.title.includes(q) || (d.source ?? '').includes(q) || q.length >= 1)
+    const hits: KbSearchHitView[] = candidates.slice(0, topK).map((d, i) => ({
+      chunkId: d.id * 100 + i,
+      documentId: d.id,
+      documentTitle: d.title,
+      anchor: `§${i + 1}`,
+      seq: i,
+      content: `[mock] 「${q}」在《${d.title}》第 ${i + 1} 段的命中内容(演示层不做真实 tsvector 排序,联调以服务端检索为准)`,
+    }))
+    // 配置/降级标记(镜像 KbRetrievalService.effectiveSearchConfig/degraded)
+    return ok({ query: q, searchConfig: 'tsvector', degraded: false, hits })
+  }),
+  http.get('/ia/api/v1/admin/kb/documents', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const url = new URL(request.url)
+    const list = [...store.kbDocuments].sort((a, b) => b.id - a.id)
+    return ok(paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10)))
+  }),
+  http.get('/ia/api/v1/admin/kb/documents/:id', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const d = store.kbDocuments.find(x => x.id === Number(params.id))
+    return d ? ok(d) : fail(404, `知识库文档不存在: ${params.id}`)
+  }),
+  http.put('/ia/api/v1/admin/kb/documents/:id', async ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const d = store.kbDocuments.find(x => x.id === Number(params.id))
+    if (!d) return fail(404, `知识库文档不存在: ${params.id}`)
+    const body = (await request.json()) as Record<string, unknown>
+    if (typeof body.title === 'string') {
+      if (!body.title.trim()) return fail(400, '文档标题不能为空')
+      d.title = body.title.trim()
+    }
+    if (typeof body.source === 'string') d.source = body.source.trim() || null
+    if (typeof body.metadata === 'string' && body.metadata.trim()) {
+      try { JSON.parse(body.metadata) } catch { return fail(400, 'metadata 不是合法 JSON') }
+    }
+    if (typeof body.content === 'string' && body.content.trim()) {
+      const chunk = normalizeKbChunkParams(body)
+      if (chunk instanceof HttpResponse) return chunk
+      d.chunkCount = Math.max(1, Math.ceil(body.content.length / chunk.chunkSize))
+    }
+    return ok(d)
+  }),
+  http.post('/ia/api/v1/admin/kb/documents/:id/deactivate', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const d = store.kbDocuments.find(x => x.id === Number(params.id))
+    if (!d) return fail(404, `知识库文档不存在: ${params.id}`)
+    d.status = 'inactive'
+    d.active = false
+    return ok(d)
+  }),
+  http.post('/ia/api/v1/admin/kb/documents/:id/activate', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const d = store.kbDocuments.find(x => x.id === Number(params.id))
+    if (!d) return fail(404, `知识库文档不存在: ${params.id}`)
+    d.status = 'active'
+    d.active = true
+    return ok(d)
+  }),
+  // 重建索引(镜像 rebuild:按当前生效检索配置重算 tsv;mock 仅刷新分段数守恒)
+  http.post('/ia/api/v1/admin/kb/documents/:id/rebuild-index', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const d = store.kbDocuments.find(x => x.id === Number(params.id))
+    if (!d) return fail(404, `知识库文档不存在: ${params.id}`)
+    return ok(d)
+  }),
+  http.delete('/ia/api/v1/admin/kb/documents/:id', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const idx = store.kbDocuments.findIndex(x => x.id === Number(params.id))
+    if (idx < 0) return fail(404, `知识库文档不存在: ${params.id}`)
+    store.kbDocuments.splice(idx, 1)
+    return ok(true)
+  }),
+]
+
+// ==================== 用量统计(镜像 AdminUsageController/UsageQueryService,W15) ====================
+
+function normalizeGranularity(value: string | null): 'DAY' | 'MONTH' | HttpResponse<DefaultBodyType> {
+  if (!value || value.trim().toUpperCase() === 'DAY') return 'DAY'
+  if (value.trim().toUpperCase() === 'MONTH') return 'MONTH'
+  return fail(400, `granularity 仅支持 DAY / MONTH: ${value}`)
+}
+
+const usageHandlers = [
+  // 聚合分页(appId/userId/from/to/granularity;镜像 UsageSummaryFilter 语义)
+  http.get('/ia/api/v1/admin/usage/summary', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const url = new URL(request.url)
+    const granularity = normalizeGranularity(url.searchParams.get('granularity'))
+    if (granularity instanceof HttpResponse) return granularity
+    const appId = url.searchParams.get('appId')
+    const userId = url.searchParams.get('userId')
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+    let list: UsageSummaryRow[] = [...store.usageSummary].sort((a, b) =>
+      b.statDate.localeCompare(a.statDate) || a.provider.localeCompare(b.provider) || a.modelCode.localeCompare(b.modelCode))
+    if (appId) list = list.filter(r => r.appId === Number(appId))
+    if (userId) list = list.filter(r => r.userId === Number(userId))
+    if (from) list = list.filter(r => r.statDate >= from.slice(0, granularity === 'MONTH' ? 7 : 10))
+    if (to) list = list.filter(r => r.statDate <= to.slice(0, granularity === 'MONTH' ? 7 : 10))
+    if (granularity === 'MONTH') {
+      // 月聚合(mock 近似:同 (userId,provider,modelCode,月) 合并计数;token 仅 COMPLETED 行)
+      const merged = new Map<string, UsageSummaryRow>()
+      for (const r of list) {
+        const key = `${r.userId}|${r.provider}|${r.modelCode}|${r.statDate.slice(0, 7)}`
+        const acc = merged.get(key)
+        if (acc) {
+          acc.calls += r.calls
+          acc.inputTokens = (acc.inputTokens ?? 0) + (r.inputTokens ?? 0)
+          acc.outputTokens = (acc.outputTokens ?? 0) + (r.outputTokens ?? 0)
+          acc.reasoningTokens = (acc.reasoningTokens ?? 0) + (r.reasoningTokens ?? 0)
+          acc.cacheTokens = (acc.cacheTokens ?? 0) + (r.cacheTokens ?? 0)
+        } else {
+          merged.set(key, { ...r, statDate: r.statDate.slice(0, 7) })
+        }
+      }
+      list = [...merged.values()].sort((a, b) => b.statDate.localeCompare(a.statDate))
+    }
+    return ok(paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10)))
+  }),
+  // 北极星(好评率 + 带反馈完成率代理;窗口无样本比率 null 不虚报)
+  http.get('/ia/api/v1/admin/usage/north-star', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const url = new URL(request.url)
+    const appId = url.searchParams.get('appId')
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+    let rows: IaFeedback[] = [...store.feedbacks]
+    if (appId) rows = rows.filter(f => f.appId === Number(appId))
+    if (from) rows = rows.filter(f => String(f.createTime) >= from)
+    if (to) rows = rows.filter(f => String(f.createTime) <= to)
+    const up = rows.filter(f => f.rating === 'UP').length
+    const down = rows.filter(f => f.rating === 'DOWN').length
+    // 带反馈完成率代理(mock 近似:按 run 锚点去重,无 run 行计入完成侧演示值;
+    // 联调以服务端 UsageQueryService.northStar 口径为准)
+    const runKeys = new Set(rows.filter(f => f.runId).map(f => f.runId!))
+    const completedRuns = runKeys.size
+    const failedRuns = 0
+    const cancelledRuns = 0
+    return ok({
+      from: from ?? null,
+      to: to ?? null,
+      thumbsUp: up,
+      thumbsDown: down,
+      positiveRate: up + down === 0 ? null : up / (up + down),
+      feedbackLinkedCompletedRuns: completedRuns,
+      feedbackLinkedFailedRuns: failedRuns,
+      feedbackLinkedCancelledRuns: cancelledRuns,
+      feedbackLinkedCompletionRate: completedRuns + failedRuns === 0 ? null : completedRuns / (completedRuns + failedRuns),
+    })
+  }),
+]
+
+// ==================== 用户反馈(镜像 AdminFeedbackController,W15) ====================
+
+const feedbackHandlers = [
+  http.get('/ia/api/v1/admin/feedbacks', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const url = new URL(request.url)
+    const rating = url.searchParams.get('rating')
+    if (rating && rating !== 'UP' && rating !== 'DOWN') {
+      return fail(400, `rating 仅支持 UP / DOWN: ${rating}`)
+    }
+    const appId = url.searchParams.get('appId')
+    const userId = url.searchParams.get('userId')
+    const conversationId = url.searchParams.get('conversationId')
+    const runId = url.searchParams.get('runId')
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+    let list = [...store.feedbacks].sort((a, b) => String(b.createTime).localeCompare(String(a.createTime)))
+    if (appId) list = list.filter(f => f.appId === Number(appId))
+    if (userId) list = list.filter(f => f.userId === Number(userId))
+    if (conversationId) list = list.filter(f => f.conversationId === conversationId)
+    if (runId) list = list.filter(f => f.runId === runId)
+    if (rating) list = list.filter(f => f.rating === rating)
+    if (from) list = list.filter(f => String(f.createTime) >= from)
+    if (to) list = list.filter(f => String(f.createTime) <= to)
+    return ok(paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10)))
+  }),
+]
+
 export const handlers = [
   ...authHandlers,
   ...appHandlers,
@@ -1202,6 +1873,11 @@ export const handlers = [
   ...modelHandlers,
   ...circuitHandlers,
   ...webhookHandlers,
+  ...mcpServerHandlers,
+  ...skillHandlers,
+  ...kbHandlers,
+  ...usageHandlers,
+  ...feedbackHandlers,
 ]
 
 // 模块加载即恢复种子,保证 dev/测试首屏即有数据

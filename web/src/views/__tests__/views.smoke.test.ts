@@ -23,7 +23,7 @@ describe('视图挂载冒烟', () => {
     wrapper.unmount()
   })
 
-  it('AdminLayout:渲染七项导航(P2-W5 起 + Agent 定义)', async () => {
+  it('AdminLayout:渲染十二项导航(P4 批次 + 三方 MCP/Skill/知识库/用量/反馈)', async () => {
     const wrapper = await mountView(AdminLayout, '/apps')
     expect(wrapper.text()).toContain('应用管理')
     expect(wrapper.text()).toContain('工具注册与授权')
@@ -32,6 +32,12 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('模型配置')
     expect(wrapper.text()).toContain('熔断与紧急停用')
     expect(wrapper.text()).toContain('Webhook')
+    // P4 批次新增五项
+    expect(wrapper.text()).toContain('三方 MCP')
+    expect(wrapper.text()).toContain('Skill 管理')
+    expect(wrapper.text()).toContain('知识库')
+    expect(wrapper.text()).toContain('用量统计')
+    expect(wrapper.text()).toContain('用户反馈')
     wrapper.unmount()
   })
 

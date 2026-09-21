@@ -13,6 +13,14 @@
  *   - AdminWebhookConfigController:/admin/webhooks/config(配置/测试真实外呼)
  *   - AdminCircuitBreakerController:/admin/circuit-breaker(状态/limits/紧急停用/
  *     恢复/单运行终止;紧急停用仅翻转总开关不批量取消,limits 本版仅管理面读写)
+ *   - AdminMcpServerController:/admin/mcp-servers(应用级三方 MCP CRUD+启停,
+ *     P4-W13;credentials 打码回显)
+ *   - AdminSkillController:/admin/skills(zip 预览 dryRun/确认导入/分页/详情/
+ *     激活上限 8/停用/删除,P4-W13)
+ *   - AdminKbController:/admin/kb/documents(文本导入/分页/更新/状态门控/
+ *     rebuild-index/删除/检索调试,P4-W14)
+ *   - AdminUsageController:/admin/usage(聚合分页 + north-star 北极星,W15)
+ *   - AdminFeedbackController:/admin/feedbacks(反馈分页,rating=UP|DOWN,W15)
  * P2-W5 分页兼容形:tools/grants 列表缺省(无 pageNo/pageSize)仍数组;list()=
  * 数组兼容形,page()=管理站主动分页形(任一参数出现即 PageResult)。
  */
@@ -31,19 +39,34 @@ import type {
   DefinitionListQuery,
   DefinitionUpdatePromptReq,
   EmergencyStopReq,
+  FeedbackPageQuery,
   IaAgentDefinition,
   IaApp,
   IaAppCreateReq,
   IaAppUpdateReq,
   IaAuditLog,
+  IaFeedback,
+  IaKbDocument,
+  IaMcpServer,
   IaModelApiConfig,
+  IaSkill,
   IaToolGrant,
   IaToolRegistry,
   IaToolSchemaHistory,
+  KbDocumentImportReq,
+  KbDocumentListQuery,
+  KbDocumentUpdateReq,
+  KbSearchDebugView,
+  McpServerSaveReq,
   ModelApiConfigPageReq,
   ModelApiConfigSaveReq,
   ModelConnectivityResult,
+  NorthStarQuery,
+  NorthStarSummary,
   ResourceLimits,
+  SkillDetailView,
+  SkillListQuery,
+  SkillPreviewView,
   TerminateRunReq,
   ToolCheckBatchReceipt,
   ToolCheckResult,
@@ -55,6 +78,8 @@ import type {
   ToolRefreshSchemaReq,
   ToolTriageResp,
   ToolUpdateReq,
+  UsageSummaryQuery,
+  UsageSummaryRow,
   WebhookConfig,
   WebhookConfigSaveReq,
   WebhookConfigTestResult,
@@ -299,4 +324,111 @@ export const webhookAdminApi = {
     const raw = await http.post<RawDelivery>(`${BASE}/webhook-deliveries/${id}/redeliver`)
     return toDelivery(raw)
   },
+}
+
+// ==================== 三方 MCP 服务器(AdminMcpServerController,P4-W13) ====================
+
+export const mcpServerAdminApi = {
+  /** 列表(含停用;应用级,数组形无分页) */
+  list: () => http.get<IaMcpServer[]>(`${BASE}/mcp-servers`),
+  get: (id: number) => http.get<IaMcpServer>(`${BASE}/mcp-servers/${id}`),
+  /** 注册(serverKey 字符集 400 / 防遮蔽冲突 409 / OAUTH 即 501;credentials 只写必填) */
+  register: (data: McpServerSaveReq) => http.post<IaMcpServer>(`${BASE}/mcp-servers`, data),
+  /** 更新(端点/静态头名/超时等;credentials 空串=保持原值,非空=覆盖——K③ 空值语义) */
+  update: (id: number, data: McpServerSaveReq) =>
+    http.put<IaMcpServer>(`${BASE}/mcp-servers/${id}`, data),
+  /** 启用(目录恢复其三方工具) */
+  enable: (id: number) => http.post<IaMcpServer>(`${BASE}/mcp-servers/${id}/enable`),
+  /** 停用(目录摘除其全部三方工具) */
+  disable: (id: number) => http.post<IaMcpServer>(`${BASE}/mcp-servers/${id}/disable`),
+  /** 删除 */
+  remove: (id: number) => http.delete<boolean>(`${BASE}/mcp-servers/${id}`),
+}
+
+// ==================== Skill 目录(AdminSkillController,P4-W13) ====================
+
+export const skillAdminApi = {
+  /**
+   * 预览校验 zip(dryRun 零落库;multipart file;返回清单+文件清单+警告+错误)。
+   * 校验不过(valid=false)仍 200,问题清单看 errors/warnings。
+   */
+  preview: (file: File | Blob, fileName: string) => {
+    const form = new FormData()
+    form.append('file', file, fileName)
+    return http.post<SkillPreviewView>(`${BASE}/skills/import/preview`, form)
+  },
+  /**
+   * 确认导入(multipart file;服务端重校验,errors 非空 → 400;
+   * overwrite=true 覆盖同名活跃行,缺省同名 409;软删同名行复活)。
+   */
+  importSkill: (opts: { file: File | Blob; fileName: string; displayName?: string; overwrite?: boolean }) => {
+    const form = new FormData()
+    form.append('file', opts.file, opts.fileName)
+    const query = buildQuery({
+      displayName: opts.displayName,
+      overwrite: opts.overwrite === true ? 'true' : '',
+    })
+    return http.post<IaSkill>(`${BASE}/skills/import${query}`, form)
+  },
+  /** 分页列表(含激活状态;id 降序) */
+  page: (params: SkillListQuery = {}) =>
+    http.get<PageResult<IaSkill>>(`${BASE}/skills${buildQuery({ ...params })}`),
+  /** 详情(含全部文件内容;总量受导入 128KB 上限约束) */
+  get: (id: number) => http.get<SkillDetailView>(`${BASE}/skills/${id}`),
+  /** 激活(应用内同时上限 8,超限 409 明确报错) */
+  activate: (id: number) => http.post<IaSkill>(`${BASE}/skills/${id}/activate`),
+  /** 停用(未激活不进上下文) */
+  deactivate: (id: number) => http.post<IaSkill>(`${BASE}/skills/${id}/deactivate`),
+  /** 删除(逻辑删除;同名再导入按复活处理) */
+  remove: (id: number) => http.delete<boolean>(`${BASE}/skills/${id}`),
+}
+
+// ==================== mini 知识库(AdminKbController,P4-W14) ====================
+
+export const kbAdminApi = {
+  /** 导入文档(文本导入→服务端分块→tsvector 落列;单 app 上限 1000,超限 409 提示拆库) */
+  importDocument: (data: KbDocumentImportReq) =>
+    http.post<IaKbDocument>(`${BASE}/kb/documents/import`, data),
+  /** 文档分页列表(含状态/分段数;id 降序) */
+  page: (params: KbDocumentListQuery = {}) =>
+    http.get<PageResult<IaKbDocument>>(`${BASE}/kb/documents${buildQuery({ ...params })}`),
+  get: (id: number) => http.get<IaKbDocument>(`${BASE}/kb/documents/${id}`),
+  /** 字段级更新(带 content 即重分块) */
+  update: (id: number, data: KbDocumentUpdateReq) =>
+    http.put<IaKbDocument>(`${BASE}/kb/documents/${id}`, data),
+  /** 失效文档(标黄语义,不参与检索) */
+  deactivate: (id: number) => http.post<IaKbDocument>(`${BASE}/kb/documents/${id}/deactivate`),
+  /** 恢复文档(重新参与检索) */
+  activate: (id: number) => http.post<IaKbDocument>(`${BASE}/kb/documents/${id}/activate`),
+  /** 重建索引(search-config 变更或降级恢复后执行;按当前生效配置重算 tsv) */
+  rebuildIndex: (id: number) =>
+    http.post<IaKbDocument>(`${BASE}/kb/documents/${id}/rebuild-index`),
+  /** 删除文档(软删主行+清理分段) */
+  remove: (id: number) => http.delete<boolean>(`${BASE}/kb/documents/${id}`),
+  /** 检索调试(top-k 命中及来源字段;searchConfig+degraded 随响应回显) */
+  search: (query: { q: string; topK?: number; source?: string }) =>
+    http.get<KbSearchDebugView>(`${BASE}/kb/documents/search${buildQuery({ ...query })}`),
+}
+
+// ==================== 用量统计(AdminUsageController,W15) ====================
+
+export const usageAdminApi = {
+  /**
+   * 用量聚合分页(应用/用户 × 日|月 × 模型;tokens 与调用次数;聚合口径=
+   * COMPLETED/FAILED/CANCELLED 终态调用,token 合计仅 COMPLETED)。
+   * from/to 为 ISO 本地日期时间(无时区后缀,镜像 @DateTimeFormat ISO.DATE_TIME)。
+   */
+  summary: (params: UsageSummaryQuery = {}) =>
+    http.get<PageResult<UsageSummaryRow>>(`${BASE}/usage/summary${buildQuery({ ...params })}`),
+  /** 北极星摘要(好评率 + 带反馈完成率代理;窗口无样本比率为 null 不虚报) */
+  northStar: (params: NorthStarQuery = {}) =>
+    http.get<NorthStarSummary>(`${BASE}/usage/north-star${buildQuery({ ...params })}`),
+}
+
+// ==================== 用户反馈(AdminFeedbackController,W15) ====================
+
+export const feedbackAdminApi = {
+  /** 反馈分页(rating=UP|DOWN 其他值 400;from/to ISO 本地日期时间) */
+  page: (params: FeedbackPageQuery = {}) =>
+    http.get<PageResult<IaFeedback>>(`${BASE}/feedbacks${buildQuery({ ...params })}`),
 }

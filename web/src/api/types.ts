@@ -48,6 +48,18 @@
  *     待服务端落地(跟踪:99-优化建议.md #2)。
  *  8. id 为数据库自增 number ✓;appId 单应用部署(ADR-10)由服务端行级拦截器注入,
  *     管理站请求体不再强制携带。
+ *  9. P4 批次(2026-09-21 web 接线)五域全部对齐真实控制器(以代码为准):
+ *     - 三方 MCP 服务器:AdminMcpServerController(/admin/mcp-servers,应用级
+ *       CRUD+启停;credentials 响应永为打码形 credentialsMasked;OAUTH 配置即
+ *       501;credentials 空值语义 K③(2026-09-21 P4-gap 收口):注册必填,
+ *       更新 null/空串=保持原值、显式非空=覆盖);
+ *     - Skill 目录:AdminSkillController(/admin/skills,zip 预览 dryRun/确认
+ *       入库/激活上限 8 超限 409/逻辑删除);
+ *     - mini 知识库:AdminKbController(/admin/kb/documents,文本导入/状态门控/
+ *       rebuild-index/检索调试 search);
+ *     - 用量统计:AdminUsageController(/admin/usage/summary 分页聚合 +
+ *       /usage/north-star 北极星);
+ *     - 用户反馈:AdminFeedbackController(/admin/feedbacks,rating=UP|DOWN)。
  */
 import type { IsoDateTime, PageQuery } from './common'
 
@@ -622,7 +634,12 @@ export interface CircuitBreakerUpdateReq {
   limits?: Partial<ResourceLimits>
 }
 
-/** 紧急停用(应用级总开关,生效延迟 ≤5s 经 Redis 取消通道) */
+/**
+ * 紧急停用(应用级 Agent 总开关;契约对齐注记 2026-09-21 服务端批:仅翻转
+ * 开关+记事件立即生效,无 Redis 取消通道/不批量取消进行中 run,存量 run 由
+ * 管理员逐个 terminate-run。旧「≤5s 经 Redis 取消通道」表述为契约漂移残留,
+ * 已按 test-report/2026-09-21-04 00-R3验证报告 #3 修正)
+ */
 export interface EmergencyStopReq {
   reason: string
 }
@@ -700,4 +717,284 @@ export interface WebhookConfigTestResult {
   httpStatus: number | null
   /** 失败原因摘要(ok=true 时为 null) */
   error: string | null
+}
+
+// ==================== 三方 MCP 服务器(ia_mcp_server_config,AdminMcpServerController,P4-W13) ====================
+// 应用级三方 MCP 注册面(与用户级 /ia/api/v1/mcp-servers 同形、域隔离);
+// serverKey 为 FQN 命名空间(字母/数字/连字符,避用下划线,与 ia_tool_registry
+// FQN mcp__<serverKey>__<tool> 同口径);注册/更新/启停/删除即失效工具清单
+// LRU 缓存与目录快照;credentials 响应永为打码形(前 2 字符 + ***),明文不回显。
+
+/** 传输方式(当前仅 streamable-http,服务端 McpThirdPartyServerSupport.TRANSPORT) */
+export type McpTransport = 'streamable-http'
+
+/** 鉴权策略:STATIC_HEADER(静态头)/OAUTH(服务端 501 暂未支持,UI 置灰) */
+export type McpAuthType = 'STATIC_HEADER' | 'OAUTH'
+
+/** 三方 MCP 服务器响应视图(镜像 McpServerRespVO;credentialsMasked 打码形) */
+export interface IaMcpServer {
+  id: number
+  /** 服务器键(FQN 命名空间,[A-Za-z0-9-]{1,64}) */
+  serverKey: string
+  /** 展示名 */
+  name: string | null
+  /** Streamable HTTP 端点 URL */
+  endpointUrl: string
+  transport: McpTransport
+  authType: McpAuthType
+  /** 静态头名(STATIC_HEADER 必填) */
+  headerName: string | null
+  /** 静态头值打码形(前 2 字符 + ***;明文永不回显) */
+  credentialsMasked: string | null
+  /** tools/call 超时(秒,1-600,缺省 30) */
+  timeoutSeconds: number
+  enabled: boolean
+  updateTime: IsoDateTime | null
+}
+
+/** 三方 MCP 注册/更新请求体(镜像 McpServerSaveReqVO;字段校验在服务层:
+ * serverKey 字符集、transport=streamable-http、STATIC_HEADER 头名必填、
+ * OAUTH 配置即 501。credentials 为静态头值,只写,响应永打码;
+ * 空值语义(P4 差距收口 K③):注册必填(缺省 400);更新 null/空串=
+ * 保持原值,显式非空=覆盖;无「清空」语义,撤销凭据请删除该三方服务) */
+export interface McpServerSaveReq {
+  serverKey: string
+  name?: string
+  endpointUrl: string
+  transport?: McpTransport
+  authType?: McpAuthType
+  headerName?: string
+  /** 静态头值(只写;打码不回显;注册必填,更新留空=保持原值) */
+  credentials?: string
+  timeoutSeconds?: number
+  enabled?: boolean
+}
+
+// ==================== Skill 目录(ia_skill/ia_skill_file,AdminSkillController,P4-W13) ====================
+// zip 导入两段式:预览(POST /import/preview,dryRun 零落库,返回清单+问题列表)
+// 与确认入库(POST /import,服务端重跑同一校验器;overwrite=true 覆盖同名活跃行,
+// 缺省同名 409;软删同名行复活)。激活门控:应用内同时上限 8,超限 409 明确报错。
+
+/** Skill 状态值域(V19 DDL CHECK) */
+export type SkillStatus = 'active' | 'inactive'
+
+/** Skill 清单视图(镜像 AppSkillCatalogService.SkillManifestView) */
+export interface SkillManifestView {
+  name: string
+  displayName: string | null
+  description: string | null
+  version: string | null
+}
+
+/** Skill 包内文件视图(镜像 FileView;content 仅详情/预览语义携带,列表为 null) */
+export interface SkillFileView {
+  path: string
+  /** utf-8 文本 / base64 二进制 */
+  encoding: 'utf-8' | 'base64'
+  sizeBytes: number
+  content: string | null
+}
+
+/** 列表/导入出参(镜像 SkillView;active 与 status 同源冗余,便于前端判定) */
+export interface IaSkill {
+  id: number
+  appId: number
+  /** 平台清单 name(包唯一标识;同名再导入按复活/覆盖处理) */
+  name: string
+  displayName: string | null
+  description: string | null
+  version: string | null
+  status: SkillStatus
+  /** 来源值域(当前仅 import) */
+  source: 'import'
+  /** 内容指纹(zip 字节 SHA-256) */
+  contentSha256: string
+  active: boolean
+}
+
+/** 预览出参(镜像 PreviewView;valid=errors 为空且包完整;零落库) */
+export interface SkillPreviewView {
+  fileName: string
+  valid: boolean
+  manifest: SkillManifestView | null
+  files: SkillFileView[]
+  warnings: string[]
+  errors: string[]
+  totalBytes: number
+}
+
+/** 详情出参(含全部文件内容) */
+export interface SkillDetailView {
+  skill: IaSkill
+  files: SkillFileView[]
+}
+
+/** Skill 分页列表查询(appId 缺省单应用 1) */
+export interface SkillListQuery extends PageQuery {
+  appId?: number
+}
+
+// ==================== mini 知识库(ia_kb_document/ia_kb_chunk,AdminKbController,P4-W14) ====================
+// 文本导入→服务端分块→tsvector 落列;状态门控(inactive 不参与检索);
+// rebuild-index 按当前生效检索配置重算 tsv;检索调试返回 top-k 命中与来源字段。
+
+/** 知识库文档状态(V20 DDL CHECK) */
+export type KbDocumentStatus = 'active' | 'inactive'
+
+/** 文档视图(镜像 KbIngestService.KbDocumentView) */
+export interface IaKbDocument {
+  id: number
+  appId: number
+  /** 文档名(检索命中来源展示) */
+  title: string
+  /** 来源标识(upload/api/外部系统等,可空) */
+  source: string | null
+  status: KbDocumentStatus
+  /** 分段数(导入/重分块后回填) */
+  chunkCount: number
+  active: boolean
+}
+
+/** 文档导入请求(镜像 KbDocumentImportReq;title/content 必填,分块参数可选) */
+export interface KbDocumentImportReq {
+  title: string
+  source?: string
+  content: string
+  /** 结构化元数据(JSON 对象字符串,可空) */
+  metadata?: string
+  /** 分段最大长度(字符;缺省 500) */
+  chunkSize?: number
+  /** 相邻分段重叠(字符;缺省 50,须小于 chunkSize) */
+  chunkOverlap?: number
+}
+
+/** 文档更新请求(镜像 KbDocumentUpdateReq;不更新传 null/缺省,带 content 即重分块) */
+export interface KbDocumentUpdateReq {
+  title?: string
+  source?: string
+  metadata?: string
+  content?: string
+  chunkSize?: number
+  chunkOverlap?: number
+}
+
+/** 知识库分页列表查询 */
+export interface KbDocumentListQuery extends PageQuery {}
+
+/** 检索命中条目(镜像 KbSearchHitView;anchor 为分段锚点标题/序号来源) */
+export interface KbSearchHitView {
+  chunkId: number
+  documentId: number
+  documentTitle: string
+  /** 分段锚点(标题路径/行号语义,原样回显) */
+  anchor: string | null
+  /** 分段序号(0 起) */
+  seq: number
+  content: string
+}
+
+/** 检索调试出参(镜像 KbSearchDebugView;degraded=检索配置不可得走了 simple 兜底) */
+export interface KbSearchDebugView {
+  query: string
+  /** 当前生效检索配置(如 tsvector/simple) */
+  searchConfig: string
+  degraded: boolean
+  hits: KbSearchHitView[]
+}
+
+// ==================== 用量统计(ia_model_call 聚合,AdminUsageController,W15) ====================
+// 聚合口径=COMPLETED/FAILED/CANCELLED 终态调用,token 合计仅 COMPLETED;
+// 行维度=应用/用户 × 日|月 × 模型;granularity 仅 DAY/MONTH,其他值 400。
+
+/** 聚合粒度(DAY 按天/MONTH 按月;其他值服务端 400) */
+export type UsageGranularity = 'DAY' | 'MONTH'
+
+/** 聚合行(镜像 UsageSummaryRow;statDate=yyyy-MM-dd(DAY)/yyyy-MM(MONTH)) */
+export interface UsageSummaryRow {
+  appId: number
+  userId: number | null
+  statDate: string
+  /** 模型服务商标识(请求协议归一) */
+  provider: string
+  /** 模型代码标识 */
+  modelCode: string
+  /** 模型调用次数(终态行;FAILED 行 token 列为空) */
+  calls: number
+  inputTokens: number | null
+  outputTokens: number | null
+  reasoningTokens: number | null
+  cacheTokens: number | null
+}
+
+/** 聚合分页查询(镜像 AdminUsageController.summary 参数;from/to 为 ISO 本地日期时间) */
+export interface UsageSummaryQuery extends PageQuery {
+  appId?: number
+  userId?: number
+  from?: IsoDateTime
+  to?: IsoDateTime
+  granularity?: UsageGranularity
+}
+
+/**
+ * 北极星摘要(镜像 UsageQueryService.NorthStarSummary;口径登记于
+ * docs/灰度与指标大盘.md B4 行):
+ * - 好评率 = 👍 ÷ (👍+👎),窗口内全部反馈;
+ * - 带反馈完成率代理 = COMPLETED ÷ (COMPLETED+FAILED)(CANCELLED 单列观察)
+ *   ——仅带反馈的根运行;比率为 [0,1],窗口无样本时 null(不出数,不虚报)。
+ */
+export interface NorthStarSummary {
+  from: IsoDateTime | null
+  to: IsoDateTime | null
+  thumbsUp: number
+  thumbsDown: number
+  positiveRate: number | null
+  feedbackLinkedCompletedRuns: number
+  feedbackLinkedFailedRuns: number
+  feedbackLinkedCancelledRuns: number
+  feedbackLinkedCompletionRate: number | null
+}
+
+/** 北极星查询(appId/from/to;时间按反馈 create_time) */
+export interface NorthStarQuery {
+  appId?: number
+  from?: IsoDateTime
+  to?: IsoDateTime
+}
+
+// ==================== 用户反馈(ia_agent_feedback,AdminFeedbackController,W15) ====================
+// 管理面跨用户分页视图;rating=UP(👍)|DOWN(👎),其他值 400;
+// 重复反馈=覆盖(updateTime 后移)。
+
+/** 反馈取向(UP-👍 / DOWN-👎;其他值服务端 400) */
+export type FeedbackRating = 'UP' | 'DOWN'
+
+/** 反馈行(镜像 FeedbackRespVO) */
+export interface IaFeedback {
+  id: number
+  appId: number
+  /** 宿主侧数字用户 ID */
+  userId: number | null
+  /** 会话锚点(维度定位) */
+  conversationId: string | null
+  /** 根运行锚点(run 级反馈按 run_id;消息级经 conversation 连根运行) */
+  runId: string | null
+  /** 消息锚点(消息级反馈) */
+  messageId: string | null
+  rating: FeedbackRating
+  comment: string | null
+  /** 首次反馈时间 */
+  createTime: IsoDateTime | null
+  /** 最近覆盖时间(重复反馈=覆盖) */
+  updateTime: IsoDateTime | null
+}
+
+/** 反馈分页查询(镜像 AdminFeedbackController.page 参数) */
+export interface FeedbackPageQuery extends PageQuery {
+  appId?: number
+  userId?: number
+  conversationId?: string
+  runId?: string
+  rating?: FeedbackRating
+  from?: IsoDateTime
+  to?: IsoDateTime
 }

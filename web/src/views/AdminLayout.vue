@@ -2,11 +2,13 @@
 /**
  * [new] 管理站布局壳:侧边导航 + 顶栏(会话/登出)。
  * 导航项与视图清单一一对应;当前路由高亮。
+ * P4 批次扩档:三方 MCP / Skill 管理 / 知识库(集成·知识侧)+
+ * 用量统计 / 用户反馈(数据洞察侧)。
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor, Coin, Document, Cpu, Lightning, Connection, Tickets, SwitchButton } from '@element-plus/icons-vue'
+import { Monitor, Coin, Document, Cpu, Lightning, Connection, Tickets, SwitchButton, Link, MagicStick, Reading, TrendCharts, ChatDotRound } from '@element-plus/icons-vue'
 import IaEnvBadge from '@/components/IaEnvBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -18,8 +20,13 @@ const navs = [
   { path: '/apps', title: '应用管理', icon: Monitor },
   { path: '/tools', title: '工具注册与授权', icon: Coin },
   { path: '/definitions', title: 'Agent 定义', icon: Tickets },
+  { path: '/mcp-servers', title: '三方 MCP', icon: Link },
+  { path: '/skills', title: 'Skill 管理', icon: MagicStick },
+  { path: '/kb', title: '知识库', icon: Reading },
   { path: '/audit', title: '审计查询', icon: Document },
   { path: '/models', title: '模型配置', icon: Cpu },
+  { path: '/usage', title: '用量统计', icon: TrendCharts },
+  { path: '/feedbacks', title: '用户反馈', icon: ChatDotRound },
   { path: '/circuit', title: '熔断与紧急停用', icon: Lightning },
   { path: '/webhooks', title: 'Webhook', icon: Connection },
 ]

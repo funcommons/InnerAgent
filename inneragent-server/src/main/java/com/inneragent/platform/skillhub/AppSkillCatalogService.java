@@ -273,6 +273,66 @@ public class AppSkillCatalogService {
     }
 
     // ------------------------------------------------------------------
+    // 用户面只读视图(P4 差距收口:GET /ia/api/v1/skills)
+    // ------------------------------------------------------------------
+
+    /**
+     * 本应用当前激活的 Skill 列表(用户面;只回激活态——未激活不进上下文,
+     * 对用户同样「不可见」)。name 升序(业务名稳定序,与内核激活目录一致)。
+     */
+    public List<SkillView> listActive(long appId) {
+        return skillMapper.selectList(
+                        new LambdaQueryWrapper<IaSkill>()
+                                .eq(IaSkill::getAppId, appId)
+                                .eq(IaSkill::getStatus, STATUS_ACTIVE)
+                                .orderByAsc(IaSkill::getName))
+                .stream()
+                .map(this::toView)
+                .toList();
+    }
+
+    /**
+     * 用户面详情:SKILL.md 正文 + 资源文件名清单(path+size;<strong>不吐
+     * 文件二进制</strong>,admin 详情才有 content)。未激活/不存在一律 404
+     * (不泄露存在性);缺 SKILL.md 行的脏数据返回 markdown=null 不抛错
+     * (列表/激活目录已按跳过口径兜底)。
+     */
+    public UserSkillDetailView userDetail(long id) {
+        IaSkill row = requireRow(id);
+        if (!STATUS_ACTIVE.equals(row.getStatus())) {
+            throw new BusinessException(404, "Skill 不存在或未激活: " + id);
+        }
+        List<IaSkillFile> files = fileMapper.selectList(
+                new LambdaQueryWrapper<IaSkillFile>()
+                        .eq(IaSkillFile::getSkillId, id)
+                        .orderByAsc(IaSkillFile::getPath));
+        String markdown = files.stream()
+                .filter(file -> SkillPackageInspector.SKILL_DOC_FILENAME
+                        .equals(file.getPath()))
+                .findFirst()
+                .map(AppSkillCatalogService::decodeContent)
+                .orElse(null);
+        List<ResourceNameView> resources = files.stream()
+                .filter(file -> !SkillPackageInspector.SKILL_DOC_FILENAME
+                        .equals(file.getPath()))
+                .map(file -> new ResourceNameView(
+                        file.getPath(), file.getSizeBytes()))
+                .toList();
+        return new UserSkillDetailView(toView(row), markdown, resources);
+    }
+
+    /** 用户面资源名视图(仅名与字节数;无 content,文件二进制不下发)。 */
+    public record ResourceNameView(String path, Long sizeBytes) {
+    }
+
+    /** 用户面详情出参(SKILL.md 正文 + 资源名清单)。 */
+    public record UserSkillDetailView(
+            SkillView skill,
+            String markdown,
+            List<ResourceNameView> resources) {
+    }
+
+    // ------------------------------------------------------------------
     // 内核输入形态(对齐 AgentSkill 的 name/description/content/source)
     // ------------------------------------------------------------------
 

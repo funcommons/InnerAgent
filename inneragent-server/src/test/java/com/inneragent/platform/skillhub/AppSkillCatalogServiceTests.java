@@ -277,6 +277,67 @@ class AppSkillCatalogServiceTests {
     }
 
     // ------------------------------------------------------------------
+    // 用户面只读视图(P4 差距收口:GET /ia/api/v1/skills)
+    // ------------------------------------------------------------------
+
+    @Test
+    void listActiveReturnsOnlyActiveRowsByNameAsc() {
+        IaSkill active = inactiveRow(7L);
+        active.setStatus(AppSkillCatalogService.STATUS_ACTIVE);
+        IaSkill other = inactiveRow(8L);
+        other.setName("another-skill");
+        other.setStatus(AppSkillCatalogService.STATUS_ACTIVE);
+        when(skillMapper.selectList(any())).thenReturn(List.of(active, other));
+
+        List<AppSkillCatalogService.SkillView> views = service.listActive(1L);
+
+        assertThat(views).extracting(AppSkillCatalogService.SkillView::id)
+                .containsExactly(7L, 8L);
+        assertThat(views).allMatch(AppSkillCatalogService.SkillView::active);
+    }
+
+    @Test
+    void userDetailReturnsMarkdownAndResourceNamesWithoutContent() {
+        IaSkill active = inactiveRow(7L);
+        active.setStatus(AppSkillCatalogService.STATUS_ACTIVE);
+        when(skillMapper.selectById(7L)).thenReturn(active);
+        IaSkillFile doc = new IaSkillFile();
+        doc.setSkillId(7L);
+        doc.setPath("SKILL.md");
+        doc.setEncoding("utf8");
+        doc.setSizeBytes(64L);
+        doc.setContent("按流程完成文档摘要。\n");
+        IaSkillFile script = new IaSkillFile();
+        script.setSkillId(7L);
+        script.setPath("scripts/run.py");
+        script.setEncoding("base64");
+        script.setSizeBytes(12L);
+        script.setContent("cHJpbnQoJ29rJyk=");
+        when(fileMapper.selectList(any())).thenReturn(List.of(doc, script));
+
+        AppSkillCatalogService.UserSkillDetailView detail = service.userDetail(7L);
+
+        assertThat(detail.skill().id()).isEqualTo(7L);
+        assertThat(detail.markdown()).isEqualTo("按流程完成文档摘要。\n");
+        assertThat(detail.resources())
+                .extracting(AppSkillCatalogService.ResourceNameView::path)
+                .containsExactly("scripts/run.py");
+        assertThat(detail.resources())
+                .extracting(AppSkillCatalogService.ResourceNameView::sizeBytes)
+                .containsExactly(12L);
+    }
+
+    @Test
+    void userDetailRejectsInactiveRowWith404() {
+        when(skillMapper.selectById(7L)).thenReturn(inactiveRow(7L));
+
+        assertThatThrownBy(() -> service.userDetail(7L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("code")
+                .isEqualTo(404);
+    }
+
+    // ------------------------------------------------------------------
     // 构造工具
     // ------------------------------------------------------------------
 

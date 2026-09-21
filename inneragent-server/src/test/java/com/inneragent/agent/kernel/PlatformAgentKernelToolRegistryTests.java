@@ -57,7 +57,7 @@ class PlatformAgentKernelToolRegistryTests {
                 com.inneragent.agent.mcp.McpToolInvocationResult.ok("{}");
         PlatformAgentKernelToolRegistry registry = new PlatformAgentKernelToolRegistry(
                 mock(ToolExecutorRegistry.class),
-                new AiToolConfigService(List.of(), new AiAgentRegistry()),
+                new AiToolConfigService(List.of(), new AiAgentService(new AiAgentRegistry())),
                 new AiAgentService(new AiAgentRegistry()),
                 mock(AgentKernelSpecFactory.class),
                 mock(org.springframework.beans.factory.ObjectProvider.class),

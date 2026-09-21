@@ -40,6 +40,21 @@ import java.util.Set;
  * {@link AgentScopeToolSchema} 规范化后取哈希——与注册时校验、内核快照
  * restore 锁定同一口径。enabledMcpTools 三分法(null/[]=未指定→默认可见性,
  * 非空=显式白名单,DEF-07)门控与可用性校验统一覆盖目录视图。
+ *
+ * <p>[adapt] P4 数据驱动内核:本工厂消费的定义({@link AiAgentDefinition})
+ * 一律经 {@link AiAgentService} 解析——<strong>ia_agent_definition 优先
+ * (DB 命中即数据驱动,管理面改完即生效),回落代码注册表(既有 agentType
+ * 零回归;同名时 DB 优先,停用 DB 行即回落代码)</strong>。据此:
+ * <ul>
+ *   <li>根运行(createRoot)人设/指令/上下文模板与工具面、子 Agent 工具
+ *       声明(selectTools)按解析后的定义组装;</li>
+ *   <li>子 Agent 引用(createChild)按同源解析——DB 声明的 refAgentType 即使
+ *       在代码注册表不存在,只要 ia_agent_definition 有启用行即可调起;</li>
+ *   <li>工具白名单挂点:定义声明的直连工具面(toolNames)∩ 已启用
+ *       ToolExecutor + 子 Agent 工具声明 + MCP 面(目录/静态注册表),收敛为
+ *       spec.toolWhitelist(),Harness Toolkit 以其为准过滤
+ *       (AgentScopeHarnessFactory 锁定校验)。</li>
+ * </ul>
  */
 @Component
 public final class AgentKernelSpecFactory {
@@ -180,6 +195,11 @@ public final class AgentKernelSpecFactory {
         if (instruction != null) {
             prompt = prompt + "\n\n" + AgentPromptVariables.render(instruction, variables);
         }
+        // [adapt] P4 数据驱动内核:子定义的上下文注入模板与根 Agent 同款挂点
+        // (AgentDefinitionPrompts.appendContextTemplate;子引用可来自 DB 定义)。
+        prompt = com.inneragent.agent.definition.AgentDefinitionPrompts
+                .appendContextTemplate(
+                        objectMapper, prompt, definition.getContextTemplateJson(), variables);
         ToolSelection tools = selectTools(childType, null, null, ownerUserId(parent));
         String agentName = normalize(subAgent.getToolName());
         if (agentName == null) {

@@ -32,6 +32,17 @@ public class AiAgentDefinition {
     private String instructionTemplate;
 
     /**
+     * 上下文注入模板(JSON 文本;P4 数据驱动内核从 ia_agent_definition
+     * context_template_json 透传,代码注册表恒 null)。
+     * <p>
+     * 形态:JSON 对象 {名称: 模板文本} 逐项渲染为 {@code <context name="...">}
+     * 区块,或 JSON 文本串整体渲染;组装点见
+     * {@code AgentDefinitionPrompts.appendContextTemplate}(根/子提示词装配
+     * 统一消费)。
+     */
+    private String contextTemplateJson;
+
+    /**
      * 默认用户消息模板（Pipeline 场景下，前端不传 message 时使用）
      * <p>
      * 支持 {projectId}、{scriptId}、{episodeId}、{storyboardId} 等模板变量。

@@ -506,6 +506,17 @@ public final class AgentScopePipelineRunService {
             prompt = prompt + "\n\n" + AgentPromptVariables.render(
                     instruction, promptVariables);
         }
+        // [adapt] P4 数据驱动内核:定义级上下文注入模板(contextTemplateJson,
+        // ia_agent_definition.context_template_json)渲染后随人设/指令进系统
+        // 提示词(子 Agent 同款挂点见 AgentKernelSpecFactory.createChild)。
+        if (definition != null) {
+            prompt = com.inneragent.agent.definition.AgentDefinitionPrompts
+                    .appendContextTemplate(
+                            objectMapper,
+                            prompt,
+                            definition.getContextTemplateJson(),
+                            promptVariables);
+        }
         if (!activeSkills.isEmpty()) {
             prompt = prompt + "\n\n" + activeSkillsPrompt(activeSkills);
         }

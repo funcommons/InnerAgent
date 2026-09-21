@@ -81,6 +81,28 @@ importers:
         specifier: ^0.8.1
         version: 0.8.1(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
 
+  packages/iframe:
+    dependencies:
+      '@inneragent/sdk-components':
+        specifier: workspace:*
+        version: link:../components
+      '@inneragent/sdk-core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.13.6
+      '@vue/tsconfig':
+        specifier: ^0.8.1
+        version: 0.8.1(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
+      pinia:
+        specifier: ^3.0.4
+        version: 3.0.4(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.25
+        version: 3.5.43(typescript@5.9.3)
+
 packages:
 
   '@asamuzakjp/css-color@5.1.11':

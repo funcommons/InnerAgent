@@ -28,6 +28,11 @@ export function setAssistantEventHooks(next?: AssistantEventHooks): void {
   hooks = next ?? noopHooks
 }
 
+/** 读取当前钩子 (iframe 桥 child 端包装/测试断言用; P4/W15)。 */
+export function getAssistantEventHooks(): AssistantEventHooks {
+  return hooks
+}
+
 /** 内部: store 调用入口 (永不抛错, 钩子异常不影响助手链路)。 */
 export const assistantEventHooks = {
   onToolFinished(toolName: string): void {

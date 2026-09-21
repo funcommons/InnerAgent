@@ -134,7 +134,7 @@ export {
 } from './displayNames'
 
 // ---- 事件钩子注入 ----
-export { setAssistantEventHooks, type AssistantEventHooks } from './store/assistantEvents'
+export { setAssistantEventHooks, getAssistantEventHooks, type AssistantEventHooks } from './store/assistantEvents'
 
 // ---- 约束范围([new] P2-scope 任务 #15:确认等待事件 scope 解析/提取) ----
 export {

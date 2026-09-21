@@ -466,6 +466,7 @@ export default {
         code: '<inneragent-chat view="chat">',
       },
       'go-docs': 'Open the integration guide',
+      'demo-agents': 'Five built-in demo scenarios — try them now',
     },
     about: {
       title: 'About this demo',

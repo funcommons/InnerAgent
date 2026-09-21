@@ -96,6 +96,12 @@ const COMPARE_ROWS = ['view', 'token', 'tools', 'usage'] as const
           <i class="ri-arrow-right-line" aria-hidden="true" />
         </router-link>
       </div>
+      <p class="steps__demo-agents">
+        <router-link to="/ia/agents" data-testid="home-demo-agents">
+          {{ t('home.steps.demo-agents') }}
+          <i class="ri-arrow-right-line" aria-hidden="true" />
+        </router-link>
+      </p>
     </section>
 
     <!-- ===== 关于本 Demo ===== -->
@@ -365,6 +371,23 @@ const COMPARE_ROWS = ['view', 'token', 'tools', 'usage'] as const
   display: flex;
   justify-content: center;
   margin-top: 28px;
+}
+
+.steps__demo-agents {
+  margin: 14px 0 0;
+  text-align: center;
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--el-color-primary);
+    text-decoration: none;
+
+    &:hover { filter: brightness(1.1); }
+  }
 }
 
 /* ===== 关于 ===== */

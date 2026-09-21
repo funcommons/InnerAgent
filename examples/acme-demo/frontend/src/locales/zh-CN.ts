@@ -466,6 +466,7 @@ export default {
         code: '<inneragent-chat view="chat">',
       },
       'go-docs': '查看接入文档',
+      'demo-agents': '已内置 5 个演示场景,开箱即试',
     },
     about: {
       title: '关于本 Demo',

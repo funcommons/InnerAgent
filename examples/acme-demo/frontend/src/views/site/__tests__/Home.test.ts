@@ -61,6 +61,12 @@ describe('Home(产品首页)', () => {
     w.unmount()
   })
 
+  it('三步曲下方「5 个演示场景」入口指向控制台场景画廊', () => {
+    const w = mountHome()
+    expect(w.find('[data-testid="home-demo-agents"]').attributes('href')).toBe('/ia/agents')
+    w.unmount()
+  })
+
   it('关于区:AgentScope 内核说明 + 与 demo-host 的四行比对表', () => {
     const w = mountHome()
     expect(w.find('[data-testid="home-agentscope"]').exists()).toBe(true)

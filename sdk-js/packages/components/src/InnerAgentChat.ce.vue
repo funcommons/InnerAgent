@@ -4,8 +4,8 @@ defineOptions({ name: 'InnerAgentChat' })
  * [new] <inneragent-chat> 根组件 (defineCustomElement + Shadow DOM)。
  *
  * 编排: AssistantChatWindow (会话导航 + 消息流 + 输入区)。
- * - view 属性: 'chat' (默认, 当前唯一实现); 'history' / 'config' 为占位
- *   (P2/W13 配置视图), 渲染提示文案。
+ * - view 属性: 'chat' (默认) | 'config' (P4/W15: Skill/三方 MCP 用户配置面板,
+ *   02-技术方案 §8.2/§9.1); 'history' 仍为占位 (渲染提示文案)。
  * - project-id 属性: 页面上下文 project 引用 (源 assistantPage ?projectId= 语义)。
  * - Shadow DOM 隔离: 主题令牌 --ia-* 经 :host 默认值 + --app-* 映射注入,
  *   宿主样式不会污染组件, 组件样式不会泄漏到宿主。
@@ -20,6 +20,7 @@ defineOptions({ name: 'InnerAgentChat' })
 import { computed, ref, watch } from 'vue'
 import { useAssistantStore, normalizeToolCallScope } from '@inneragent/sdk-core'
 import AssistantChatWindow from './assistant/AssistantChatWindow.vue'
+import AgentConfigPanel from './config/AgentConfigPanel.vue'
 import { useI18n } from './i18n'
 
 const props = withDefaults(defineProps<{
@@ -40,7 +41,7 @@ const projectIdNumber = computed<number | null>(() => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 })
 
-const isPlaceholderView = computed(() => props.view !== 'chat')
+const isPlaceholderView = computed(() => props.view === 'history')
 
 // ---- SCOPE_RESOLVED 派发(确认等待事件的约束范围可检视时机) ----
 
@@ -85,9 +86,10 @@ watch(pendingConfirmation, (pending) => {
     <div v-if="isPlaceholderView" class="ia-chat-root__placeholder" data-testid="ia-view-placeholder">
       <p>{{ t('assistant.title') }} · view="{{ view }}"</p>
       <p class="ia-chat-root__placeholder-desc">
-        history / config 视图为占位 (P2/W13); 当前实现: view="chat"。
+        history 视图为占位; 当前实现: view="chat" / view="config"。
       </p>
     </div>
+    <AgentConfigPanel v-else-if="view === 'config'" />
     <AssistantChatWindow v-else :project-id="projectIdNumber" />
   </div>
 </template>

@@ -136,6 +136,24 @@ export const zhCN: Record<string, string> = {
   'emptyState.empty': '暂无内容',
   'api.request-failed': '请求失败',
   'api.unauthorized': '登录已过期，请重新登录',
+
+  // ---- [new] P4/W15 配置视图 (view="config"; Skill 只读 + 用户级三方 MCP 启停) ----
+  'config.title': '配置',
+  'config.skills': 'Skill 技能',
+  'config.skills-desc': '当前可被助手引用的 Skill(只读, 由应用管理员与内置库提供)',
+  'config.skills-empty': '暂无可用 Skill',
+  'config.mcp': '三方 MCP 服务器',
+  'config.mcp-desc': '接入你自己的三方 MCP 服务器; 停用后其工具将从你的目录摘除',
+  'config.mcp-empty': '还没有接入三方 MCP 服务器',
+  'config.mcp-enabled': '已启用',
+  'config.mcp-disabled': '已停用',
+  'config.action-enable': '启用',
+  'config.action-disable': '停用',
+  'config.action-refresh': '刷新',
+  'config.auth-static-header': '静态头鉴权',
+  'config.auth-oauth': 'OAuth 鉴权(暂未支持)',
+  'config.load-failed': '配置加载失败',
+  'config.update-failed': '操作失败, 已回滚',
 }
 
 export const enUS: Record<string, string> = {
@@ -269,4 +287,22 @@ export const enUS: Record<string, string> = {
   'emptyState.empty': 'Nothing here yet',
   'api.request-failed': 'Request failed',
   'api.unauthorized': 'Session expired, please sign in again',
+
+  // ---- [new] P4/W15 config view (view="config"; read-only skills + user-level MCP toggle) ----
+  'config.title': 'Configuration',
+  'config.skills-desc': 'Skills the assistant can reference (read-only; provided by app admins and the built-in library)',
+  'config.skills': 'Skills',
+  'config.skills-empty': 'No skills available',
+  'config.mcp': 'Third-party MCP servers',
+  'config.mcp-desc': 'Connect your own MCP servers; disabling one removes its tools from your catalog',
+  'config.mcp-empty': 'No third-party MCP servers connected',
+  'config.mcp-enabled': 'Enabled',
+  'config.mcp-disabled': 'Disabled',
+  'config.action-enable': 'Enable',
+  'config.action-disable': 'Disable',
+  'config.action-refresh': 'Refresh',
+  'config.auth-static-header': 'Static header auth',
+  'config.auth-oauth': 'OAuth auth (not supported yet)',
+  'config.load-failed': 'Failed to load configuration',
+  'config.update-failed': 'Operation failed, reverted',
 }

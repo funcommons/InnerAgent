@@ -33,10 +33,11 @@ import org.testcontainers.utility.DockerImageName;
  * 优化建议 #2 随 V14__circuit_breaker_and_webhook_config.sql 熔断/Webhook 订阅配置增补、
  * R3 修复随 V15__ia_app_circuit_limits_text.sql 熔断上限列 JSONB → TEXT 增补、
  * P2-W5 随 V16__audit_admin_plane_codes.sql 审计管理面码值注释刷新、
- * P2-safety 批次②随 V17__tool_registry_health_check.sql 工具体检位增补(合并时自 V16 顺延))。
+ * P2-safety 批次②随 V17__tool_registry_health_check.sql 工具体检位增补(合并时自 V16 顺延)、
+ * P4-W13 随 V18__mcp_third_party_server.sql 三方 MCP 服务器两表增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
- * 上执行 classpath:db/migration 全链迁移,断言 26 张 ia_ 业务表全部建成、种子数据落库,
+ * 上执行 classpath:db/migration 全链迁移,断言 28 张 ia_ 业务表全部建成、种子数据落库,
  * 并重复执行 migrate 验证幂等。由 maven-failsafe-plugin 执行(类名 *IT 结尾)。</p>
  */
 @Testcontainers
@@ -50,7 +51,7 @@ class FlywayMigrationSmokeIT {
             .withUsername("inneragent")
             .withPassword("inneragent");
 
-    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件 + V10 管理站认证 + V11 终态 Webhook 投递 + V14 熔断事件流水(字典序,26 张)。 */
+    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件 + V10 管理站认证 + V11 终态 Webhook 投递 + V14 熔断事件流水 + V18 三方 MCP 服务器两表(字典序,28 张)。 */
     private static final List<String> EXPECTED_IA_TABLES = List.of(
             // V10:管理站账号认证(18a;ia_adm 字典序居 ia_agent_* 之前)
             "ia_admin_account",
@@ -78,6 +79,9 @@ class FlywayMigrationSmokeIT {
             "ia_audit_log",
             // V14:熔断事件流水(优化建议 #2 服务端半)
             "ia_circuit_event",
+            // V18:三方 MCP 服务器(应用级 + 用户级;P4-W13)
+            "ia_mcp_server_config",
+            "ia_mcp_user_server",
             "ia_model_api_config",
             // V5:工作区/媒体对象存储配置
             "ia_storage_config",
@@ -104,18 +108,18 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(17, result.migrationsExecuted, "应依次执行 V1-V17 十七个迁移(V14 熔断/Webhook 订阅配置;V15 熔断上限列 JSONB→TEXT;V16 审计管理面码值注释刷新;V17 工具体检位)");
+        assertEquals(18, result.migrationsExecuted, "应依次执行 V1-V18 十八个迁移(V14 熔断/Webhook 订阅配置;V15 熔断上限列 JSONB→TEXT;V16 审计管理面码值注释刷新;V17 工具体检位;V18 三方 MCP 服务器两表)");
 
         List<String> actualTables = listIaTables();
-        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 26 张 ia_ 表(V14 增熔断事件流水)");
+        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 28 张 ia_ 表(V14 增熔断事件流水;V18 增三方 MCP 服务器两表)");
 
-        // flyway_schema_history:十六条记录且全部 success
+        // flyway_schema_history:十八条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(17, resultSet.getInt(1), "flyway_schema_history 应有 17 条成功记录(V14 熔断/Webhook 配置 + V15 熔断上限列 TEXT + V16 审计码值注释刷新 + V17 工具体检位)");
+            assertEquals(18, resultSet.getInt(1), "flyway_schema_history 应有 18 条成功记录(V14 熔断/Webhook 配置 + V15 熔断上限列 TEXT + V16 审计码值注释刷新 + V17 工具体检位 + V18 三方 MCP 两表)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -269,6 +273,24 @@ class FlywayMigrationSmokeIT {
                 "ia_circuit_event.operator 应存在(V14)");
         assertTrue(indexExists("idx_ia_circuit_event_app_time"),
                 "ia_circuit_event (app_id, create_time DESC) 检索索引应存在(V14)");
+
+        // V18:三方 MCP 服务器两表(P4-W13);credentials 为 TEXT(DEF-08 教训:值不进审计/日志)
+        assertEquals("text", columnType("ia_mcp_server_config", "credentials"),
+                "ia_mcp_server_config.credentials 应为 TEXT(V18,DEF-08 教训)");
+        assertEquals("text", columnType("ia_mcp_user_server", "credentials"),
+                "ia_mcp_user_server.credentials 应为 TEXT(V18,DEF-08 教训)");
+        assertTrue(indexExists("uk_ia_mcp_server_config_key"),
+                "uk_ia_mcp_server_config_key (app_id, server_key) 唯一索引应存在(V18 防遮蔽:serverKey 应用内唯一)");
+        assertTrue(indexExists("uk_ia_mcp_user_server_key"),
+                "uk_ia_mcp_user_server_key (app_id, user_id, server_key) 唯一索引应存在(V18 行级 userId 隔离)");
+        assertTrue(indexExists("idx_ia_mcp_user_server_user"),
+                "ia_mcp_user_server (app_id, user_id) 检索索引应存在(V18)");
+        try (Connection connection = openConnection();
+             PreparedStatement v18 = connection.prepareStatement(
+                     "SELECT auth_type, transport, enabled FROM ia_mcp_server_config LIMIT 1")) {
+            // 仅校验列存在与缺省口径可查(空表无行,不触发 next 断言)
+            v18.executeQuery();
+        }
     }
 
     @Test

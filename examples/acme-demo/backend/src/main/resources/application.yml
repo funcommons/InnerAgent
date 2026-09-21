@@ -1,0 +1,47 @@
+server:
+  port: 9300
+  shutdown: graceful                # 优雅停机: SIGTERM 后处理完在途请求再退出
+
+spring:
+  application:
+    name: acme-demo-backend
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+# InnerAgent 接入配置(docs/接入指南.md 步骤①~④的交付物)。
+# 一律环境变量注入,严禁硬编码入库入前端。
+# 注意: ia.* 必须在主文档(不限 profile)—— 回归 2026-09-20-01 记录:
+# 曾置于 dev profile 文档下, 非 dev 启动时静默回退默认值。
+ia:
+  server-base: ${IA_SERVER_BASE:http://localhost:18090}   # InnerAgent 主服务
+  app-key: ${IA_APP_KEY:acme-demo}                        # embed token iss = 管理面 appKey
+  agent-type: ${IA_AGENT_TYPE:ai_media}                   # SDK init agentType
+  sign-private-key-pem: ${IA_SIGN_PRIVATE_KEY:}           # RSA 私钥 PEM(仅后端持有;公开钥登记给管理面)
+  embed-ttl-seconds: ${IA_EMBED_TTL_SECONDS:43200}        # 12h(接入指南建议值)
+  tenant-id: ${IA_TENANT_ID:0}                            # 可选租户声明(embed token tenantId)
+  webhook-secret: ${IA_WEBHOOK_SECRET:}                   # Webhook 验签密钥(管理面下发的 secret)
+  admin-key: ${IA_ADMIN_KEY:}                             # 管理面 X-IA-Admin-Key(仅一次性开通/自检用)
+  connect-timeout-seconds: 5
+  read-timeout-seconds: 30
+
+# starter 工具桥(docs/接入指南.md 步骤③):
+# 扫描 @IaTool 注册进进程内 MCP server(/ia-mcp),并对 X-IA-Act 验签。
+inneragent:
+  bridge:
+    enabled: true
+    # InnerAgent 主服务地址(JWKS 拉取基址;未配置时 /ia-mcp 全量 401 fail-closed)
+    server-base: ${IA_SERVER_BASE:http://localhost:18090}
+    endpoint: /ia-mcp
+    act:
+      # 【最关键的一行】期望的 act token aud,必须与「管理面注册工具时的
+      # endpointUrl」完全一致(本 DEMO 后端 9300 端口);错配即 /ia-mcp 全量 401。
+      audiences:
+        - ${IA_BRIDGE_AUDIENCE:http://localhost:9300/ia-mcp}
+    tools:
+      # 灰度开关演示:include/exclude 均空 = 全部暴露(接入指南步骤②/starter README)
+      include: []
+      exclude: []
+
+logging:
+  level:
+    fun.commons.acmedemo: DEBUG

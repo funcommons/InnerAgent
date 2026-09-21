@@ -46,13 +46,20 @@ describe('视图挂载冒烟', () => {
     wrapper.unmount()
   })
 
-  it('ToolsView:注册表 Tab 渲染 FQN/指纹/注解;授权 Tab 可切换', async () => {
+  it('ToolsView:注册表 Tab 渲染 FQN/指纹/注解/体检徽标;授权 Tab 可切换', async () => {
     const wrapper = await mountView(ToolsView, '/tools')
     expect(wrapper.text()).toContain('mcp__demo_host__get_user')
     expect(wrapper.text()).toContain('mcp__demo_host__reset_password')
     expect(wrapper.text()).toContain('sha256:0002fp')
     // 注解图例(R/D/I/W)渲染
     expect(wrapper.findAll('.hint').length).toBeGreaterThan(0)
+    // 体检列(V17):种子 id1=ok(健康),id7=degraded(漂移),其余未体检
+    expect(wrapper.text()).toContain('健康')
+    expect(wrapper.text()).toContain('漂移')
+    expect(wrapper.text()).toContain('未体检')
+    // 页级批量体检入口 + 行内详情入口(立即体检落点)
+    expect(wrapper.text()).toContain('批量体检')
+    expect(wrapper.text()).toContain('详情')
     wrapper.unmount()
   })
 

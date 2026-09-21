@@ -1,9 +1,10 @@
 /**
  * [new] 工具注册与授权 store(视图清单 #3)。
- * 覆盖 ia_tool_registry(注册/活刷新分诊/confirm|reject/启停/治理元数据)
- * 与 ia_tool_grant(授予/撤销/失效展示)。
- * P2 对齐:服务端 tools/grants 列表返回全量数组(无分页),keyword/风险级等
- * 过滤与分页在客户端完成;授权过滤按真实 query 形(toolName/scope/activeOnly)。
+ * 覆盖 ia_tool_registry(注册/活刷新分诊/confirm|reject/启停/治理元数据/
+ * 工具体检 V17)与 ia_tool_grant(授予/撤销/失效展示)。
+ * P2-W5 分页兼容形:列表主动传 pageNo/pageSize 走服务端 PageResult(activeOnly
+ * 下推 SQL);keyword/风险级无服务端参数 → 走数组兼容形全量取回后客户端过滤
+ * 分页(总数保持真实)。代授下拉全集用数组兼容形(page 形只回当前页)。
  */
 import { defineStore } from 'pinia'
 import { toolAdminApi, toolGrantAdminApi } from '@/api/admin'
@@ -14,6 +15,10 @@ import type {
   IaToolRegistry,
   ToolAdminPolicy,
   ToolAnnotations,
+  ToolCheckBatchReceipt,
+  ToolCheckResult,
+  ToolHealthCheckItem,
+  ToolHealthStatus,
   ToolRegisterReq,
   ToolTriageResp,
   ToolRiskLevel,
@@ -44,6 +49,8 @@ export const useToolsStore = defineStore('tools', {
     toolsLoading: false,
     toolFilters: { keyword: '', riskLevel: '', enabled: null, pageNo: 1, pageSize: 10 } as ToolFilters,
     lastTriage: null as ToolTriageResp | null,
+    /** 代授下拉全集(数组兼容形;独立于分页列表) */
+    grantable: [] as IaToolRegistry[],
     // 授权
     grants: [] as IaToolGrant[],
     grantsTotal: 0,
@@ -54,20 +61,41 @@ export const useToolsStore = defineStore('tools', {
     async loadTools() {
       this.toolsLoading = true
       try {
-        const all = await toolAdminApi.list()
-        const kw = this.toolFilters.keyword.trim()
-        let filtered = all
-        if (kw) filtered = filtered.filter(t => t.toolName.includes(kw) || t.fqn.includes(kw) || (t.description ?? '').includes(kw))
-        if (this.toolFilters.riskLevel) filtered = filtered.filter(t => t.riskLevel === this.toolFilters.riskLevel)
-        if (this.toolFilters.enabled !== null) filtered = filtered.filter(t => t.enabled === this.toolFilters.enabled)
-        this.toolsTotal = filtered.length
-        const pageNo = this.toolFilters.pageNo ?? 1
-        const pageSize = this.toolFilters.pageSize ?? 10
-        const start = (pageNo - 1) * pageSize
-        this.tools = filtered.slice(start, start + pageSize)
+        const f = this.toolFilters
+        const keyword = f.keyword.trim()
+        if (keyword || f.riskLevel) {
+          // keyword/风险级无服务端参数:数组兼容形全量取回 → 客户端过滤分页
+          const all = await toolAdminApi.list({ enabled: f.enabled ?? undefined })
+          let filtered = all
+          if (keyword) filtered = filtered.filter(t => t.toolName.includes(keyword) || t.fqn.includes(keyword) || (t.description ?? '').includes(keyword))
+          if (f.riskLevel) filtered = filtered.filter(t => t.riskLevel === f.riskLevel)
+          this.toolsTotal = filtered.length
+          const pageNo = f.pageNo ?? 1
+          const pageSize = f.pageSize ?? 10
+          const start = (pageNo - 1) * pageSize
+          this.tools = filtered.slice(start, start + pageSize)
+        } else {
+          // 服务端分页形(P2-W5:pageNo/pageSize 任一下发即 PageResult)
+          const page = await toolAdminApi.page({
+            enabled: f.enabled ?? undefined,
+            pageNo: f.pageNo ?? 1,
+            pageSize: f.pageSize ?? 10,
+          })
+          this.tools = page.list
+          this.toolsTotal = page.total
+        }
       } finally {
         this.toolsLoading = false
       }
+    },
+    /** 工具详情(GET /tools/{id};详情抽屉用,回读含体检三列的最新行) */
+    async getTool(id: number) {
+      return toolAdminApi.get(id)
+    },
+    /** 代授下拉全集(数组兼容形全量;仅启用且未注销) */
+    async loadGrantable() {
+      const all = await toolAdminApi.list()
+      this.grantable = all.filter(t => t.enabled && !t.deleted)
     },
     async register(req: ToolRegisterReq) {
       const entry = await toolAdminApi.register(req)
@@ -105,22 +133,35 @@ export const useToolsStore = defineStore('tools', {
     async schemaHistory(id: number) {
       return toolAdminApi.schemaHistory(id)
     },
+    /**
+     * 工具体检(V17,单工具同步):可达/清单/指纹/注解四项矩阵,结论与
+     * 明细落库;完成后刷新列表(当前页回填最新体检位)。
+     */
+    async checkHealth(id: number): Promise<ToolCheckResult> {
+      const result = await toolAdminApi.checkHealth(id)
+      await this.loadTools()
+      return result
+    },
+    /** 批量/全量体检(异步受理回执;结果落各自注册行,由 UI 延时/手动刷新可查) */
+    async checkHealthBatch(ids?: number[]): Promise<ToolCheckBatchReceipt> {
+      return toolAdminApi.checkHealthBatch(ids)
+    },
     async loadGrants() {
       this.grantsLoading = true
       try {
         const f = this.grantFilters
         const userId = f.userId.trim() ? Number(f.userId.trim()) : undefined
-        const all = await toolGrantAdminApi.list({
+        // 服务端分页形(P2-W5):activeOnly 下推 SQL 条件,分页计数与过滤一致
+        const page = await toolGrantAdminApi.page({
           toolName: f.toolName.trim() || undefined,
           userId: userId !== undefined && !Number.isNaN(userId) ? userId : undefined,
           scope: f.scope || undefined,
           activeOnly: f.includeInvalid ? false : undefined, // 服务端默认 true
+          pageNo: f.pageNo ?? 1,
+          pageSize: f.pageSize ?? 10,
         })
-        this.grantsTotal = all.length
-        const pageNo = f.pageNo ?? 1
-        const pageSize = f.pageSize ?? 10
-        const start = (pageNo - 1) * pageSize
-        this.grants = all.slice(start, start + pageSize)
+        this.grants = page.list
+        this.grantsTotal = page.total
       } finally {
         this.grantsLoading = false
       }
@@ -172,4 +213,40 @@ export const GRANT_INVALID_REASONS: Record<GrantInvalidatedReason, string> = {
   'schema_breaking': 'schema 安全相关变更(breaking)',
   'tool_disabled': '工具已停用',
   'tool_deleted': '工具已注销',
+}
+
+/** 体检明细 JSON 解析形({"status","checks":[{check,status,detail?,advice?}]}) */
+export interface ToolHealthDetail {
+  status: ToolHealthStatus | string
+  checks: ToolHealthCheckItem[]
+}
+
+/**
+ * 解析 ia_tool_registry.health_detail_json(镜像 ToolHealthService.detailJson);
+ * null/空/解析失败 → null(与「未体检」同视图)。
+ */
+export function parseHealthDetail(json: string | null | undefined): ToolHealthDetail | null {
+  if (!json) return null
+  try {
+    const parsed = JSON.parse(json) as Partial<ToolHealthDetail>
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.checks)) return null
+    return { status: parsed.status ?? 'unknown', checks: parsed.checks }
+  } catch {
+    return null
+  }
+}
+
+/** 体检三态徽标元数据(V17:绿=ok/黄=degraded/红=unreachable;NULL=未体检灰) */
+export const HEALTH_META: Record<string, { label: string; tag: 'success' | 'warning' | 'danger' | 'info' }> = {
+  ok: { label: '健康', tag: 'success' },
+  degraded: { label: '漂移', tag: 'warning' },
+  unreachable: { label: '不可达', tag: 'danger' },
+}
+
+/** 检查项码值 → 展示名(镜像 ToolHealthService 检查矩阵) */
+export const HEALTH_CHECK_LABELS: Record<string, string> = {
+  endpoint_reachable: '端点可达',
+  tool_present: '宿主清单',
+  schema_fingerprint: 'schema 指纹',
+  annotations_diff: '注解一致',
 }

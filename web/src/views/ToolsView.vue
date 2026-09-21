@@ -2,15 +2,18 @@
 /**
  * [new] 工具注册与授权视图(视图清单 #3)。
  * Tab1 ia_tool_registry:FQN / schema 指纹(schemaSha256)/ 风险等级 / MCP 注解 /
- *      管理员策略 / revalidateRequired 分诊态;注册(单条)/ 活刷新分诊
- *      (unchanged/compatible/breaking + confirm/reject)/ 停用启用 / 治理元数据。
+ *      管理员策略 / 体检三态徽标(V17:health_status,详情抽屉可立即体检)/
+ *      revalidateRequired 分诊态;注册(单条)/ 活刷新分诊(unchanged/compatible/
+ *      breaking + confirm/reject)/ 停用启用 / 治理元数据 / 批量体检(页级异步受理)。
  * Tab2 ia_tool_grant:授权列表(invalidated 原因)/ 授予(toolName+scope+会话)/ 撤销。
  * P2 对齐:注册为单条工具(非端点清单拉取);启用为 enabled 布尔;
  * 授予按 toolName(服务端解析 FQN)、conversation 作用域必填会话 ID。
+ * P2-W5:两 Tab 列表均走服务端分页形(pageNo/pageSize → PageResult);keyword/
+ * 风险级为客户端过滤(无服务端参数);代授下拉走数组兼容形全集。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, CircleCheck, CircleClose, Setting, Clock } from '@element-plus/icons-vue'
+import { Plus, Refresh, CircleCheck, CircleClose, Setting, Clock, Aim, View } from '@element-plus/icons-vue'
 import {
   useToolsStore, RISK_LEVELS, ADMIN_POLICIES, GRANT_INVALID_REASONS, parseAnnotations,
 } from '@/stores/tools'
@@ -20,6 +23,8 @@ import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
 import IaTime from '@/components/IaTime.vue'
+import IaToolHealthBadge from '@/components/IaToolHealthBadge.vue'
+import ToolDetailDrawer from '@/components/ToolDetailDrawer.vue'
 import type { GrantScope, IaToolGrant, IaToolRegistry, IaToolSchemaHistory, ToolRiskLevel } from '@/api/types'
 
 const store = useToolsStore()
@@ -35,6 +40,38 @@ onMounted(() => {
   void store.loadTools()
   void store.loadGrants()
 })
+
+// ===== 工具体检(V17):批量体检(页级,异步受理)+ 详情抽屉「立即体检」 =====
+const batchChecking = ref(false)
+
+async function batchCheck() {
+  const confirmed = await ElMessageBox.confirm(
+    '对注册表全部工具发起体检(异步逐个执行):端点可达 / 宿主清单 / schema 指纹 / 注解 diff 四项检查,结论落库。继续?',
+    '批量体检',
+    { type: 'info', confirmButtonText: '发起体检', cancelButtonText: '取消' },
+  ).then(() => true).catch(() => false)
+  if (!confirmed) return
+  batchChecking.value = true
+  try {
+    const receipt = await store.checkHealthBatch()
+    ElMessage.success(`批量体检已受理(${receipt.total} 个工具),结果异步落库,稍后自动刷新`)
+    // 受理后延时刷新一次;期间可手动「查询」立即拉取已落库的行
+    setTimeout(() => { void store.loadTools() }, 1500)
+  } catch (err) {
+    ElMessage.error(apiErrorMessage(err, '批量体检发起失败'))
+  } finally {
+    batchChecking.value = false
+  }
+}
+
+// ===== 详情抽屉(注册行全字段 + 体检位 + 立即体检) =====
+const detailVisible = ref(false)
+const detailToolId = ref<number | null>(null)
+
+function openDetail(t: IaToolRegistry) {
+  detailToolId.value = t.id
+  detailVisible.value = true
+}
 
 // ===== 注册(单条工具,镜像 RegisterToolReqVO) =====
 const registerVisible = ref(false)
@@ -185,10 +222,12 @@ const grantForm = reactive({
   decisionNote: '',
 })
 
-const grantableTools = computed(() => store.tools.filter(t => t.enabled))
+// 代授下拉全集:数组兼容形全量取回(服务端分页形只回当前页,不供下拉)
+const grantableTools = computed(() => store.grantable)
 
 function openGrant() {
   Object.assign(grantForm, { userId: '', toolName: '', scope: 'permanent', conversationId: '', decisionNote: '' })
+  void store.loadGrantable()
   grantVisible.value = true
 }
 
@@ -289,7 +328,8 @@ function shortSha(sha: string): string {
 <template>
   <IaPageContainer subtitle="MCP 工具注册表、活刷新分诊与用户授权">
     <template #action>
-      <!-- 页级操作右置(#19):随页签切换「注册工具/代授」 -->
+      <!-- 页级操作右置(#19):随页签切换「注册工具/代授」;registry 页级含批量体检 -->
+      <el-button v-if="tab === 'registry'" :icon="Aim" :loading="batchChecking" @click="batchCheck">批量体检</el-button>
       <el-button v-if="tab === 'registry'" type="primary" :icon="Plus" @click="openRegister">注册工具</el-button>
       <el-button v-else type="primary" :icon="Plus" @click="openGrant">代授</el-button>
     </template>
@@ -345,18 +385,25 @@ function shortSha(sha: string): string {
             <el-table-column label="schema 指纹" min-width="150">
               <template #default="{ row }"><span class="mono fingerprint">{{ row.schemaSha256 }}</span></template>
             </el-table-column>
+            <!-- 体检列(V17):三态徽标 ok=绿/degraded=黄/unreachable=红,NULL=未体检灰 -->
+            <el-table-column label="体检" width="92">
+              <template #default="{ row }">
+                <IaToolHealthBadge :status="row.healthStatus" />
+              </template>
+            </el-table-column>
             <el-table-column label="状态" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="360" fixed="right">
+            <el-table-column label="操作" width="410" fixed="right">
               <template #default="{ row }">
                 <el-button text type="primary" size="small" :icon="Refresh" @click="refreshTool(row)">刷新</el-button>
                 <el-button text type="primary" size="small" :icon="Clock" @click="openHistory(row)">历史</el-button>
                 <el-button v-if="row.revalidateRequired" text type="success" size="small" :icon="CircleCheck" @click="confirmSchema(row)">确认</el-button>
                 <el-button v-if="row.revalidateRequired" text type="warning" size="small" :icon="CircleClose" @click="rejectSchema(row)">拒绝</el-button>
                 <el-button text type="primary" size="small" :icon="Setting" @click="openPolicy(row)">策略</el-button>
+                <el-button text type="primary" size="small" :icon="View" @click="openDetail(row)">详情</el-button>
                 <el-button
                   text size="small" :type="row.enabled ? 'danger' : 'success'"
                   @click="toggleEnabled(row)"
@@ -585,6 +632,9 @@ function shortSha(sha: string): string {
         <el-button type="primary" :loading="grantSaving" @click="submitGrant">授予</el-button>
       </template>
     </el-dialog>
+
+    <!-- 工具详情抽屉(注册行全字段 + 体检位 V17 + 立即体检) -->
+    <ToolDetailDrawer v-model:visible="detailVisible" :tool-id="detailToolId" />
   </IaPageContainer>
 </template>
 

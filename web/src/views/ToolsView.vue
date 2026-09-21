@@ -18,6 +18,7 @@ import { apiErrorMessage } from '@/stores/apps'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
+import IaTime from '@/components/IaTime.vue'
 import type { GrantScope, IaToolGrant, IaToolRegistry, IaToolSchemaHistory, ToolRiskLevel } from '@/api/types'
 
 const store = useToolsStore()
@@ -431,7 +432,9 @@ function shortSha(sha: string): string {
                 </el-tooltip>
               </template>
             </el-table-column>
-            <el-table-column prop="createTime" label="授予时间" min-width="160" show-overflow-tooltip />
+            <el-table-column label="授予时间" min-width="120">
+              <template #default="{ row }"><IaTime :value="row.createTime" /></template>
+            </el-table-column>
             <el-table-column label="操作" width="90" fixed="right">
               <template #default="{ row }">
                 <el-button text type="danger" size="small" :disabled="row.invalidated" @click="revokeGrant(row)">撤销</el-button>

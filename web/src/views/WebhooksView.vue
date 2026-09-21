@@ -11,6 +11,7 @@ import { Refresh, RefreshRight } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
+import IaTime from '@/components/IaTime.vue'
 import { useWebhooksStore, WEBHOOK_EVENTS, DELIVERY_STATUS } from '@/stores/webhooks'
 import { apiErrorMessage } from '@/stores/apps'
 import type { WebhookDelivery } from '@/api/types'
@@ -156,9 +157,9 @@ async function redeliver(row: WebhookDelivery) {
             <template #empty>
               <IaEmpty description="还没有投递记录" hint="运行到达终态后这里会出现通知投递明细" />
             </template>
-            <el-table-column label="时间" min-width="150">
+            <el-table-column label="时间" min-width="120">
               <template #default="{ row }">
-                <span v-if="row.deliveredAt" class="mono">{{ row.deliveredAt }}</span>
+                <IaTime v-if="row.deliveredAt" :value="row.deliveredAt" />
                 <span v-else class="dim">待投递</span>
               </template>
             </el-table-column>
@@ -181,9 +182,9 @@ async function redeliver(row: WebhookDelivery) {
             <el-table-column label="HTTP" width="70" align="center">
               <template #default="{ row }">{{ row.httpStatus ?? '—' }}</template>
             </el-table-column>
-            <el-table-column label="下次重试" min-width="150" show-overflow-tooltip>
+            <el-table-column label="下次重试" min-width="110">
               <template #default="{ row }">
-                <span v-if="row.nextRetryAt" class="retry">{{ row.nextRetryAt }}</span>
+                <IaTime v-if="row.nextRetryAt" :value="row.nextRetryAt" class="retry" />
                 <span v-else class="dim">—</span>
               </template>
             </el-table-column>

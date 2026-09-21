@@ -73,7 +73,9 @@ describe('视图挂载冒烟', () => {
     const wrapper = await mountView(AuditView, '/audit')
     expect(wrapper.text()).toContain('mcp__demo_host__reset_password')
     expect(wrapper.text()).toContain('模式默认')
-    expect(wrapper.text()).toContain('2026-09-20T07:59:00Z')
+    // [优化建议 #21] 时间列相对化:精确 ISO 保留在 <time datetime> 机器可读属性
+    const timeAttrs = wrapper.findAll('.ia-time').map(t => t.attributes('datetime'))
+    expect(timeAttrs).toContain('2026-09-20T07:59:00Z')
     // [优化建议 #3] zh-cn locale 全量接入:分页总数中文「共 N 条」,不再出现英文 Total
     expect(wrapper.text()).toContain('共 12 条')
     expect(wrapper.text()).not.toContain('Total')

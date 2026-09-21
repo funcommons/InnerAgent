@@ -13,6 +13,7 @@ import IaEmpty from '@/components/IaEmpty.vue'
 import IaListPage, { type IaListColumnDef } from '@/components/IaListPage.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
+import IaTime from '@/components/IaTime.vue'
 import { useAuditStore, DECISION_SOURCES, AUDIT_DECISIONS } from '@/stores/audit'
 import type { IaAuditLog } from '@/api/types'
 
@@ -176,7 +177,9 @@ async function exportCsv() {
         <template #empty>
           <IaEmpty description="没有符合条件的审计记录" hint="调整筛选条件或扩大时间范围后重试" />
         </template>
-        <el-table-column v-if="!visibleColumns.length || visibleColumns.includes('createTime')" prop="createTime" label="时间" min-width="160" show-overflow-tooltip />
+        <el-table-column v-if="!visibleColumns.length || visibleColumns.includes('createTime')" label="时间" min-width="120">
+          <template #default="{ row }"><IaTime :value="row.createTime" /></template>
+        </el-table-column>
         <el-table-column v-if="!visibleColumns.length || visibleColumns.includes('toolFqn')" prop="toolFqn" label="工具" min-width="220" show-overflow-tooltip>
           <template #default="{ row }"><span class="mono">{{ row.toolFqn }}</span></template>
         </el-table-column>

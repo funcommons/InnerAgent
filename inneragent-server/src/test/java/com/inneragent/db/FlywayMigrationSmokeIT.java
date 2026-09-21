@@ -24,6 +24,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import com.inneragent.platform.config.AppTenantLineInnerInterceptor;
+
 /**
  * Flyway 迁移链冒烟测试(P0-T4 建立;P1 台账④随 V5__storage_config.sql、
  * P1-T2a 随 V6 工具中枢增补、P1-T3b 随 V7__agent_attachment.sql 对话附件增补、
@@ -38,7 +40,8 @@ import org.testcontainers.utility.DockerImageName;
  * P4-W13 Skill 随 V19__skill_hub.sql Skill 包两表增补、
  * P4-W14 随 V20__ia_kb.sql mini KB 两表增补、P4-W15 随 V21__ia_feedback.sql 用户反馈表增补、
  * 收尾批次随 V22__ia_storage_config_options_text.sql 存储配置 options 列 JSONB → TEXT 增补、
- * demo 冒烟修复随 V23__ia_skill_tenant_id.sql Skill 两表 tenant_id 列增补)。
+ * demo 冒烟修复随 V23__ia_skill_tenant_id.sql Skill 两表 tenant_id 列增补、
+ * acme-demo 真机修复随 V24__ia_tenant_id_missing_tables.sql 全库缺列灭族(六表 tenant_id 增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
  * 上执行 classpath:db/migration 全链迁移,断言 33 张 ia_ 业务表全部建成、种子数据落库,
@@ -120,7 +123,7 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(23, result.migrationsExecuted, "应依次执行 V1-V23 二十三个迁移(V19 Skill 包两表;V20 mini KB 两表;V21 用户反馈表;V22 存储配置 options 列 TEXT 化;V23 Skill 两表 tenant_id 列)");
+        assertEquals(24, result.migrationsExecuted, "应依次执行 V1-V24 二十四个迁移(V19 Skill 包两表;V20 mini KB 两表;V21 用户反馈表;V22 存储配置 options 列 TEXT 化;V23 Skill 两表 tenant_id 列;V24 全库缺列灭族六表 tenant_id)");
 
         List<String> actualTables = listIaTables();
         assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 33 张 ia_ 表(V18 三方 MCP 两表;V19 Skill 两表;V20 mini KB 两表;V21 用户反馈表)");
@@ -131,7 +134,7 @@ class FlywayMigrationSmokeIT {
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(23, resultSet.getInt(1), "flyway_schema_history 应有 23 条成功记录(V19 Skill 两表 + V20 mini KB 两表 + V21 用户反馈表 + V22 options 列 TEXT 化 + V23 Skill 两表 tenant_id 列)");
+            assertEquals(24, resultSet.getInt(1), "flyway_schema_history 应有 24 条成功记录(V19 Skill 两表 + V20 mini KB 两表 + V21 用户反馈表 + V22 options 列 TEXT 化 + V23 Skill 两表 tenant_id 列 + V24 全库缺列灭族)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -145,6 +148,28 @@ class FlywayMigrationSmokeIT {
                 "ia_skill.tenant_id 应存在(V23;用户面请求租户注入,缺失即 500)");
         assertTrue(columnExists("ia_skill_file", "tenant_id"),
                 "ia_skill_file.tenant_id 应存在(V23)");
+
+        // V24:全库缺列灭族(acme-demo 真机 500 根因的 schema 侧防御)——
+        // TenantIdLineHandler 对 IGNORED_TABLES 之外的每张 ia_ 表注入 tenant_id
+        // 条件(请求线程携带租户上下文时),缺列即 column "tenant_id" does not
+        // exist → 500。V23 只补了 ia_skill 两张,本轮清点补齐其余六张;此断言按
+        // 拦截器忽略清单动态比对全部 ia_ 表,后续新增业务表缺列在此直接红。
+        // 注:IGNORED_TABLES 含 flyway_schema_history(不在 EXPECTED_IA_TABLES,
+        // 比对天然跳过)。
+        List<String> v24Tables = List.of(
+                "ia_tool_registry", "ia_tool_schema_history", "ia_storage_config",
+                "ia_mcp_server_config", "ia_kb_document", "ia_kb_chunk");
+        for (String table : EXPECTED_IA_TABLES) {
+            if (!AppTenantLineInnerInterceptor.IGNORED_TABLES.contains(table)) {
+                assertTrue(columnExists(table, "tenant_id"),
+                        table + ".tenant_id 应存在(V24 灭族;不在 IGNORED_TABLES 的业务表必携 tenant_id,"
+                                + "否则租户注入 500)。V24 名单:" + v24Tables);
+            }
+        }
+        for (String table : v24Tables) {
+            assertEquals("bigint", columnType(table, "tenant_id"),
+                    table + ".tenant_id 应为 BIGINT(V24,照 V23 先例 NOT NULL DEFAULT 0)");
+        }
 
         // V16:工具体检 v1 三列(结论/时间/明细;明细为 TEXT 存 JSON,R3 DEF-08 教训)
         assertEquals("character varying", columnType("ia_tool_registry", "health_status"),

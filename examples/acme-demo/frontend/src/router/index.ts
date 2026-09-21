@@ -20,9 +20,31 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/auth/Logout.vue'),
     meta: { title: 'router.logout', public: true, hideInMenu: true, layout: 'blank' }
   },
+  // —— 公开官网区(无需登录): 产品首页 / 文档中心 / API 体验台 ——
   {
     path: '/',
-    redirect: '/ia/overview'
+    component: () => import('@/layout/PublicLayout.vue'),
+    meta: { layout: 'public', public: true },
+    children: [
+      {
+        path: '',
+        name: 'SiteHome',
+        component: () => import('@/views/site/Home.vue'),
+        meta: { title: 'router.site-home', desc: 'seo.home-desc', public: true }
+      },
+      {
+        path: 'docs/:sectionId?',
+        name: 'SiteDocs',
+        component: () => import('@/views/site/Docs.vue'),
+        meta: { title: 'router.site-docs', desc: 'seo.docs-desc', public: true }
+      },
+      {
+        path: 'playground',
+        name: 'SitePlayground',
+        component: () => import('@/views/site/Playground.vue'),
+        meta: { title: 'router.playground', desc: 'seo.playground-desc', public: true }
+      }
+    ]
   },
   // —— InnerAgent 接入 DEMO 三页 — AppLayout 侧栏 ——
   {
@@ -172,8 +194,17 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach(async (to, _from) => {
   const title = to.meta.title as string
+  // 公开官网区标题用产品名 InnerAgent;控制台沿用脚手架/OEM 命名
+  const isPublicLayout = to.matched.some((r) => r.meta.layout === 'public')
+  const siteName = isPublicLayout ? t('site.name') : t('app.name')
   if (title) {
-    document.title = `${t(title)} - ${t('app.name')}`
+    document.title = `${t(title)} - ${siteName}`
+  }
+
+  // SEO: 按路由更新 meta description(静态兜底在 index.html)
+  const descKey = to.meta.desc as string | undefined
+  if (descKey) {
+    document.querySelector('meta[name="description"]')?.setAttribute('content', t(descKey))
   }
 
   // 嵌入模式: 解析外观参数 (brand/mode/language), 即时生效不持久化

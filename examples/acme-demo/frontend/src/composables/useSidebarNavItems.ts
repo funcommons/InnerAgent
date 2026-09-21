@@ -1,12 +1,12 @@
 /**
  * useSidebarNavItems — 项目侧 nav 工厂 (基于 SDK 底座).
  *
- * DEMO 侧栏:"InnerAgent 接入" 三入口 + "开发者" 脚手架能力展示.
+ * DEMO 侧栏:"InnerAgent 接入" 三入口 + "开发者" 脚手架能力展示 + "返回官网".
  */
 import { computed, type ComputedRef } from 'vue'
 import type { Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Compass, Film, Tools, VideoPlay } from '@element-plus/icons-vue'
+import { Compass, Film, House, Tools, VideoPlay } from '@element-plus/icons-vue'
 import type { NavItem } from '@/components/sdk'
 
 /** 默认展开的 sub-menu id 列表 (无 sub-menu 时为空数组) */
@@ -34,6 +34,12 @@ export function useSidebarNavItems(): ComputedRef<NavItem[]> {
       index: '/dev',
       label: t('router.dev-index'),
       icon: Tools as unknown as Component,
+    },
+    {
+      // 控制台 ↔ 公开官网的一致返回入口(公开区顶部导航则有「进入控制台」)
+      index: '/',
+      label: t('router.back-to-site'),
+      icon: House as unknown as Component,
     },
   ])
 }

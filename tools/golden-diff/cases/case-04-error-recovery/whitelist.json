@@ -1,0 +1,9 @@
+{
+  "rules": [
+    {
+      "event": "ERROR",
+      "field": "data.error",
+      "reason": "两侧资源限额错误码命名不同(builtin: RESOURCE_LIMIT_EXCEEDED / inner: IA_RESOURCE_LIMIT),对照 03-开发计划 §2.6「归一化去 RESOURCE_LIMIT」;白名单条目需评审后保留"
+    }
+  ]
+}

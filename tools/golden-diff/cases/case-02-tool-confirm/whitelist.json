@@ -1,0 +1,9 @@
+{
+  "rules": [
+    {
+      "event": "PROGRESS",
+      "side": "builtin",
+      "reason": "builtin 侧 progress 心跳 inner 侧不产出(已知可接受差异,灰度观察项)"
+    }
+  ]
+}

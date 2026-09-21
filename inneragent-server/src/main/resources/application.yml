@@ -142,6 +142,13 @@ management:
 # 请求体上限说明(R6):所钉 mcp 0.17.0 客户端传输不设请求体上限(无 413 路径),
 # 故无大小旋钮;详见 McpInvokerProperties 类注释。
 inneragent:
+  cors:
+    # iframe 跨源接入 allowlist(K 清单②;env IA_CORS_ALLOWED_ORIGINS,逗号分隔)。
+    # 缺省空 = 关闭 = 同源反代姿态(零 CORS 头,行为与未引入前完全一致);
+    # 配置后仅对 /ia/api/** 生效(含 SSE),方法 GET/POST/OPTIONS,
+    # 头 Authorization/X-IA-Act/X-IA-Admin-Key/Content-Type/Last-Event-ID,
+    # credentials=true(allowlist 为显式来源,永不回退 *)
+    allowed-origins: ${IA_CORS_ALLOWED_ORIGINS:}
   mcp:
     # false 时 McpClientToolInvoker 不装配,回退 T2a 缺省 UnavailableMcpToolInvoker
     enabled: true

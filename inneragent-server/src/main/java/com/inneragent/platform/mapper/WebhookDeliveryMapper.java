@@ -24,10 +24,14 @@ public interface WebhookDeliveryMapper extends BaseMapper<WebhookDelivery> {
     /**
      * 读取应用 Webhook 回调配置(ia_app 为平台级表,无行级注入;
      * url/secret 任一为空即返回空串,由服务层判定跳过)。
+     * enabled/events 为 V14 订阅配置(两参构造兼容:enabled=TRUE、
+     * events=NULL 表示不过滤,既有调用/测试语义不变)。
      */
     @Select("""
             SELECT COALESCE(webhook_url, '') AS url,
-                   COALESCE(webhook_secret, '') AS secret
+                   COALESCE(webhook_secret, '') AS secret,
+                   COALESCE(webhook_enabled, TRUE) AS enabled,
+                   webhook_events AS events
             FROM ia_app
             WHERE id = #{appId}
               AND deleted = FALSE
@@ -187,7 +191,22 @@ public interface WebhookDeliveryMapper extends BaseMapper<WebhookDelivery> {
             """)
     int resetForRedeliver(@Param("id") long id, @Param("now") LocalDateTime now);
 
-    /** 应用回调配置投影(避免 platform 层反向依赖 server.admin 实体)。 */
-    record WebhookConfigRow(String url, String secret) {
+    /**
+     * 应用回调配置投影(避免 platform 层反向依赖 server.admin 实体)。
+     * 两参构造为 V14 前形态兼容入口(enabled=TRUE、events=NULL=不过滤)。
+     */
+    record WebhookConfigRow(String url, String secret, boolean enabled, String events) {
+
+        public WebhookConfigRow(String url, String secret) {
+            this(url, secret, true, null);
+        }
+
+        /** 事件是否已订阅(NULL 配置 = 全部放行,V14 前行为)。 */
+        public boolean subscribed(String eventType) {
+            return events == null || events.isBlank()
+                    || java.util.Arrays.stream(events.split(","))
+                            .map(String::trim)
+                            .anyMatch(eventType::equals);
+        }
     }
 }

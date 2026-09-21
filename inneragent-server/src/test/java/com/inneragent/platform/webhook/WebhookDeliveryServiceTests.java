@@ -107,6 +107,38 @@ class WebhookDeliveryServiceTests {
     }
 
     @Test
+    @DisplayName("订阅配置(V14):总开关关闭或事件未订阅 → 不入队;订阅内事件照常")
+    void enqueueRespectsSubscriptionConfig() {
+        // 总开关关闭:不入队
+        when(mapper.selectWebhookConfig(7L)).thenReturn(new WebhookDeliveryMapper.WebhookConfigRow(
+                URL, SECRET, false, "run.finished,run.failed,run.cancelled"));
+        service.onRunTerminal(WebhookDeliveryService.TerminalEvent.of(
+                7L, WebhookDeliveryService.EVENT_RUN_FINISHED, "run-1", "DONE"));
+        verify(mapper, never()).insert(any(WebhookDelivery.class));
+
+        // 已订阅事件:入队
+        when(mapper.selectWebhookConfig(7L)).thenReturn(new WebhookDeliveryMapper.WebhookConfigRow(
+                URL, SECRET, true, "run.finished"));
+        when(mapper.selectDatabaseNow()).thenReturn(NOW);
+        service.onRunTerminal(WebhookDeliveryService.TerminalEvent.of(
+                7L, WebhookDeliveryService.EVENT_RUN_FINISHED, "run-1", "DONE"));
+        verify(mapper).insert(any(WebhookDelivery.class));
+
+        // 未订阅事件:不入队
+        org.mockito.Mockito.clearInvocations(mapper);
+        service.onRunTerminal(WebhookDeliveryService.TerminalEvent.of(
+                7L, WebhookDeliveryService.EVENT_RUN_CANCELLED, "run-2", "CANCELLED"));
+        verify(mapper, never()).insert(any(WebhookDelivery.class));
+
+        // events 为空(NULL/空白,V14 前形态)= 不过滤,全部放行
+        when(mapper.selectWebhookConfig(7L)).thenReturn(
+                new WebhookDeliveryMapper.WebhookConfigRow(URL, SECRET));
+        service.onRunTerminal(WebhookDeliveryService.TerminalEvent.of(
+                7L, WebhookDeliveryService.EVENT_RUN_CANCELLED, "run-3", "CANCELLED"));
+        verify(mapper).insert(any(WebhookDelivery.class));
+    }
+
+    @Test
     @DisplayName("首投成功:markSuccess 落 SUCCESS,签名/URL/状态码持久化")
     void firstAttemptSuccessMarksSuccess() {
         stubScan(claimedDelivery(1, 5));

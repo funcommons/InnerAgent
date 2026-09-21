@@ -4,22 +4,34 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.util.unit.DataSize;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 
 import java.lang.reflect.Method;
 
@@ -191,6 +203,153 @@ class GlobalExceptionHandlerTests {
                 .andExpect(jsonPath("$.msg").value("系统内部错误"));
     }
 
+    // ==================== 优化建议 #4:上传超限 413 ====================
+
+    @Test
+    void mapsUploadSizeExceededTo413WithConfiguredLimitInMessage() {
+        GlobalExceptionHandler withCustomLimit = new GlobalExceptionHandler("5MB");
+
+        CommonResult<?> result = withCustomLimit.handleMaxUploadSize(
+                new MaxUploadSizeExceededException(Long.valueOf(5 * 1024 * 1024)));
+
+        assertThat(result.getCode()).isEqualTo(413);
+        assertThat(result.getMsg())
+                .contains("附件大小不能超过 5MB")
+                .contains("请压缩或拆分文件后重新上传");
+    }
+
+    @Test
+    void defaultHandlerCarriesDefault20MbLimit() {
+        CommonResult<?> result = handler.handleMaxUploadSize(
+                new MaxUploadSizeExceededException(1));
+
+        assertThat(result.getCode()).isEqualTo(413);
+        assertThat(result.getMsg()).contains("附件大小不能超过 20MB");
+    }
+
+    @Test
+    void humanizesDataSizeForLimitMessage() {
+        assertThat(GlobalExceptionHandler.humanize(DataSize.parse("20MB"))).isEqualTo("20MB");
+        assertThat(GlobalExceptionHandler.humanize(DataSize.parse("512KB"))).isEqualTo("512KB");
+        assertThat(GlobalExceptionHandler.humanize(DataSize.parse("2GB"))).isEqualTo("2GB");
+        assertThat(GlobalExceptionHandler.humanize(DataSize.ofBytes(1024))).isEqualTo("1KB");
+        assertThat(GlobalExceptionHandler.humanize(DataSize.ofBytes(7))).isEqualTo("7B");
+    }
+
+    @Test
+    void fallsBackToDefaultLimitWhenConfiguredValueUnparseable() {
+        GlobalExceptionHandler brokenConfig = new GlobalExceptionHandler("not-a-size");
+
+        CommonResult<?> result = brokenConfig.handleMaxUploadSize(
+                new MaxUploadSizeExceededException(1));
+
+        assertThat(result.getMsg()).contains("20MB");
+    }
+
+    @Test
+    void mvcPipelineReturns413ForMultipartSizeExceeded() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new ProbeController())
+                .setControllerAdvice(handler)
+                .build();
+
+        mockMvc.perform(post("/probe/upload").content("x"))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.code").value(413))
+                .andExpect(jsonPath("$.msg").value(
+                        org.hamcrest.Matchers.containsString("附件大小不能超过 20MB")));
+    }
+
+    // ==================== 优化建议 #22:错误语义表 ====================
+
+    @Test
+    void mapsDataIntegrityViolationTo409() {
+        CommonResult<?> result = handler.handleDataIntegrityViolation(
+                new DataIntegrityViolationException("uk_ia_app_key"));
+
+        assertThat(result.getCode()).isEqualTo(409);
+        assertThat(result.getMsg())
+                .contains("数据状态冲突")
+                .contains("请刷新后重试");
+    }
+
+    @Test
+    void mapsUnreadableBodyMissingParamAndTypeMismatchTo400() throws Exception {
+        CommonResult<?> unreadable = handler.handleUnreadableBody(
+                new HttpMessageNotReadableException("bad json", new MockHttpInputMessage("x".getBytes())));
+        assertThat(unreadable.getCode()).isEqualTo(400);
+        assertThat(unreadable.getMsg()).contains("请求体格式不正确").contains("请按接口文档检查请求体");
+
+        CommonResult<?> missing = handler.handleMissingParameter(
+                new MissingServletRequestParameterException("conversationId", "String"));
+        assertThat(missing.getCode()).isEqualTo(400);
+        assertThat(missing.getMsg()).contains("conversationId").contains("请补齐必填参数");
+
+        CommonResult<?> mismatch = handler.handleTypeMismatch(
+                new MethodArgumentTypeMismatchException("x", Long.class, "pageNo", null, new RuntimeException()));
+        assertThat(mismatch.getCode()).isEqualTo(400);
+        assertThat(mismatch.getMsg()).contains("pageNo").contains("请核对参数类型");
+    }
+
+    @Test
+    void mapsMethodNotSupportedTo405() {
+        CommonResult<?> result = handler.handleMethodNotSupported(
+                new HttpRequestMethodNotSupportedException("DELETE"));
+
+        assertThat(result.getCode()).isEqualTo(405);
+        assertThat(result.getMsg()).contains("请求方法不支持").contains("HTTP 方法");
+    }
+
+    @Test
+    void mapsUpstreamAccessFailureTo502WithReadableCause() {
+        ResourceAccessException timeout = new ResourceAccessException("I/O error",
+                new SocketTimeoutException("Read timed out"));
+        CommonResult<?> result = handler.handleUpstreamUnavailable(timeout);
+        assertThat(result.getCode()).isEqualTo(502);
+        assertThat(result.getMsg()).contains("上游服务暂时不可达").contains("连接超时").contains("请稍后重试");
+
+        ResourceAccessException refused = new ResourceAccessException("I/O error",
+                new ConnectException("Connection refused"));
+        assertThat(handler.handleUpstreamUnavailable(refused).getMsg()).contains("连接失败");
+    }
+
+    @Test
+    void errorSemanticsTableIsCompleteAndActionable() {
+        for (GlobalExceptionHandler.ErrorSemantics entry :
+                GlobalExceptionHandler.ErrorSemantics.values()) {
+            HttpStatus status = entry.status();
+            assertThat(status.isError())
+                    .as("语义表 %s 必须映射到 4xx/5xx", entry.name())
+                    .isTrue();
+            assertThat(entry.message()).as("%s 文案", entry.name()).isNotBlank();
+            assertThat(entry.userAction())
+                    .as("%s 必须带「用户该做什么」行动指引", entry.name())
+                    .isNotBlank();
+            assertThat(entry.fullMessage()).contains(entry.userAction());
+        }
+    }
+
+    @Test
+    void mvcPipelineReturns400ForMalformedJsonAnd405ForWrongMethod() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new ProbeController())
+                .setControllerAdvice(handler)
+                .build();
+
+        mockMvc.perform(post("/probe/validate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{broken-json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.msg").value(
+                        org.hamcrest.Matchers.containsString("请求体格式不正确")));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/probe/conflict"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value(405))
+                .andExpect(jsonPath("$.msg").value(
+                        org.hamcrest.Matchers.containsString("请求方法不支持")));
+    }
+
     private Method probeMethod() throws NoSuchMethodException {
         return ProbeController.class.getDeclaredMethod("validate", ValidationTarget.class);
     }
@@ -225,6 +384,12 @@ class GlobalExceptionHandlerTests {
         @GetMapping("/probe/crash")
         CommonResult<String> crash() {
             throw new IllegalStateException("internal detail");
+        }
+
+        /** [#4] 模拟 multipart 解析阶段的超限异常(经 advice 映射 413)。 */
+        @PostMapping("/probe/upload")
+        CommonResult<String> upload() {
+            throw new MaxUploadSizeExceededException(1);
         }
     }
 }

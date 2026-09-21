@@ -29,10 +29,11 @@ import org.testcontainers.utility.DockerImageName;
  * P1-T2a 随 V6 工具中枢增补、P1-T3b 随 V7__agent_attachment.sql 对话附件增补、
  * P2-srv U1 随 V8 decision_source 注释刷新、P2-key 随 V9__app_sign_key_rotation_grace.sql
  * 签名公钥轮换双 key 列增补、P2-obs 随 V11__webhook_delivery.sql 终态 Webhook 投递增补、
- * R1 修复随 V13__tool_grant_active_unique_index.sql 授权活跃行部分唯一索引增补)。
+ * R1 修复随 V13__tool_grant_active_unique_index.sql 授权活跃行部分唯一索引增补、
+ * 优化建议 #2 随 V14__circuit_breaker_and_webhook_config.sql 熔断/Webhook 订阅配置增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
- * 上执行 classpath:db/migration 全链迁移,断言 25 张 ia_ 业务表全部建成、种子数据落库,
+ * 上执行 classpath:db/migration 全链迁移,断言 26 张 ia_ 业务表全部建成、种子数据落库,
  * 并重复执行 migrate 验证幂等。由 maven-failsafe-plugin 执行(类名 *IT 结尾)。</p>
  */
 @Testcontainers
@@ -46,7 +47,7 @@ class FlywayMigrationSmokeIT {
             .withUsername("inneragent")
             .withPassword("inneragent");
 
-    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件 + V10 管理站认证 + V11 终态 Webhook 投递(字典序,25 张)。 */
+    /** ia_ 业务表全集:技术方案 §5.1 的 19 张 + V5 存储配置 + V6 schema 历史 + V7 附件 + V10 管理站认证 + V11 终态 Webhook 投递 + V14 熔断事件流水(字典序,26 张)。 */
     private static final List<String> EXPECTED_IA_TABLES = List.of(
             // V10:管理站账号认证(18a;ia_adm 字典序居 ia_agent_* 之前)
             "ia_admin_account",
@@ -72,6 +73,8 @@ class FlywayMigrationSmokeIT {
             "ia_ai_model",
             "ia_app",
             "ia_audit_log",
+            // V14:熔断事件流水(优化建议 #2 服务端半)
+            "ia_circuit_event",
             "ia_model_api_config",
             // V5:工作区/媒体对象存储配置
             "ia_storage_config",
@@ -98,18 +101,18 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(13, result.migrationsExecuted, "应依次执行 V1-V13 十三个迁移(V9 轮换双 key;V10 管理站账号认证;V11 终态 Webhook 投递;V12 审计列宽;V13 授权活跃行部分唯一索引)");
+        assertEquals(14, result.migrationsExecuted, "应依次执行 V1-V14 十四个迁移(V9 轮换双 key;V10 管理站账号认证;V11 终态 Webhook 投递;V12 审计列宽;V13 授权活跃行部分唯一索引;V14 熔断/Webhook 订阅配置)");
 
         List<String> actualTables = listIaTables();
-        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 25 张 ia_ 表(V13 仅改索引,不改表集合)");
+        assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 26 张 ia_ 表(V14 增熔断事件流水)");
 
-        // flyway_schema_history:十三条记录且全部 success
+        // flyway_schema_history:十四条记录且全部 success
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(13, resultSet.getInt(1), "flyway_schema_history 应有 13 条成功记录(V9 轮换双 key + V10 管理站认证 + V11 Webhook 投递 + V12 审计列宽 + V13 授权部分唯一索引)");
+            assertEquals(14, resultSet.getInt(1), "flyway_schema_history 应有 14 条成功记录(V9 轮换双 key + V10 管理站认证 + V11 Webhook 投递 + V12 审计列宽 + V13 授权部分唯一索引 + V14 熔断/Webhook 配置)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -207,6 +210,48 @@ class FlywayMigrationSmokeIT {
             assertEquals("[\"image\", \"file\"]", modelResultSet.getString(1),
                     "V7 应为演示模型补 image/file 多模态输入类型");
         }
+
+        // V14:熔断与 Webhook 订阅配置(优化建议 #2 服务端半)
+        // ia_app 熔断列:总开关缺省未停用;limits 默认 JSON 含 §4.7 核心护栏(8 并发/20 QPS)
+        assertTrue(columnExists("ia_app", "circuit_limits_json"),
+                "ia_app.circuit_limits_json 应存在(V14)");
+        assertEquals("boolean", columnType("ia_app", "circuit_stopped"),
+                "ia_app.circuit_stopped 应为 BOOLEAN(V14 应用级紧急停用总开关)");
+        assertTrue(columnExists("ia_app", "circuit_stopped_at"),
+                "ia_app.circuit_stopped_at 应存在(V14)");
+        assertTrue(columnExists("ia_app", "circuit_stop_reason"),
+                "ia_app.circuit_stop_reason 应存在(V14)");
+        assertTrue(columnExists("ia_app", "webhook_enabled"),
+                "ia_app.webhook_enabled 应存在(V14 Webhook 总开关)");
+        assertTrue(columnExists("ia_app", "webhook_events"),
+                "ia_app.webhook_events 应存在(V14 Webhook 订阅事件)");
+        try (Connection connection = openConnection();
+             PreparedStatement app14 = connection.prepareStatement(
+                     "SELECT circuit_stopped, circuit_limits_json::text, webhook_enabled, webhook_events "
+                             + "FROM ia_app WHERE id = 1");
+             ResultSet app14Set = app14.executeQuery()) {
+            assertTrue(app14Set.next(), "应预置 id=1 的默认应用");
+            assertFalse(app14Set.getBoolean(1), "默认应用缺省未紧急停用(V14)");
+            // jsonb 会重排/加空格,先归一化再断言关键护栏值
+            String limitsJson = app14Set.getString(2).replaceAll("\\s", "");
+            assertTrue(limitsJson.contains("\"mcpConcurrency\":8")
+                            && limitsJson.contains("\"mcpQps\":20"),
+                    "limits 默认值应含 §4.7 核心护栏(并发 8/QPS 20):" + limitsJson);
+            assertTrue(limitsJson.contains("\"confirmTimeoutHours\":24"),
+                    "limits 默认值应含确认超时 24h:" + limitsJson);
+            assertTrue(app14Set.getBoolean(3), "Webhook 总开关缺省开启(V14)");
+            assertEquals("run.finished,run.failed,run.cancelled",
+                    app14Set.getString(4), "Webhook 订阅缺省终态三事件(V14)");
+        }
+        // ia_circuit_event 流水表(仅追加;mock 契约 CircuitBreakerEvent 数据源)
+        assertTrue(columnExists("ia_circuit_event", "type"),
+                "ia_circuit_event.type 应存在(V14)");
+        assertTrue(columnExists("ia_circuit_event", "run_id"),
+                "ia_circuit_event.run_id 应存在(V14)");
+        assertTrue(columnExists("ia_circuit_event", "operator"),
+                "ia_circuit_event.operator 应存在(V14)");
+        assertTrue(indexExists("idx_ia_circuit_event_app_time"),
+                "ia_circuit_event (app_id, create_time DESC) 检索索引应存在(V14)");
     }
 
     @Test

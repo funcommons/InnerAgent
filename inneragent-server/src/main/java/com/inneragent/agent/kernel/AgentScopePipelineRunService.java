@@ -5,6 +5,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inneragent.platform.common.BusinessException;
+import com.inneragent.platform.context.AppContext;
+import com.inneragent.server.admin.CircuitBreakerAdminService;
 import com.inneragent.platform.config.AgentScopeV2Properties;
 import com.inneragent.platform.config.ai.AiAgentDefinition;
 import com.inneragent.server.controller.vo.AiChatReqVO;
@@ -99,6 +101,7 @@ public final class AgentScopePipelineRunService {
     private final ObjectMapper objectMapper;
     private final AgentScopeSkillRegistry skillRegistry;
     private final AgentUserSkillService userSkillService;
+    private final CircuitBreakerAdminService circuitBreakers;
 
     public AgentScopePipelineRunService(
             AiModelService modelService,
@@ -119,7 +122,8 @@ public final class AgentScopePipelineRunService {
             AgentRuntimeSchedulers schedulers,
             ObjectMapper objectMapper,
             AgentScopeSkillRegistry skillRegistry,
-            AgentUserSkillService userSkillService) {
+            AgentUserSkillService userSkillService,
+            CircuitBreakerAdminService circuitBreakers) {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
         this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
         this.conversations = Objects.requireNonNull(conversations, "conversations must not be null");
@@ -144,6 +148,8 @@ public final class AgentScopePipelineRunService {
         this.skillRegistry = Objects.requireNonNull(skillRegistry, "skillRegistry must not be null");
         this.userSkillService = Objects.requireNonNull(
                 userSkillService, "userSkillService must not be null");
+        this.circuitBreakers = Objects.requireNonNull(
+                circuitBreakers, "circuitBreakers must not be null");
     }
 
     public Flux<AiChatStreamRespVO> stream(AiChatReqVO request, long userId) {
@@ -228,6 +234,10 @@ public final class AgentScopePipelineRunService {
     }
 
     private PreparedRun prepare(AiChatReqVO request, long userId) {
+        // 优化建议 #2(紧急停用最小实现):新 run 发起前校验应用级总开关,
+        // 停用后 403「应用已紧急停用」(本类是根 run 唯一生产入口,
+        // 子 Agent/续跑均无法绕过;进行中 run 不受影响,由管理员逐个终止)
+        circuitBreakers.assertRunStartAllowed(AppContext.currentOrDefault());
         String conversationId = normalize(request.getConversationId());
         if (conversationId == null) {
             conversationId = IdUtil.fastSimpleUUID();
@@ -299,6 +309,8 @@ public final class AgentScopePipelineRunService {
             AgentKernelSpec spec,
             AgentKernelSnapshot snapshot,
             long userId) {
+        // 续跑同样是新 run 发起:同受紧急停用总开关约束(见 prepare 注释)
+        circuitBreakers.assertRunStartAllowed(AppContext.currentOrDefault());
         if (!Objects.equals(spec.agentDefinitionStableKey(), previous.getAgentType())) {
             throw new BusinessException(409, "历史 Pipeline 的 Agent 配置不一致");
         }

@@ -1,9 +1,11 @@
 package com.inneragent.server.admin;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.inneragent.platform.common.BaseEntity;
+import com.inneragent.platform.common.handler.JsonbTypeHandler;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -16,10 +18,15 @@ import java.time.LocalDateTime;
  * sign_public_key 用于验签,ia_app.id 即各业务表 app_id。单应用部署预置
  * id=1 的 default 应用;行级双列拦截器对本表不注入 app_id/tenant_id
  * (见 AppTenantLineInnerInterceptor.IGNORED_TABLES)。
+ *
+ * <p>V14:熔断域配置落本行(circuit_limits_json/circuit_stopped 三列,优化
+ * 建议 #2 服务端半)与 Webhook 订阅两列(webhook_enabled/webhook_events;
+ * url/secret 列 V2 已有),供 CircuitBreakerAdminService/WebhookConfigAdminService
+ * 读写。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("ia_app")
+@TableName(value = "ia_app", autoResultMap = true)
 public class AppRegistration extends BaseEntity {
 
     /** 主键 ID(即各业务表 app_id) */
@@ -46,6 +53,25 @@ public class AppRegistration extends BaseEntity {
 
     /** Webhook 回调签名密钥(可空) */
     private String webhookSecret;
+
+    /** 熔断资源上限配置 JSON(V14;§4.7 默认值,执行层接线待后续) */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String circuitLimitsJson;
+
+    /** 应用级紧急停用总开关(V14;TRUE 时新 run 拒绝 403) */
+    private Boolean circuitStopped;
+
+    /** 紧急停用时刻(恢复时清空;V14) */
+    private LocalDateTime circuitStoppedAt;
+
+    /** 紧急停用原因(恢复时清空;V14) */
+    private String circuitStopReason;
+
+    /** 终态 Webhook 投递总开关(V14;FALSE 时终态事件不入队) */
+    private Boolean webhookEnabled;
+
+    /** Webhook 订阅事件(逗号分隔 CSV;V14) */
+    private String webhookEvents;
 
     /** 会话保留天数(超期物理清理,默认 180,ADR-9) */
     private Integer conversationRetentionDays;

@@ -88,6 +88,13 @@ public class WebhookDeliveryService {
         if (config == null || config.url() == null || config.url().isBlank()) {
             return;
         }
+        // V14 订阅配置:总开关关闭或事件未订阅 → 不入队(停用 = 不再新增;
+        // 已入队存量投递继续既有重试,不做 destructive 清队)
+        if (!config.enabled() || !config.subscribed(event.eventType())) {
+            log.debug("Webhook delivery skipped by subscription config: app={}, event={}",
+                    event.appId(), event.eventType());
+            return;
+        }
         LocalDateTime now = inTransaction(deliveryMapper::selectDatabaseNow);
         ObjectNode payload = JsonNodeFactory.instance.objectNode();
         payload.put("event", event.eventType());

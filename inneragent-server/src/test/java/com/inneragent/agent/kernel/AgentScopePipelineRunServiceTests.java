@@ -49,6 +49,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -148,7 +149,8 @@ class AgentScopePipelineRunServiceTests {
                 schedulers,
                 new ObjectMapper(),
                 skillRegistry,
-                userSkillService);
+                userSkillService,
+                org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class));
         AiChatReqVO request = new AiChatReqVO()
                 .setConversationId("conversation-1")
                 .setMessage("hello harness")
@@ -186,6 +188,54 @@ class AgentScopePipelineRunServiceTests {
                         assertThat(message.getTextContent()).isEqualTo("hello harness"));
         assertThat(execution.getValue().kernelSpec()).isSameAs(spec);
         assertThat(execution.getValue().runtimeContextRequest()).isSameAs(runtime);
+    }
+
+    @Test
+    void emergencyStopRejectsNewRunsWith403BeforeAnyRunStarts() {
+        // 优化建议 #2:紧急停用总开关在 run 发起入口(prepare 阶段)拦截,
+        // 不触碰协调器/监督器(确认流与既有执行链只读不动)
+        com.inneragent.server.admin.CircuitBreakerAdminService stopped =
+                mock(com.inneragent.server.admin.CircuitBreakerAdminService.class);
+        org.mockito.Mockito.doThrow(new com.inneragent.platform.common.BusinessException(
+                403, "应用已紧急停用:演练,新运行已被拒绝,请等待管理员恢复后再试"))
+                .when(stopped).assertRunStartAllowed(anyLong());
+        AgentRunCoordinator coordinator = mock(AgentRunCoordinator.class);
+
+        AgentScopePipelineRunService service = new AgentScopePipelineRunService(
+                mock(AiModelService.class),
+                mock(AiAgentService.class),
+                mock(AgentConversationService.class),
+                mock(AgentMessageService.class),
+                mock(AgentKernelSpecFactory.class),
+                mock(AgentKernelSnapshotBuilder.class),
+                new AgentScopeMessageMapper(),
+                coordinator,
+                mock(AgentExecutionRuntimeContextRequests.class),
+                mock(AgentExecutionFactory.class),
+                mock(RunExecutionSupervisor.class),
+                mock(AgentRunQueryService.class),
+                mock(AgentRunReplayService.class),
+                mock(AgentRuntimeInstanceIdentity.class),
+                new AgentScopeV2Properties(),
+                schedulers,
+                new ObjectMapper(),
+                mock(AgentScopeSkillRegistry.class),
+                mock(AgentUserSkillService.class),
+                stopped);
+
+        AiChatReqVO request = new AiChatReqVO()
+                .setConversationId("conversation-stop")
+                .setMessage("hello");
+        StepVerifier.create(service.start(request, 42L))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error)
+                            .isInstanceOf(com.inneragent.platform.common.BusinessException.class);
+                    assertThat(error.getMessage()).contains("应用已紧急停用");
+                })
+                .verify();
+
+        org.mockito.Mockito.verify(stopped).assertRunStartAllowed(anyLong());
+        verify(coordinator, never()).start(any(StartAgentRunCommand.class));
     }
 
     @ParameterizedTest
@@ -269,7 +319,8 @@ class AgentScopePipelineRunServiceTests {
                 schedulers,
                 new ObjectMapper(),
                 skillRegistry,
-                userSkillService);
+                userSkillService,
+                org.mockito.Mockito.mock(com.inneragent.server.admin.CircuitBreakerAdminService.class));
 
         StepVerifier.create(service.startContinuation("failed-run", 42L))
                 .assertNext(started -> assertThat(started.conversationId())
@@ -333,7 +384,8 @@ class AgentScopePipelineRunServiceTests {
                 schedulers,
                 new ObjectMapper(),
                 mock(AgentScopeSkillRegistry.class),
-                mock(AgentUserSkillService.class));
+                mock(AgentUserSkillService.class),
+                mock(com.inneragent.server.admin.CircuitBreakerAdminService.class));
 
         StepVerifier.create(service.startContinuation("completed-run", 42L))
                 .expectErrorSatisfies(error -> assertThat(error)

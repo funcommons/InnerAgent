@@ -18,6 +18,10 @@ import java.util.List;
  * {@code AppTenantLineInnerInterceptor} 兜底注入(管理请求无 AppContext,
  * 缺省 app_id=1,单应用部署语义;appId 参数为冗余显式过滤)。
  *
+ * <p><strong>toolFqn 为模糊匹配</strong>(优化建议 #15:占位文案「模糊」对齐实现,
+ * 采纳方案①):{@code tool_fqn ILIKE '%q%'}(审计量级可承受);查询词按 LIKE
+ * 通配语义转义 {@code % _ \},杜绝通配注入与误匹配。其余维度仍为精确等值。
+ *
  * <p><strong>读时脱敏</strong>:出参逐行过 {@link AuditParamMasker}(存量
  * 原文行同样受保护,取舍见该类注释;写路径保持透传不变)。ia_audit_log 仅追加,
  * 本服务只读(不提供 update/delete)。
@@ -37,11 +41,13 @@ public class ToolAuditQueryService {
     public PageResult<ToolAuditLog> page(AuditLogFilter filter) {
         int pageNo = Math.max(filter.pageNo(), 1);
         int pageSize = Math.min(Math.max(filter.pageSize(), 1), MAX_PAGE_SIZE);
+        String toolFqn = filter.toolFqn();
         LambdaQueryWrapper<ToolAuditLog> wrapper = new LambdaQueryWrapper<ToolAuditLog>()
                 .eq(filter.appId() != null, ToolAuditLog::getAppId, filter.appId())
                 .eq(filter.userId() != null, ToolAuditLog::getUserId, filter.userId())
-                .eq(hasText(filter.toolFqn()), ToolAuditLog::getToolFqn,
-                        filter.toolFqn() == null ? null : filter.toolFqn().trim())
+                // 优化建议 #15:toolFqn 模糊匹配(ILIKE '%q%',通配符转义防注入/误匹配)
+                .apply(hasText(toolFqn), TOOL_FQN_ILIKE_FRAGMENT,
+                        "%" + escapeLikePattern(toolFqn) + "%")
                 .eq(hasText(filter.decision()), ToolAuditLog::getDecision,
                         filter.decision() == null ? null : filter.decision().trim())
                 .eq(hasText(filter.decisionSource()), ToolAuditLog::getDecisionSource,
@@ -60,6 +66,30 @@ public class ToolAuditQueryService {
         result.setPageNo(pageNo);
         result.setPageSize(pageSize);
         return result;
+    }
+
+    /**
+     * toolFqn 模糊匹配 SQL 片段({0} 为 MyBatis-Plus 参数占位符,值走
+     * PreparedStatement 绑定,无拼接注入面;列名字面量与
+     * {@link ToolAuditLog} 表映射 {@code ia_audit_log.tool_fqn} 一致)。
+     */
+    static final String TOOL_FQN_ILIKE_FRAGMENT = "tool_fqn ILIKE {0}";
+
+    /**
+     * LIKE/ILIKE 通配符转义(PostgreSQL 默认转义符为反斜杠):
+     * {@code \ → \\}、{@code % → \%}、{@code _ → \_},保证用户输入中的
+     * 通配元字符按字面量匹配(防通配注入导致的全表模糊扫描/误匹配)。
+     * 入参先 trim 再转义;null 安全(调用方以 hasText 条件守卫)。
+     */
+    static String escapeLikePattern(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String trimmed = raw.trim();
+        return trimmed
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     /**

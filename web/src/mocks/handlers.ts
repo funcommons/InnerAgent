@@ -332,6 +332,10 @@ const toolHandlers = [
       pendingAnnotationsJson: null,
       pendingSchemaSha256: null,
       pendingRefreshAt: null,
+      // 工具体检位(V17):新注册行未体检(NULL 三列)
+      healthStatus: null,
+      lastCheckedAt: null,
+      healthDetailJson: null,
       enabled: body.enabled ?? true,
       lastTestStatus: null,
       createTime: now,

@@ -3,25 +3,35 @@
  * 契约类型见 ./types.ts;已对齐服务端真实控制器:
  *   - AdminAppController:/admin/apps(CRUD;公钥登记/轮换=PUT signPublicKey,V9 宽限期)
  *   - AdminToolController:/admin/tools(注册/列表/详情/schema 历史/更新/活刷新
- *     分诊 schema+confirm+reject/启停/注销)
+ *     分诊 schema+confirm+reject/启停/注销/工具体检 check+check-batch,V17)
  *   - AdminGrantController:/admin/grants(授予/列表/撤销)
+ *   - AdminAgentDefinitionController:/admin/definitions(分页列表/详情/提示词
+ *     单槽编辑/export bundle/import,P2-W5)
  *   - AdminAuditController:/admin/audit-logs(分页/过滤/字典,W5)
  *   - AdminModelConfigController:/admin/model-configs(CRUD/连通性测试)
  *   - WebhookDeliveryAdminController:/admin/webhook-deliveries(分页/手动重投,#18b)
  *   - AdminWebhookConfigController:/admin/webhooks/config(配置/测试真实外呼)
  *   - AdminCircuitBreakerController:/admin/circuit-breaker(状态/limits/紧急停用/
  *     恢复/单运行终止;紧急停用仅翻转总开关不批量取消,limits 本版仅管理面读写)
- * apps/tools/grants 列表为服务端全量数组(分页在管理站客户端完成)。
+ * P2-W5 分页兼容形:tools/grants 列表缺省(无 pageNo/pageSize)仍数组;list()=
+ * 数组兼容形,page()=管理站主动分页形(任一参数出现即 PageResult)。
  */
 import { http } from './request'
-import type { IsoDateTime, PageResult } from './common'
+import type { IsoDateTime, PageQuery, PageResult } from './common'
 import type {
   AuditDictionary,
   AuditLogQuery,
   CircuitBreakerEvent,
   CircuitBreakerState,
   CircuitBreakerUpdateReq,
+  DefinitionBundle,
+  DefinitionExportReq,
+  DefinitionImportReq,
+  DefinitionImportResult,
+  DefinitionListQuery,
+  DefinitionUpdatePromptReq,
   EmergencyStopReq,
+  IaAgentDefinition,
   IaApp,
   IaAppCreateReq,
   IaAppUpdateReq,
@@ -35,6 +45,8 @@ import type {
   ModelConnectivityResult,
   ResourceLimits,
   TerminateRunReq,
+  ToolCheckBatchReceipt,
+  ToolCheckResult,
   ToolGrantCreateReq,
   ToolGrantListQuery,
   ToolGrantRevokeReq,
@@ -87,9 +99,18 @@ export const appAdminApi = {
 // ==================== 工具注册(AdminToolController) ====================
 
 export const toolAdminApi = {
-  /** 工具列表(serverKey/enabled 过滤;真实形:数组,无分页) */
+  /**
+   * 工具列表——数组兼容形(不传分页参数,镜像 AdminToolController.list 旧形:
+   * 服务端返回全量数组;授权代授下拉等「需要全集」的场景用)。
+   */
   list: (query: ToolListQuery = {}) =>
     http.get<IaToolRegistry[]>(`${BASE}/tools${buildQuery({ ...query })}`),
+  /**
+   * 工具列表——服务端分页形(P2-W5:主动传 pageNo/pageSize 任一即 PageResult,
+   * 单页上限 100;与 audit-logs 分页形一致)。管理站列表页走此方法。
+   */
+  page: (query: ToolListQuery & Required<PageQuery>) =>
+    http.get<PageResult<IaToolRegistry>>(`${BASE}/tools${buildQuery({ ...query })}`),
   get: (id: number) => http.get<IaToolRegistry>(`${BASE}/tools/${id}`),
   /** 注册工具(单条;FQN 唯一 → 409,serverKey 仅字母/数字/连字符 → 400) */
   register: (data: ToolRegisterReq) => http.post<IaToolRegistry>(`${BASE}/tools`, data),
@@ -106,6 +127,17 @@ export const toolAdminApi = {
   rejectSchema: (id: number) => http.post<IaToolRegistry>(`${BASE}/tools/${id}/schema/reject`),
   disable: (id: number) => http.post<IaToolRegistry>(`${BASE}/tools/${id}/disable`),
   enable: (id: number) => http.post<IaToolRegistry>(`${BASE}/tools/${id}/enable`),
+  /**
+   * 工具体检 v1(V17,单工具同步):可达/清单/指纹/注解四项检查矩阵,
+   * 结论与明细落库并返回(结果同时持久化,GET /admin/tools/{id} 可回读)。
+   */
+  checkHealth: (id: number) => http.post<ToolCheckResult>(`${BASE}/tools/${id}/check`),
+  /**
+   * 批量/全量异步体检(受理后单线程逐个执行):ids 缺省=全部未删除注册行;
+   * 未知 id 计入 skipped。结果即时落各自注册行,经列表/详情刷新可查。
+   */
+  checkHealthBatch: (ids?: number[]) =>
+    http.post<ToolCheckBatchReceipt>(`${BASE}/tools/check-batch`, { ids: ids ?? [] }),
   /** 注销(逻辑删除+级联清除授权) */
   remove: (id: number) => http.delete<boolean>(`${BASE}/tools/${id}`),
 }
@@ -113,14 +145,52 @@ export const toolAdminApi = {
 // ==================== 工具授权(AdminGrantController) ====================
 
 export const toolGrantAdminApi = {
-  /** 授权列表(userId/toolName/scope/activeOnly 过滤;真实形:数组,无分页) */
+  /**
+   * 授权列表——数组兼容形(不传分页参数;镜像 AdminGrantController.list 旧形,
+   * activeOnly 服务端默认 true)。
+   */
   list: (query: ToolGrantListQuery = {}) =>
     http.get<IaToolGrant[]>(`${BASE}/grants${buildQuery({ ...query })}`),
+  /**
+   * 授权列表——服务端分页形(P2-W5:pageNo/pageSize 任一出现即 PageResult,
+   * 单页上限 100;activeOnly 已下推 SQL 条件 invalidated=FALSE)。
+   */
+  page: (query: ToolGrantListQuery & Required<PageQuery>) =>
+    http.get<PageResult<IaToolGrant>>(`${BASE}/grants${buildQuery({ ...query })}`),
   /** 授予授权(快照风险级/schema 指纹,落审计;同作用域有效授权重复 → 409) */
   grant: (data: ToolGrantCreateReq) => http.post<IaToolGrant>(`${BASE}/grants`, data),
   /** 撤销授权(逻辑删除,落审计;可携带 decisionNote) */
   revoke: (id: number, data?: ToolGrantRevokeReq) =>
     http.delete<boolean>(`${BASE}/grants/${id}`, { data }),
+}
+
+// ==================== Agent 定义(AdminAgentDefinitionController,P2-W5) ====================
+
+export const definitionAdminApi = {
+  /**
+   * 定义分页列表(端点缺省即分页形 PageResult,与 audit-logs 一致,缺省 1/10;
+   * agentKey 升序;出参含提示词三槽与规格 spec 对象)。
+   */
+  page: (params: DefinitionListQuery = {}) =>
+    http.get<PageResult<IaAgentDefinition>>(`${BASE}/definitions${buildQuery({ ...params })}`),
+  /** 定义详情(含提示词三槽与规格 spec 对象;不存在 → 404) */
+  get: (id: number) => http.get<IaAgentDefinition>(`${BASE}/definitions/${id}`),
+  /**
+   * 编辑提示词槽位(slot=systemPrompt/instructionTemplate/greeting;
+   * systemPrompt 必须非空白、65536 上限,其余槽位空白=清空;
+   * 旧值快照落审计 definition-updated/source=admin)。
+   */
+  updatePrompt: (id: number, data: DefinitionUpdatePromptReq) =>
+    http.put<IaAgentDefinition>(`${BASE}/definitions/${id}/prompt`, data),
+  /** 导出 bundle({schemaVersion:1, exportedAt, definitions[]};ids 缺省=该应用全量) */
+  export: (data: DefinitionExportReq = {}) =>
+    http.post<DefinitionBundle>(`${BASE}/definitions/export`, data),
+  /**
+   * 导入 bundle(conflictPolicy=skip|overwrite 缺省 skip;dryRun=true 只出预览
+   * 零副作用;结果 {dryRun,created,updated,skipped,errors[]})。
+   */
+  import: (data: DefinitionImportReq) =>
+    http.post<DefinitionImportResult>(`${BASE}/definitions/import`, data),
 }
 
 // ==================== 审计查询(AdminAuditController,W5) ====================

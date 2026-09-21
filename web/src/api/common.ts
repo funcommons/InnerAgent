@@ -19,7 +19,8 @@ export interface CommonResult<T> {
   trace_id?: string
 }
 
-/** 分页响应(仅 mock 域使用:audit-logs/model-configs/webhook deliveries 等) */
+/** 分页响应(audit-logs/model-configs/webhook-deliveries/definitions 分页域共用;
+ *  P2-W5 起 tools/grants 传 pageNo/pageSize 亦切本形——兼容模式,缺省仍数组) */
 export interface PageResult<T> {
   list: T[]
   total: number
@@ -27,7 +28,7 @@ export interface PageResult<T> {
   pageSize: number
 }
 
-/** 分页请求基类(仅 mock 域使用;真实 apps/tools/grants 列表无分页) */
+/** 分页请求基类(pageNo/pageSize 任一下发即服务端分页形) */
 export interface PageQuery {
   pageNo?: number
   pageSize?: number

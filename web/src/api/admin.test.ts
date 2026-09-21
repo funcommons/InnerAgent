@@ -13,12 +13,13 @@ import {
   auditAdminApi,
   buildQuery,
   circuitAdminApi,
+  definitionAdminApi,
   modelConfigAdminApi,
   toolAdminApi,
   toolGrantAdminApi,
   webhookAdminApi,
 } from './admin'
-import type { IaApp, IaToolRegistry } from './types'
+import type { DefinitionBundle, IaAgentDefinition, IaApp, IaToolRegistry } from './types'
 
 /** 捕获最近一次请求,并以固定信封响应 */
 function capture<T>(payload: T) {
@@ -132,6 +133,51 @@ describe('admin API 客户端', () => {
       expect(url.searchParams.get('enabled')).toBe('false')
     })
 
+    it('page:GET /tools?pageNo&pageSize(P2-W5 分页兼容形:任一出现即 PageResult;enabled 同发)', async () => {
+      const page = { list: [], total: 9, pageNo: 2, pageSize: 10 }
+      const { state, respond } = capture(page)
+      server.use(mswHttp.get('/ia/api/v1/admin/tools', respond))
+      const resp = await toolAdminApi.page({ enabled: false, pageNo: 2, pageSize: 10 })
+      const url = new URL(state.req!.url)
+      expect(url.pathname).toBe('/ia/api/v1/admin/tools')
+      expect(url.searchParams.get('pageNo')).toBe('2')
+      expect(url.searchParams.get('pageSize')).toBe('10')
+      expect(url.searchParams.get('enabled')).toBe('false')
+      expect(resp.total).toBe(9)
+      expect(resp.pageNo).toBe(2)
+    })
+
+    it('checkHealth:POST /tools/{id}/check(V17 单工具同步体检,响应=ToolCheckResult)', async () => {
+      const result = {
+        toolId: 7, fqn: 'mcp__host__x', toolName: 'x', status: 'degraded' as const,
+        checks: [{ check: 'tool_present', status: 'drift', detail: '宿主清单不含 x', advice: '核对宿主' }],
+        detailJson: '{"status":"degraded","checks":[]}',
+      }
+      const { state, respond } = capture(result)
+      server.use(mswHttp.post('/ia/api/v1/admin/tools/7/check', respond))
+      const resp = await toolAdminApi.checkHealth(7)
+      expect(state.req!.method).toBe('POST')
+      expect(state.req!.url).toContain('/ia/api/v1/admin/tools/7/check')
+      expect(resp.status).toBe('degraded')
+      expect(resp.checks[0]!.advice).toBe('核对宿主')
+    })
+
+    it('checkHealthBatch:POST /tools/check-batch(body {ids};缺省=全量)', async () => {
+      const receipt = { accepted: true, total: 2, skipped: [999] }
+      const { state, respond } = capture(receipt)
+      server.use(mswHttp.post('/ia/api/v1/admin/tools/check-batch', respond))
+      const resp = await toolAdminApi.checkHealthBatch([1, 999])
+      expect(state.req!.method).toBe('POST')
+      expect(state.body).toEqual({ ids: [1, 999] })
+      expect(resp.accepted).toBe(true)
+      expect(resp.skipped).toEqual([999])
+
+      const { state: s2, respond: r2 } = capture({ accepted: true, total: 9, skipped: [] })
+      server.use(mswHttp.post('/ia/api/v1/admin/tools/check-batch', r2))
+      await toolAdminApi.checkHealthBatch()
+      expect(s2.body).toEqual({ ids: [] }) // 缺省=全量
+    })
+
     it('refreshSchema:POST /tools/{id}/schema,响应=真实 TriageRespVO 形', async () => {
       const triage = {
         toolId: 3, fqn: 'mcp__host__x', verdict: 'breaking' as const, reasons: ['新增必填参数'],
@@ -222,6 +268,81 @@ describe('admin API 客户端', () => {
       expect(state.req!.method).toBe('DELETE')
       expect(state.req!.url).toContain('/grants/9')
       expect(state.body).toEqual({ decisionNote: '误授撤销' })
+    })
+
+    it('page:GET /grants?pageNo&pageSize(P2-W5 分页兼容形;activeOnly 同发)', async () => {
+      const page = { list: [], total: 5, pageNo: 1, pageSize: 20 }
+      const { state, respond } = capture(page)
+      server.use(mswHttp.get('/ia/api/v1/admin/grants', respond))
+      const resp = await toolGrantAdminApi.page({ activeOnly: false, pageNo: 1, pageSize: 20 })
+      const url = new URL(state.req!.url)
+      expect(url.pathname).toBe('/ia/api/v1/admin/grants')
+      expect(url.searchParams.get('pageNo')).toBe('1')
+      expect(url.searchParams.get('pageSize')).toBe('20')
+      expect(url.searchParams.get('activeOnly')).toBe('false')
+      expect(resp.total).toBe(5)
+    })
+  })
+
+  describe('Agent 定义(对齐 AdminAgentDefinitionController,P2-W5)', () => {
+    it('page:GET /admin/definitions?pageNo&pageSize(端点缺省即分页形 PageResult)', async () => {
+      const def = { id: 1, agentType: 'demo', kind: 'main', name: '演示助手' } as IaAgentDefinition
+      const { state, respond } = capture({ list: [def], total: 4, pageNo: 1, pageSize: 10 })
+      server.use(mswHttp.get('/ia/api/v1/admin/definitions', respond))
+      const resp = await definitionAdminApi.page({ pageNo: 1, pageSize: 10 })
+      const url = new URL(state.req!.url)
+      expect(url.pathname).toBe('/ia/api/v1/admin/definitions')
+      expect(url.searchParams.get('pageNo')).toBe('1')
+      expect(url.searchParams.get('pageSize')).toBe('10')
+      expect(resp.list[0]!.agentType).toBe('demo')
+      expect(resp.total).toBe(4)
+    })
+
+    it('get:GET /definitions/{id};updatePrompt:PUT {slot,content}(三槽值域)', async () => {
+      const def = { id: 3, agentType: 'demo', prompts: { systemPrompt: 'x', instructionTemplate: null, greeting: null } } as IaAgentDefinition
+      const { state, respond } = capture(def)
+      server.use(mswHttp.get('/ia/api/v1/admin/definitions/3', respond))
+      const got = await definitionAdminApi.get(3)
+      expect(new URL(state.req!.url).pathname).toBe('/ia/api/v1/admin/definitions/3')
+      expect(got.id).toBe(3)
+
+      const { state: s2, respond: r2 } = capture(def)
+      server.use(mswHttp.put('/ia/api/v1/admin/definitions/3/prompt', r2))
+      const updated = await definitionAdminApi.updatePrompt(3, { slot: 'greeting', content: '你好' })
+      expect(s2.req!.method).toBe('PUT')
+      expect(s2.body).toEqual({ slot: 'greeting', content: '你好' })
+      expect(updated.id).toBe(3)
+    })
+
+    it('export:POST /definitions/export(body {ids};缺省={} 全量)→ Bundle', async () => {
+      const bundle: DefinitionBundle = {
+        schemaVersion: 1, exportedAt: '2026-09-21T00:00:00Z',
+        definitions: [{ definitionId: 1, agentType: 'demo', name: '演示助手', specJson: null, prompts: [] }],
+      }
+      const { state, respond } = capture(bundle)
+      server.use(mswHttp.post('/ia/api/v1/admin/definitions/export', respond))
+      const resp = await definitionAdminApi.export({ ids: [1] })
+      expect(state.req!.method).toBe('POST')
+      expect(state.body).toEqual({ ids: [1] })
+      expect(resp.schemaVersion).toBe(1)
+      expect(resp.definitions[0]!.agentType).toBe('demo')
+
+      const { state: s2, respond: r2 } = capture(bundle)
+      server.use(mswHttp.post('/ia/api/v1/admin/definitions/export', r2))
+      await definitionAdminApi.export()
+      expect(s2.body).toEqual({}) // 全量导出:无 ids
+    })
+
+    it('import:POST /definitions/import(body {bundle,conflictPolicy,dryRun})→ ImportResult', async () => {
+      const result = { dryRun: true, created: 1, updated: 2, skipped: 3, errors: [{ agentType: 'bad', reason: '未知槽位' }] }
+      const { state, respond } = capture(result)
+      server.use(mswHttp.post('/ia/api/v1/admin/definitions/import', respond))
+      const payload = { bundle: { schemaVersion: 1, definitions: [] }, conflictPolicy: 'overwrite' as const, dryRun: true }
+      const resp = await definitionAdminApi.import(payload)
+      expect(state.req!.method).toBe('POST')
+      expect(state.body).toEqual(payload)
+      expect(resp.dryRun).toBe(true)
+      expect(resp.errors[0]!.agentType).toBe('bad')
     })
   })
 

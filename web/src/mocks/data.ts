@@ -79,7 +79,7 @@ export const seedApps: IaApp[] = [
 
 function tool(partial: Partial<IaToolRegistry> & Pick<IaToolRegistry, 'id' | 'serverKey' | 'toolName'>): IaToolRegistry {
   const fqn = `mcp__${partial.serverKey}__${partial.toolName}`
-  return {
+  const base: Omit<IaToolRegistry, 'id' | 'serverKey' | 'toolName'> = {
     appId: 1,
     fqn,
     description: '',
@@ -99,13 +99,17 @@ function tool(partial: Partial<IaToolRegistry> & Pick<IaToolRegistry, 'id' | 'se
     pendingAnnotationsJson: null,
     pendingSchemaSha256: null,
     pendingRefreshAt: null,
+    // 工具体检位(V17):种子默认未体检(NULL);体检演示行见 seedTools 覆盖
+    healthStatus: null,
+    lastCheckedAt: null,
+    healthDetailJson: null,
     enabled: true,
     lastTestStatus: null,
     createTime: '2026-09-05T00:00:00Z',
     updateTime: MOCK_TIME,
     deleted: false,
-    ...partial,
   }
+  return { ...base, ...partial }
 }
 
 export const seedTools: IaToolRegistry[] = [

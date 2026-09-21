@@ -10,9 +10,19 @@
  *     错误 HTTP 状态=业务 code(400/403/404/409…)。
  *
  * ── 「契约空缺 / 自拟字段清单」裁决沿革(随服务端落地滚动更新)────────────────
- *  1. 路径:apps/tools/grants/audit-logs/model-configs 已全部对齐真实控制器。
- *     apps/tools/grants 列表返回数组、无服务端分页(分页在管理站客户端完成);
- *     audit-logs/model-configs/webhook-deliveries 为服务端 PageResult 分页。
+ *  1. 路径:apps/tools/grants/audit-logs/model-configs/definitions 已全部对齐真实控制器。
+ *     P2-W5 起 tools/grants 列表为「兼容模式」:请求不带 pageNo/pageSize → 数组
+ *     全量(旧形不破);任一出现 → PageResult(list/total/pageNo/pageSize,单页
+ *     上限 100)。管理站主动走分页形(page 方法);audit-logs/model-configs/
+ *     webhook-deliveries/definitions 为服务端 PageResult 分页(definitions 缺省
+ *     即分页形,无数组兼容档)。
+ *  1b. Agent 定义管理域(AdminAgentDefinitionController,P2-W5):GET 分页列表/
+ *     GET {id} 详情/PUT {id}/prompt(单槽编辑,旧值快照落审计 definition-updated
+ *     ·admin)/POST export(bundle schemaVersion=1,形状为 P3/W7 融光定义导出
+ *     预留)/POST import(conflictPolicy=skip|overwrite,dryRun 预演零副作用,
+ *     结果 {created,updated,skipped,errors[]})。提示词槽位值域仅三槽
+ *     (systemPrompt/instructionTemplate/greeting);W7 融光 defaultUserMessage
+ *     等扩展槽位随 schemaVersion 升版引入(当前未知槽位=条目级错误)。
  *  2. ia_app 公钥轮换(V9 已落地):PUT /apps/{id} {signPublicKey} 即登记/轮换,
  *     响应回 signKeyFingerprint/signKeyRotatedAt;旧公钥进入 72h 验签宽限期
  *     (inneragent.auth.embed-key-grace,双公钥并存,见 AdminAppService/DbAppSigningKeyProvider)。
@@ -112,6 +122,9 @@ export type ToolSource = 'host_app' | 'third_party' | 'builtin'
 /** 活刷新分诊结论(V14) */
 export type SchemaTriageVerdict = 'unchanged' | 'compatible' | 'breaking'
 
+/** 工具体检结论(V17 三态;NULL=未体检。落库码值 ia_tool_registry.health_status) */
+export type ToolHealthStatus = 'ok' | 'degraded' | 'unreachable'
+
 export interface IaToolRegistry {
   id: number
   /** 所属应用(单应用部署固定 1,服务端行级拦截器注入) */
@@ -147,6 +160,12 @@ export interface IaToolRegistry {
   pendingAnnotationsJson: string | null
   pendingSchemaSha256: string | null
   pendingRefreshAt: IsoDateTime | null
+  /** 工具体检结论(V17):ok=健康/degraded=漂移/unreachable=不可达;null=未体检 */
+  healthStatus: ToolHealthStatus | null
+  /** 最近一次体检时间(体检落库时写入) */
+  lastCheckedAt: IsoDateTime | null
+  /** 体检明细 JSON:{"status","checks":[{check,status,detail?,advice?}]}(解析见 stores/tools parseHealthDetail) */
+  healthDetailJson: string | null
   /** 是否启用(停用级联失效授权;布尔,非 0/1) */
   enabled: boolean
   /** 最近一次工具体检/连通性测试结果 */
@@ -221,10 +240,38 @@ export interface IaToolSchemaHistory {
   createTime: IsoDateTime | null
 }
 
-/** 工具列表过滤(服务端仅此两项;其余过滤由管理站客户端完成) */
+/** 工具列表过滤(服务端仅此两项;keyword/风险级无服务端参数,管理站客户端过滤) */
 export interface ToolListQuery {
   serverKey?: string
   enabled?: boolean
+}
+
+/** 单项体检结论(ToolHealthService.CheckItem;status=pass 通过/drift 漂移) */
+export interface ToolHealthCheckItem {
+  /** 检查项:endpoint_reachable/tool_present/schema_fingerprint/annotations_diff */
+  check: string
+  status: 'pass' | 'drift'
+  detail?: string | null
+  /** 整改建议(仅漂移项携带) */
+  advice?: string | null
+}
+
+/** 单工具体检结果(同步响应=落库明细同源;镜像 ToolHealthService.ToolCheckResult) */
+export interface ToolCheckResult {
+  toolId: number
+  fqn: string
+  toolName: string
+  status: ToolHealthStatus
+  checks: ToolHealthCheckItem[]
+  detailJson: string | null
+}
+
+/** 批量体检受理回执(异步单线程逐个执行;结果落各自注册行,GET /admin/tools/{id} 可查) */
+export interface ToolCheckBatchReceipt {
+  accepted: boolean
+  total: number
+  /** ids 指定模式下不存在的工具 id(全量模式为空数组) */
+  skipped: number[]
 }
 
 // ==================== 工具授权(ia_tool_grant,AdminGrantController) ====================
@@ -281,7 +328,7 @@ export interface ToolGrantRevokeReq {
   decisionNote?: string
 }
 
-/** 授权列表过滤(activeOnly 默认 true:仅未撤销未失效) */
+/** 授权列表过滤(activeOnly 默认 true:仅未撤销未失效;P2-W5 起已下推 SQL) */
 export interface ToolGrantListQuery {
   userId?: number
   toolName?: string
@@ -289,10 +336,98 @@ export interface ToolGrantListQuery {
   activeOnly?: boolean
 }
 
+// ==================== Agent 定义(ia_agent_definition,AdminAgentDefinitionController) ====================
+// 定义管理域(P2-W5):数据落 ia_agent_definition,运行内核仍读代码注册表。
+// 编辑留痕:提示词编辑旧值快照进审计入参(params_masked_json,decision=
+// definition-updated,source=admin,ia_audit_log 仅追加)。
+
+/** 提示词槽位(ia_agent_definition 提示词三列;W7 融光 defaultUserMessage 等
+ *  扩展槽位随 bundle schemaVersion 升版引入,当前未知槽位=导入条目级错误) */
+export type DefinitionPromptSlot = 'systemPrompt' | 'instructionTemplate' | 'greeting'
+
+/** 提示词单槽长度上限(镜像 AgentDefinitionAdminService.MAX_PROMPT_LENGTH) */
+export const DEFINITION_MAX_PROMPT_LENGTH = 65_536
+
+/** 定义视图(GET 列表/详情出参;spec 与 bundle specJson 同构,未知字段原样保留) */
+export interface IaAgentDefinition {
+  id: number
+  appId: number
+  /** 业务标识(ia_agent_definition.agent_key;导入定位键=(appId, agentType),跨环境 ID 不稳定) */
+  agentType: string
+  /** kind 值域(V1 DDL CHECK):main=主定义 sub=子代理(被 subAgentTools 引用者) */
+  kind: 'main' | 'sub'
+  /** 显示名(title) */
+  name: string
+  enabled: boolean
+  /** 提示词三槽(列语义原样:可空;systemPrompt 不可清空) */
+  prompts: {
+    systemPrompt: string | null
+    instructionTemplate: string | null
+    greeting: string | null
+  }
+  /** 规格对象 {kind,enabled,modelId,toolWhitelist,subAgentTools,contextTemplate} */
+  spec: Record<string, unknown> | null
+  modelId: number | null
+}
+
+/** 导入导出 bundle 顶层({schemaVersion:1, exportedAt, definitions[]};P3/W7 融光定义导出预留形) */
+export interface DefinitionBundle {
+  schemaVersion: number
+  exportedAt: string
+  definitions: DefinitionBundleEntry[]
+}
+
+/** bundle 定义条目(definitionId 仅回显/对账;导入定位一律 (appId, agentType)) */
+export interface DefinitionBundleEntry {
+  definitionId: number | null
+  agentType: string
+  name: string
+  specJson: Record<string, unknown> | null
+  prompts: Array<{ slot: DefinitionPromptSlot; content: string | null }>
+}
+
+/** 导入冲突策略:skip=遇冲突保留现库 | overwrite=按 bundle 覆盖(未出现的列不动) */
+export type DefinitionConflictPolicy = 'skip' | 'overwrite'
+
+/**
+ * 导入结果(镜像 AgentDefinitionBundle.ImportResult):created+updated+skipped
+ * 只含有效条目,校验失败条目只进 errors[](不占 skipped);dryRun=true 时
+ * 零副作用,计数为「将要发生」的预演值。
+ */
+export interface DefinitionImportResult {
+  dryRun: boolean
+  created: number
+  updated: number
+  skipped: number
+  errors: Array<{ agentType: string | null; reason: string }>
+}
+
+/** PUT /{id}/prompt 请求体(systemPrompt 必须非空白;其余槽位空白=清空) */
+export interface DefinitionUpdatePromptReq {
+  slot: DefinitionPromptSlot
+  content: string
+}
+
+/** POST /export 请求体(ids 缺省=该应用全量;未知 id 静默忽略) */
+export interface DefinitionExportReq {
+  ids?: number[]
+}
+
+/** POST /import 请求体(bundle 内嵌 JSON 对象;conflictPolicy 缺省 skip) */
+export interface DefinitionImportReq {
+  bundle: unknown
+  conflictPolicy: DefinitionConflictPolicy
+  dryRun?: boolean
+}
+
+/** 定义列表查询(端点缺省即分页形,缺省 1/10;无数组兼容档) */
+export interface DefinitionListQuery extends PageQuery {}
+
 // ==================== 审计(ia_audit_log;镜像 AdminAuditController,W5) ====================
 
-/** 决策来源(V22 真实码值 + V8 增补 expired;「高危 100% 确认」的日志证明锚点。
- *  下拉值域以 GET /audit-logs/dictionary 字典端点为准(#12),常量仅作兜底) */
+/** 决策来源(V22 真实码值 + V8 增补 expired + P2-W5 增补 admin;「高危 100%
+ *  确认」的日志证明锚点。下拉值域以 GET /audit-logs/dictionary 字典端点为准
+ *  (#12),常量仅作兜底) */
 export type DecisionSource =
   | 'mode-default'
   | 'user-grant'
@@ -300,6 +435,7 @@ export type DecisionSource =
   | 'live-confirm'
   | 'expired'
   | 'full-access'
+  | 'admin'
 
 /** 审计字典项(AdminAuditController.DictionaryVO/ToolAuditQueryService.DictionaryEntry) */
 export interface AuditDictionaryEntry {
@@ -316,7 +452,12 @@ export interface AuditDictionary {
 /**
  * 裁决结果(ia_audit_log.decision 真实码值):
  * 工具调用 allowed/denied;授权生命周期 granted/revoked/invalidated;
- * 级联事件 risk_upgraded/tool_disabled/schema_compatible/schema_breaking。
+ * 级联事件 risk_upgraded/tool_disabled/schema_compatible/schema_breaking;
+ * 运行治理 run-terminated(terminate-run,T2a);P2-safety 内容安全
+ * blocked/redacted(ContentSafetyGate ingress/egress);P2-W5 定义管理
+ * definition-updated/definition-imported。
+ * 注:字典端点当前仅枚举到 definition-imported;run-terminated/blocked/
+ * redacted 为真实落库码值(以代码为准),下拉兜底常量补齐。
  */
 export type AuditDecision =
   | 'allowed'
@@ -328,6 +469,11 @@ export type AuditDecision =
   | 'tool_disabled'
   | 'schema_compatible'
   | 'schema_breaking'
+  | 'run-terminated'
+  | 'blocked'
+  | 'redacted'
+  | 'definition-updated'
+  | 'definition-imported'
 
 /** 审计行(列形对齐 ia_audit_log/ToolAuditLog) */
 export interface IaAuditLog {

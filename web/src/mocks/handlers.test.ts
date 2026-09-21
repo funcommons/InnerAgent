@@ -106,11 +106,11 @@ describe('mock 后端:工具注册(真实契约形)', () => {
     expect(crm.every(t => t.serverKey === 'crm')).toBe(true)
     const disabled = await toolAdminApi.list({ enabled: false })
     expect(disabled.map(t => t.fqn)).toEqual(['mcp__demo_host__export_users'])
-    // 行形 = ia_tool_registry 真实列
+    // 行形 = ia_tool_registry 真实列(V17 起含体检三列;旧自拟 schemaFingerprint 不存在)
     expect(all[0]).toHaveProperty('schemaSha256')
     expect(all[0]).toHaveProperty('revalidateRequired')
     expect(all[0]).not.toHaveProperty('schemaFingerprint')
-    expect(all[0]).not.toHaveProperty('healthStatus')
+    expect(all[0]).toHaveProperty('healthStatus')
   })
 
   it('register:请求形=真实契约(单条注册);FQN 重复 → 409;serverKey 非法 → 400', async () => {

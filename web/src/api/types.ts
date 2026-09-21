@@ -50,7 +50,9 @@
  *     管理站请求体不再强制携带。
  *  9. P4 批次(2026-09-21 web 接线)五域全部对齐真实控制器(以代码为准):
  *     - 三方 MCP 服务器:AdminMcpServerController(/admin/mcp-servers,应用级
- *       CRUD+启停;credentials 响应永为打码形 credentialsMasked;OAUTH 配置即 501);
+ *       CRUD+启停;credentials 响应永为打码形 credentialsMasked;OAUTH 配置即
+ *       501;credentials 空值语义 K③(2026-09-21 P4-gap 收口):注册必填,
+ *       更新 null/空串=保持原值、显式非空=覆盖);
  *     - Skill 目录:AdminSkillController(/admin/skills,zip 预览 dryRun/确认
  *       入库/激活上限 8 超限 409/逻辑删除);
  *     - mini 知识库:AdminKbController(/admin/kb/documents,文本导入/状态门控/
@@ -751,9 +753,10 @@ export interface IaMcpServer {
 }
 
 /** 三方 MCP 注册/更新请求体(镜像 McpServerSaveReqVO;字段校验在服务层:
- * serverKey 字符集、transport=streamable-http、STATIC_HEADER 头名/值必填、
- * OAUTH 配置即 501。credentials 为静态头值,只写,响应永打码;注意更新(PUT)
- * 与注册走同一 normalize——全表单语义,静态头值更新时亦必填重新输入) */
+ * serverKey 字符集、transport=streamable-http、STATIC_HEADER 头名必填、
+ * OAUTH 配置即 501。credentials 为静态头值,只写,响应永打码;
+ * 空值语义(P4 差距收口 K③):注册必填(缺省 400);更新 null/空串=
+ * 保持原值,显式非空=覆盖;无「清空」语义,撤销凭据请删除该三方服务) */
 export interface McpServerSaveReq {
   serverKey: string
   name?: string
@@ -761,8 +764,8 @@ export interface McpServerSaveReq {
   transport?: McpTransport
   authType?: McpAuthType
   headerName?: string
-  /** 静态头值(只写;打码不回显,注册/更新均必填) */
-  credentials: string
+  /** 静态头值(只写;打码不回显;注册必填,更新留空=保持原值) */
+  credentials?: string
   timeoutSeconds?: number
   enabled?: boolean
 }

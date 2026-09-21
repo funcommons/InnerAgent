@@ -707,8 +707,9 @@ describe('mock 后端:三方 MCP 服务器(P4-W13 契约形)', () => {
     })).rejects.toMatchObject({ status: 409, message: expect.stringContaining('防遮蔽') })
   })
 
-  it('update:全表单语义(与注册同一 normalize,credentials 缺省 → 400);启停/删除 404', async () => {
+  it('update:credentials 空值语义 K③(空串=保持原值,非空=覆盖);启停/删除 404', async () => {
     const before = (await mcpServerAdminApi.list()).find(s => s.serverKey === 'crm-mcp')!
+    // 覆盖:显式非空 → 新掩码
     const updated = await mcpServerAdminApi.update(before.id, {
       serverKey: before.serverKey, name: 'CRM 三方服务(改)', endpointUrl: 'https://crm-mcp.example.com/mcp',
       headerName: 'X-Api-Key', credentials: 'brand-new-key', timeoutSeconds: 90,
@@ -716,11 +717,12 @@ describe('mock 后端:三方 MCP 服务器(P4-W13 契约形)', () => {
     expect(updated.name).toContain('改')
     expect(updated.credentialsMasked).toBe('br***')
     expect(updated.enabled).toBe(true)
-    // 全表单语义:credentials 空 → 400(镜像服务端 update 走同一 normalize)
-    await expect(mcpServerAdminApi.update(before.id, {
+    // 保持原值:空串 = 不覆盖(镜像 K③ KEEP_IF_ABSENT;注册时才必填)
+    const keep = await mcpServerAdminApi.update(before.id, {
       serverKey: before.serverKey, name: updated.name!, endpointUrl: updated.endpointUrl,
       headerName: 'X-Api-Key', credentials: '', timeoutSeconds: 90,
-    })).rejects.toMatchObject({ status: 400, message: expect.stringContaining('静态头值') })
+    })
+    expect(keep.credentialsMasked).toBe('br***')
     const disabled = await mcpServerAdminApi.disable(before.id)
     expect(disabled.enabled).toBe(false)
     const enabled = await mcpServerAdminApi.enable(before.id)

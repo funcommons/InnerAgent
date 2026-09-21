@@ -332,9 +332,9 @@ export const mcpServerAdminApi = {
   /** 列表(含停用;应用级,数组形无分页) */
   list: () => http.get<IaMcpServer[]>(`${BASE}/mcp-servers`),
   get: (id: number) => http.get<IaMcpServer>(`${BASE}/mcp-servers/${id}`),
-  /** 注册(serverKey 字符集 400 / 防遮蔽冲突 409 / OAUTH 即 501;credentials 只写) */
+  /** 注册(serverKey 字符集 400 / 防遮蔽冲突 409 / OAUTH 即 501;credentials 只写必填) */
   register: (data: McpServerSaveReq) => http.post<IaMcpServer>(`${BASE}/mcp-servers`, data),
-  /** 更新(端点/静态头/超时等;与注册同一 normalize 全表单语义,credentials 必填) */
+  /** 更新(端点/静态头名/超时等;credentials 空串=保持原值,非空=覆盖——K③ 空值语义) */
   update: (id: number, data: McpServerSaveReq) =>
     http.put<IaMcpServer>(`${BASE}/mcp-servers/${id}`, data),
   /** 启用(目录恢复其三方工具) */

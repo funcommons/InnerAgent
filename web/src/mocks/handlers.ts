@@ -1225,8 +1225,16 @@ function requireMcpServerKeyFree(serverKey: string): HttpResponse<DefaultBodyTyp
   return null
 }
 
-/** 应用级注册/更新字段级校验+归一化(镜像 McpThirdPartyServerSupport.normalize,userFacing=false) */
-function normalizeMcpUpsert(body: Record<string, unknown>): { error?: HttpResponse<DefaultBodyType> } & Partial<IaMcpServer> & { credentials?: string } {
+/**
+ * 应用级注册/更新字段级校验+归一化(镜像 McpThirdPartyServerSupport.normalize,
+ * userFacing=false)。credentials 空值语义(P4 差距收口 K③):mode=REQUIRED
+ * (注册)必填;mode=KEEP_IF_ABSENT(更新)null/空串 → credentials=undefined
+ * (= 保持原值哨兵,handler 跳过掩码覆盖),非空 → 覆盖。
+ */
+function normalizeMcpUpsert(
+  body: Record<string, unknown>,
+  mode: 'REQUIRED' | 'KEEP_IF_ABSENT',
+): { error?: HttpResponse<DefaultBodyType> } & Partial<IaMcpServer> & { credentials?: string } {
   const serverKey = typeof body.serverKey === 'string' ? body.serverKey.trim() : ''
   if (!serverKey) return { error: fail(400, 'serverKey 不能为空') }
   if (!/^[A-Za-z0-9-]{1,64}$/.test(serverKey)) {
@@ -1253,8 +1261,15 @@ function normalizeMcpUpsert(body: Record<string, unknown>): { error?: HttpRespon
   const headerName = typeof body.headerName === 'string' ? body.headerName.trim() : ''
   if (!headerName) return { error: fail(400, '静态头名不能为空') }
   if (headerName.length > 128) return { error: fail(400, '静态头名超长(≤128)') }
-  const credentials = typeof body.credentials === 'string' ? body.credentials.trim() : ''
-  if (!credentials) return { error: fail(400, '静态头值不能为空') }
+  // K③ 空值语义:更新 null/空串 = 保持原值(哨兵 undefined);注册必填
+  const rawCredentials = typeof body.credentials === 'string' ? body.credentials.trim() : ''
+  let credentials: string | undefined
+  if (mode === 'KEEP_IF_ABSENT' && !rawCredentials) {
+    credentials = undefined
+  } else {
+    if (!rawCredentials) return { error: fail(400, '静态头值不能为空') }
+    credentials = rawCredentials
+  }
   const endpointUrl = typeof body.endpointUrl === 'string' ? body.endpointUrl.trim() : ''
   if (!endpointUrl) return { error: fail(400, 'endpoint URL 不能为空') }
   try {
@@ -1298,7 +1313,7 @@ const mcpServerHandlers = [
     const denied = requireAdminCredential(request)
     if (denied) return denied
     const body = (await request.json()) as Record<string, unknown>
-    const normalized = normalizeMcpUpsert(body)
+    const normalized = normalizeMcpUpsert(body, 'REQUIRED')
     if (normalized.error) return normalized.error
     const conflict = requireMcpServerKeyFree(normalized.serverKey!)
     if (conflict) return conflict
@@ -1324,7 +1339,8 @@ const mcpServerHandlers = [
     const s = store.mcpServers.find(x => x.id === Number(params.id))
     if (!s) return fail(404, '三方 MCP 服务不存在')
     const body = (await request.json()) as Record<string, unknown>
-    const normalized = normalizeMcpUpsert(body)
+    // K③ 空值语义:更新 credentials null/空串 = 保持原值;显式非空 = 覆盖
+    const normalized = normalizeMcpUpsert(body, 'KEEP_IF_ABSENT')
     if (normalized.error) return normalized.error
     if (normalized.serverKey !== s.serverKey) {
       const conflict = requireMcpServerKeyFree(normalized.serverKey!)
@@ -1341,7 +1357,6 @@ const mcpServerHandlers = [
       enabled: normalized.enabled,
       updateTime: nowIso(),
     })
-    // credentials 只写:仅显式提供时重算掩码(空=不修改,更新场景)
     if (normalized.credentials) s.credentialsMasked = maskCredentials(normalized.credentials)
     return ok(s)
   }),

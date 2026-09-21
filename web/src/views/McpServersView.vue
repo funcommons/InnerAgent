@@ -3,7 +3,8 @@
  * [new] 三方 MCP 服务器视图(P4-W13,视图清单 #8;AdminMcpServerController 应用级)。
  * 列表(serverKey/endpoint/auth_type/enabled/超时,含停用)+ 注册/编辑表单
  * (serverKey 字符集提示 [A-Za-z0-9-]、endpoint URL、静态头名/值——值打码
- * 不回显,编辑须重新输入)+ 启停 + 删除;OAUTH 选项置灰「暂未支持」(后端 501)。
+ * 不回显;credentials 空值语义 K③:注册必填,更新留空=保持原值,非空=覆盖)+
+ * 启停 + 删除;OAUTH 选项置灰「暂未支持」(后端 501)。
  * 防遮蔽:serverKey 与宿主注册表工具冲突 → 409 友好呈现。
  */
 import { onMounted, reactive, ref } from 'vue'
@@ -74,7 +75,8 @@ function validateForm(): string | null {
   if (!/^https?:\/\//.test(form.endpointUrl.trim())) return 'endpoint URL 须为 http(s):// 地址'
   if (form.authType === 'OAUTH') return 'OAuth 暂未支持:当前仅支持 STATIC_HEADER 静态头鉴权'
   if (!form.headerName.trim()) return '静态头名不能为空'
-  if (!form.credentials.trim()) return '静态头值不能为空(打码不回显,编辑须重新输入)'
+  // credentials 空值语义(K③):注册必填;更新留空=保持原值(非必填)
+  if (editingId.value === null && !form.credentials.trim()) return '静态头值不能为空'
   if (form.timeoutSeconds < 1 || form.timeoutSeconds > 600) return '超时须在 1-600 秒之间'
   return null
 }
@@ -93,7 +95,8 @@ async function submitForm() {
       endpointUrl: form.endpointUrl.trim(),
       authType: form.authType,
       headerName: form.headerName.trim(),
-      credentials: form.credentials.trim(),
+      // K③:更新留空 = 保持原值(不下发);非空 = 覆盖
+      credentials: form.credentials.trim() || undefined,
       timeoutSeconds: form.timeoutSeconds,
       enabled: form.enabled,
     }
@@ -209,7 +212,7 @@ async function remove(row: IaMcpServer) {
       </el-table>
     </el-card>
 
-    <!-- 注册/编辑(全表单语义:credentials 打码不回显,编辑须重新输入) -->
+    <!-- 注册/编辑(credentials 打码不回显;K③:更新留空=保持原值) -->
     <el-dialog v-model="formVisible" :title="editingId === null ? '注册三方 MCP 服务器' : `编辑:${form.serverKey}`" width="620px">
       <el-alert type="info" :closable="false" show-icon class="mb12"
         title="serverKey 是工具 FQN 命名空间(mcp__<serverKey>__<tool>),仅字母/数字/连字符且不得与宿主注册表冲突(防遮蔽)。"
@@ -236,15 +239,15 @@ async function remove(row: IaMcpServer) {
         <el-form-item label="静态头名" required>
           <el-input v-model="form.headerName" placeholder="如 X-Api-Key / Authorization" maxlength="128" />
         </el-form-item>
-        <el-form-item label="静态头值" required>
+        <el-form-item label="静态头值" :required="editingId === null">
           <el-input
             v-model="form.credentials"
             type="password"
             show-password
             autocomplete="new-password"
-            :placeholder="editingId === null ? '头值(只写,响应中永为打码形)' : '已打码不回显,更新须重新输入'"
+            :placeholder="editingId === null ? '头值(只写,响应中永为打码形)' : '留空=保持原值;输入新值即轮换'"
           />
-          <div class="form-hint">值不进审计/日志;列表仅显示前 2 字符掩码。</div>
+          <div class="form-hint">值不进审计/日志;列表仅显示前 2 字符掩码;无「清空」语义(撤销凭据请删除该服务器)。</div>
         </el-form-item>
         <el-form-item label="超时(秒)">
           <el-input-number v-model="form.timeoutSeconds" :min="1" :max="600" />

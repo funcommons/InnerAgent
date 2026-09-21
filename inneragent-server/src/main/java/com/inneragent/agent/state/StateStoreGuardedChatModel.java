@@ -7,8 +7,10 @@ import com.inneragent.agent.context.AgentConversationContext;
 import com.inneragent.agent.context.AgentRunContext;
 import com.inneragent.agent.observability.GenAiSemanticAttributes;
 import com.inneragent.agent.observability.GenAiSpanFactory;
+import com.inneragent.agent.run.ModelCallUsageLedgerPort;
 import com.inneragent.agent.run.ModelUsageSettlementPort;
 import com.inneragent.agent.run.model.NormalizedModelUsage;
+import com.inneragent.platform.enums.ai.AgentModelCallStatus;
 import io.agentscope.core.agent.AgentBase;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.Msg;
@@ -19,10 +21,12 @@ import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.ToolSchema;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.SignalType;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -31,6 +35,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * 幂等键 = {@code runId:modelCallId}，从 {@link RuntimeContext} 拿 runId/ownerUserId。
  * 流结束（finishReason 非 null 或上游主动 complete）时触发落库。
+ * <p>
+ * W15 用量统计:每次 doStream 视为一次模型调用——上下文无 modelCallId 时
+ * 生成 {@code mc-<uuid>};挂点 {@link ModelCallUsageLedgerPort}(可空=旁路)
+ * 按流入口 STARTED / 流尾 COMPLETED(有 usage)/ 失败 FAILED 记
+ * {@code ia_agent_model_call_usage} 台账。台账失败只降级(WARN)不阻断流。
  */
 @Slf4j
 public final class StateStoreGuardedChatModel extends ChatModelBase {
@@ -46,19 +55,25 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
     private final ModelUsageSettlementPort usagePort;
     /** [adapt] 任务 #18b(W5):chat span 工厂(null=noop 挂点整体旁路)。 */
     private final GenAiSpanFactory spanFactory;
+    /** W15 用量统计:量表白账挂点(null=旁路)。 */
+    private final ModelCallUsageLedgerPort ledgerPort;
+    /** 台账身份:请求协议归一的服务商标识(构造期绑定,harness 一模型一身份)。 */
+    private final String provider;
+    /** 台账身份:模型代码标识。 */
+    private final String modelCode;
     private final int contextWindowSize;
 
     public StateStoreGuardedChatModel(
             ChatModelBase delegate,
             StateStoreFailureGuard failures) {
-        this(delegate, failures, null, null, null);
+        this(delegate, failures, null, null, null, null, null, null);
     }
 
     public StateStoreGuardedChatModel(
             ChatModelBase delegate,
             StateStoreFailureGuard failures,
             Integer configuredContextWindow) {
-        this(delegate, failures, configuredContextWindow, null, null);
+        this(delegate, failures, configuredContextWindow, null, null, null, null, null);
     }
 
     public StateStoreGuardedChatModel(
@@ -66,7 +81,7 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
             StateStoreFailureGuard failures,
             Integer configuredContextWindow,
             ModelUsageSettlementPort usagePort) {
-        this(delegate, failures, configuredContextWindow, usagePort, null);
+        this(delegate, failures, configuredContextWindow, usagePort, null, null, null, null);
     }
 
     public StateStoreGuardedChatModel(
@@ -75,10 +90,27 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
             Integer configuredContextWindow,
             ModelUsageSettlementPort usagePort,
             GenAiSpanFactory spanFactory) {
+        this(delegate, failures, configuredContextWindow, usagePort, spanFactory,
+                null, null, null);
+    }
+
+    /** 全参构造(W15):span 工厂 + 用量结算 + 量表白账(含模型身份)。 */
+    public StateStoreGuardedChatModel(
+            ChatModelBase delegate,
+            StateStoreFailureGuard failures,
+            Integer configuredContextWindow,
+            ModelUsageSettlementPort usagePort,
+            GenAiSpanFactory spanFactory,
+            ModelCallUsageLedgerPort ledgerPort,
+            String provider,
+            String modelCode) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.failures = Objects.requireNonNull(failures, "failures must not be null");
         this.usagePort = usagePort;
         this.spanFactory = spanFactory == null ? GenAiSpanFactory.noop() : spanFactory;
+        this.ledgerPort = ledgerPort;
+        this.provider = provider;
+        this.modelCode = modelCode;
         this.contextWindowSize = configuredContextWindow != null && configuredContextWindow > 0
                 ? configuredContextWindow
                 : delegate.getContextWindowSize();
@@ -119,10 +151,18 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
             failures.throwIfFailed(new StateStoreSlot(
                     runtimeContext.getUserId(), runtimeContext.getSessionId()));
             AgentScopeRuntimeContextAccess.set(runtimeContext);
+            // W15 用量统计:一次 doStream = 一次模型调用。runId 取运行上下文
+            // (AgentRunContext.runId,内核运行即真实 ia_agent_run.run_id;
+            // session id 为状态存储会话键,仅在无运行上下文的形态下兜底);
+            // modelCallId 优先沿用 modeler 写入的上下文 key,否则生成。
+            String runId = resolveRunId(runtimeContext);
+            String modelCallId = resolveModelCallId(runtimeContext);
+            ModelCallUsageLedgerPort.ModelCallRef usageRef =
+                    startLedgerCall(runId, modelCallId);
             // [adapt] 任务 #18b(W5):chat span(每次模型调用一个;noop 工厂旁路)。
             GenAiSpanFactory.GenAiSpan chatSpan = startChatSpan(runtimeContext, messages);
             Flux<ChatResponse> source = delegate.stream(messages, tools, options);
-            if (usagePort == null && chatSpan == null) {
+            if (usagePort == null && chatSpan == null && usageRef == null) {
                 return source;
             }
             // 边流边记、流尾结算: chunk 必须逐个透传。工具调用的带名 anchor 块
@@ -144,18 +184,87 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
                         try {
                             ChatResponse last = lastUsage.get();
                             if (last != null) {
-                                settleUsage(last);
+                                settleUsage(last, runId, modelCallId);
                                 if (chatSpan != null) {
                                     endChatSpan(chatSpan, last);
                                 }
                             } else if (chatSpan != null) {
                                 chatSpan.end();
                             }
+                            settleLedgerTerminal(usageRef, last, sig);
                         } finally {
                             AgentScopeRuntimeContextAccess.clear();
                         }
                     });
         });
+    }
+
+    /** runId 解析:优先真实运行上下文,兜底状态会话键(旧约定形态)。 */
+    private static String resolveRunId(RuntimeContext runtimeContext) {
+        AgentRunContext run = runtimeContext.get(AgentRunContext.class);
+        if (run != null && run.runId() != null && !run.runId().isBlank()) {
+            return run.runId();
+        }
+        return runtimeContext.getSessionId();
+    }
+
+    /**
+     * modelCallId 解析:modeler 写入的上下文 key 优先(幂等对齐);缺失时
+     * 按次生成({@code mc-<32hex>},≤64 列宽)。
+     */
+    private static String resolveModelCallId(RuntimeContext runtimeContext) {
+        Object value = runtimeContext.get(MODEL_CALL_ID_KEY);
+        if (value instanceof String s && !s.isBlank()) {
+            return s;
+        }
+        return "mc-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /** 流入口落 STARTED;台账缺位/失败均返回 null(本次调用旁路)。 */
+    private ModelCallUsageLedgerPort.ModelCallRef startLedgerCall(
+            String runId, String modelCallId) {
+        if (ledgerPort == null || runId == null || runId.isBlank()) {
+            return null;
+        }
+        ModelCallUsageLedgerPort.ModelCallRef ref = new ModelCallUsageLedgerPort.ModelCallRef(
+                runId, modelCallId,
+                provider == null || provider.isBlank() ? "unknown" : provider,
+                modelCode == null || modelCode.isBlank() ? "unknown" : modelCode);
+        try {
+            ledgerPort.start(ref);
+            return ref;
+        } catch (Exception ledgerFailure) {
+            log.warn("[usage-ledger] start 落库失败(旁路本次调用): {}", ledgerFailure.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 流尾台账终态:有 usage → COMPLETED(带 token);无 usage 且流错误 →
+     * FAILED;无 usage 的正常完成/取消保持 STARTED,由运行终态对账
+     * (finishAllStartedForRun)兜底标 CANCELLED。台账异常只降级。
+     */
+    private void settleLedgerTerminal(
+            ModelCallUsageLedgerPort.ModelCallRef usageRef,
+            ChatResponse last,
+            SignalType signal) {
+        if (usageRef == null || ledgerPort == null) {
+            return;
+        }
+        try {
+            if (last != null) {
+                NormalizedModelUsage usage = toNormalizedUsage(last);
+                if (usage != null) {
+                    ledgerPort.complete(usageRef, usage);
+                }
+                return;
+            }
+            if (signal == SignalType.ON_ERROR) {
+                ledgerPort.fail(usageRef, AgentModelCallStatus.FAILED);
+            }
+        } catch (Exception ledgerFailure) {
+            log.warn("[usage-ledger] 终态落库失败: {}", ledgerFailure.getMessage());
+        }
     }
 
     /**
@@ -249,14 +358,15 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
         }
     }
 
-    private void settleUsage(ChatResponse response) {
+    private void settleUsage(ChatResponse response, String runId, String modelCallId) {
         try {
+            if (usagePort == null) {
+                return;
+            }
             NormalizedModelUsage usage = toNormalizedUsage(response);
             if (usage == null) {
                 return;
             }
-            String runId = currentRunId();
-            String modelCallId = currentModelCallId();
             if (runId == null || modelCallId == null) {
                 return;
             }
@@ -342,19 +452,5 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
             }
         }
         return null;
-    }
-
-    private static String currentRunId() {
-        RuntimeContext context = AgentScopeRuntimeContextAccess.current();
-        return context == null ? null : context.getSessionId();
-    }
-
-    private static String currentModelCallId() {
-        RuntimeContext context = AgentScopeRuntimeContextAccess.current();
-        if (context == null) {
-            return null;
-        }
-        Object value = context.get(MODEL_CALL_ID_KEY);
-        return value instanceof String s ? s : null;
     }
 }

@@ -8,6 +8,8 @@ import com.inneragent.agent.skill.AgentScopeSkillRegistry;
 import com.inneragent.agent.workspace.AgentWorkspaceBaseStore;
 import com.inneragent.agent.permission.AgentToolPermissionPolicy;
 import com.inneragent.agent.permission.ToolExecutionMode;
+import com.inneragent.platform.service.ai.model.AiModelMetadata;
+import com.inneragent.platform.service.ai.model.AiModelMetadataResolver;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
@@ -38,6 +40,10 @@ public final class AgentScopeHarnessFactory {
     private final com.inneragent.agent.run.ModelUsageSettlementPort usagePort;
     /** [adapt] 任务 #18b(W5):chat span 工厂(缺省 noop)。 */
     private final com.inneragent.agent.observability.GenAiSpanFactory spanFactory;
+    /** W15 用量统计:模型调用量表写入端口(缺省 null=旁路)。 */
+    private final com.inneragent.agent.run.ModelCallUsageLedgerPort usageLedgerPort;
+    /** W15 用量统计:请求协议归一(provider 字段解析)。 */
+    private final AiModelMetadataResolver modelMetadataResolver;
 
     @Autowired
     public AgentScopeHarnessFactory(
@@ -49,7 +55,9 @@ public final class AgentScopeHarnessFactory {
             ObjectProvider<AgentScopeSkillRegistry> skillRegistries,
             ObjectProvider<AgentWorkspaceBaseStore> workspaceStores,
             ObjectProvider<com.inneragent.agent.run.ModelUsageSettlementPort> usagePort,
-            ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories) {
+            ObjectProvider<com.inneragent.agent.observability.GenAiSpanFactory> spanFactories,
+            ObjectProvider<com.inneragent.agent.run.ModelCallUsageLedgerPort> usageLedgerPorts,
+            ObjectProvider<AiModelMetadataResolver> modelMetadataResolvers) {
         this(
                 modelFactory,
                 toolRegistry,
@@ -59,7 +67,9 @@ public final class AgentScopeHarnessFactory {
                 skillRegistries.getIfAvailable(AgentScopeHarnessFactory::disabledSkillRegistry),
                 workspaceStores.getIfAvailable(),
                 usagePort.getIfAvailable(),
-                spanFactories.getIfAvailable());
+                spanFactories.getIfAvailable(),
+                usageLedgerPorts.getIfAvailable(),
+                modelMetadataResolvers.getIfAvailable());
     }
 
     AgentScopeHarnessFactory(
@@ -83,7 +93,7 @@ public final class AgentScopeHarnessFactory {
             BaseStore workspaceStore,
             com.inneragent.agent.run.ModelUsageSettlementPort usagePort) {
         this(modelFactory, toolRegistry, stateStore, failures, shutdownRecoveryBridge,
-                skillRegistry, workspaceStore, usagePort, null);
+                skillRegistry, workspaceStore, usagePort, null, null, null);
     }
 
     AgentScopeHarnessFactory(
@@ -96,6 +106,22 @@ public final class AgentScopeHarnessFactory {
             BaseStore workspaceStore,
             com.inneragent.agent.run.ModelUsageSettlementPort usagePort,
             com.inneragent.agent.observability.GenAiSpanFactory spanFactory) {
+        this(modelFactory, toolRegistry, stateStore, failures, shutdownRecoveryBridge,
+                skillRegistry, workspaceStore, usagePort, spanFactory, null, null);
+    }
+
+    AgentScopeHarnessFactory(
+            AgentKernelModelFactory modelFactory,
+            AgentKernelToolRegistry toolRegistry,
+            AgentStateStore stateStore,
+            StateStoreFailureGuard failures,
+            AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
+            AgentScopeSkillRegistry skillRegistry,
+            BaseStore workspaceStore,
+            com.inneragent.agent.run.ModelUsageSettlementPort usagePort,
+            com.inneragent.agent.observability.GenAiSpanFactory spanFactory,
+            com.inneragent.agent.run.ModelCallUsageLedgerPort usageLedgerPort,
+            AiModelMetadataResolver modelMetadataResolver) {
         this.modelFactory = Objects.requireNonNull(modelFactory, "modelFactory must not be null");
         this.toolRegistry = Objects.requireNonNull(toolRegistry, "toolRegistry must not be null");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore must not be null");
@@ -107,6 +133,8 @@ public final class AgentScopeHarnessFactory {
         this.workspaceStore = workspaceStore;
         this.usagePort = usagePort;
         this.spanFactory = spanFactory;
+        this.usageLedgerPort = usageLedgerPort;
+        this.modelMetadataResolver = modelMetadataResolver;
     }
 
     public AgentScopeHarnessFactory(
@@ -151,7 +179,9 @@ public final class AgentScopeHarnessFactory {
                     .description(spec.description())
                     .sysPrompt(spec.systemPrompt())
                     .model(new StateStoreGuardedChatModel(
-                            ownedModel.model(), failures, contextWindow, usagePort, spanFactory))
+                            ownedModel.model(), failures, contextWindow, usagePort, spanFactory,
+                            usageLedgerPort,
+                            resolveProvider(spec), resolveModelCode(spec)))
                     .stateStore(stateStore)
                     .toolkit(toolkit)
                     .permissionContext(AgentToolPermissionPolicy.contextFor(
@@ -201,6 +231,29 @@ public final class AgentScopeHarnessFactory {
             AgentKernelResource.rethrow(accumulated);
             throw new AssertionError("unreachable");
         }
+    }
+
+    /**
+     * W15 用量统计:台账 provider 字段解析(请求协议归一,与
+     * AgentExecutionFactory/快照构建同源 {@code AiModelMetadataResolver});
+     * 解析缺位落 {@code unknown},台账列非空约束兜底。
+     */
+    private String resolveProvider(AgentKernelSpec spec) {
+        if (modelMetadataResolver == null) {
+            return "unknown";
+        }
+        try {
+            AiModelMetadata metadata = modelMetadataResolver.resolve(spec.model());
+            String protocol = metadata != null ? metadata.modelProtocol() : null;
+            return protocol == null || protocol.isBlank() ? "unknown" : protocol;
+        } catch (Exception resolveFailure) {
+            return "unknown";
+        }
+    }
+
+    private String resolveModelCode(AgentKernelSpec spec) {
+        String code = spec.model().getCode();
+        return code == null || code.isBlank() ? "unknown" : code;
     }
 
     private void removeUnlistedHarnessTools(Toolkit toolkit, Set<String> whitelist) {

@@ -1,0 +1,6 @@
+{
+  "name": "meeting-notes",
+  "displayName": "会议纪要",
+  "description": "把会议记录或口述速记整理为标准纪要：议题、结论、行动项三段结构，责任人与截止时间显式标注。",
+  "version": "1.0.0"
+}

@@ -101,6 +101,8 @@ public final class AgentScopePipelineRunService {
     private final ObjectMapper objectMapper;
     private final AgentScopeSkillRegistry skillRegistry;
     private final AgentUserSkillService userSkillService;
+    /** [adapt] P4-W13:应用级激活 Skill 目录端口(可空:测试直构免装配)。 */
+    private final com.inneragent.agent.skill.AppSkillCatalogPort appSkillCatalog;
     private final CircuitBreakerAdminService circuitBreakers;
     private final com.inneragent.platform.safety.ContentSafetyGate safetyGate;
 
@@ -124,6 +126,7 @@ public final class AgentScopePipelineRunService {
             ObjectMapper objectMapper,
             AgentScopeSkillRegistry skillRegistry,
             AgentUserSkillService userSkillService,
+            com.inneragent.agent.skill.AppSkillCatalogPort appSkillCatalog,
             CircuitBreakerAdminService circuitBreakers,
             com.inneragent.platform.safety.ContentSafetyGate safetyGate) {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
@@ -150,6 +153,7 @@ public final class AgentScopePipelineRunService {
         this.skillRegistry = Objects.requireNonNull(skillRegistry, "skillRegistry must not be null");
         this.userSkillService = Objects.requireNonNull(
                 userSkillService, "userSkillService must not be null");
+        this.appSkillCatalog = appSkillCatalog;
         this.circuitBreakers = Objects.requireNonNull(
                 circuitBreakers, "circuitBreakers must not be null");
         this.safetyGate = Objects.requireNonNull(
@@ -478,6 +482,20 @@ public final class AgentScopePipelineRunService {
                     skill.getDescription(),
                     skill.getSkillContent(),
                     skill.getSource()));
+        }
+        // [adapt] P4-W13:应用级已激活 Skill 并入可用目录(「按需激活」平台
+        // 侧语义:未激活行不经此路径,天然不进上下文)。覆盖顺序:内置/静态
+        // 仓库 < 应用激活 < 用户自定义(同名后者生效,与 MeController 一致)。
+        if (appSkillCatalog != null) {
+            for (com.inneragent.agent.skill.AppSkillCatalogPort.ActivatedAppSkill skill
+                    : appSkillCatalog.activated(
+                    com.inneragent.platform.context.AppContext.currentOrDefault())) {
+                available.put(skill.name(), new ActiveSkill(
+                        skill.name(),
+                        skill.description(),
+                        skill.markdown(),
+                        skill.source()));
+            }
         }
         for (AgentUserSkillService.UserSkill skill : userSkillService.list(userId)) {
             available.put(skill.name(), new ActiveSkill(

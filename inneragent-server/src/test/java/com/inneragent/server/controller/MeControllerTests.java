@@ -32,8 +32,10 @@ class MeControllerTests {
     private final AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
     private final AgentScopeMcpRegistry mcpRegistry = mock(AgentScopeMcpRegistry.class);
     private final AgentUserSkillService userSkillService = mock(AgentUserSkillService.class);
-    private final MeController controller =
-            new MeController(aiModelService, skillRegistry, mcpRegistry, userSkillService);
+    private final com.inneragent.agent.skill.AppSkillCatalogPort appSkillCatalog =
+            mock(com.inneragent.agent.skill.AppSkillCatalogPort.class);
+    private final MeController controller = new MeController(
+            aiModelService, skillRegistry, mcpRegistry, userSkillService, appSkillCatalog);
 
     @AfterEach
     void clearSecurityContext() {
@@ -92,6 +94,8 @@ class MeControllerTests {
         when(mcpRegistry.catalogForAgent("ai_assistant_agent", 42L)).thenReturn(List.of(
                 new AgentScopeMcpRegistry.McpToolReference(
                         "assets", "search_assets", "搜索素材", true)));
+        when(appSkillCatalog.activated(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(List.of());
 
         CommonResult<AssistantReferenceOptionsRespVO> result = controller.referenceOptions();
 

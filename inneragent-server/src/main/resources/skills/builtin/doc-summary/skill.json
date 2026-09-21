@@ -1,0 +1,6 @@
+{
+  "name": "doc-summary",
+  "displayName": "文档摘要",
+  "description": "面向长文档的摘要与要点提取：按固定流程通读、分层提炼、输出结构化摘要。",
+  "version": "1.0.0"
+}

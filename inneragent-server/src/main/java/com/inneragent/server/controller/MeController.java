@@ -50,6 +50,8 @@ public class MeController {
     private final AgentScopeSkillRegistry skillRegistry;
     private final AgentScopeMcpRegistry mcpRegistry;
     private final AgentUserSkillService userSkillService;
+    /** [adapt] P4-W13:应用级激活 Skill 目录(可空:测试直构免装配)。 */
+    private final com.inneragent.agent.skill.AppSkillCatalogPort appSkillCatalog;
 
     @GetMapping("/models")
     @Operation(summary = "按类型获取当前用户可用模型列表")
@@ -69,6 +71,16 @@ public class MeController {
                 new AssistantReferenceOptionsRespVO.SkillOption(
                         skill.id(), skill.name(), skill.displayName(),
                         skill.description(), skill.source())));
+        // P4-W13:应用级已激活 Skill(未激活不下发);同名被用户级覆盖
+        if (appSkillCatalog != null) {
+            appSkillCatalog.activated(
+                            com.inneragent.platform.context.AppContext.currentOrDefault())
+                    .forEach(skill -> skillOptions.put(skill.name(),
+                            new AssistantReferenceOptionsRespVO.SkillOption(
+                                    String.valueOf(skill.id()), skill.name(),
+                                    skill.displayName(), skill.description(),
+                                    skill.source())));
+        }
         userSkillService.catalog(userId).forEach(skill -> skillOptions.put(skill.name(),
                 new AssistantReferenceOptionsRespVO.SkillOption(
                         skill.id(), skill.name(), skill.displayName(),

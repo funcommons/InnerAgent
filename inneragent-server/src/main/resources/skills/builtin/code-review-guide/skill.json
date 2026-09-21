@@ -1,0 +1,6 @@
+{
+  "name": "code-review-guide",
+  "displayName": "代码变更自检",
+  "description": "对代码变更做结构化自检：正确性、边界条件、并发与资源、可读性四个维度逐项过检并输出风险分级。",
+  "version": "1.0.0"
+}

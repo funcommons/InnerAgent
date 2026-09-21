@@ -3,6 +3,7 @@ package com.inneragent.agent.run;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.inneragent.agent.entity.AgentRun;
+import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.enums.ai.AgentRunStatus;
 import com.inneragent.platform.enums.ai.AgentRuntimeErrorCode;
 import com.inneragent.platform.enums.ai.AgentTerminalOutputType;
@@ -83,6 +84,21 @@ public final class CancellationCoordinator implements RunShutdownCancellationPor
         String safeParentRunId = requireRunId(parentRunId);
         return requestDescendants(safeParentRunId)
                 .flatMap(tree -> publishAndInterrupt(tree.affected()));
+    }
+
+    /**
+     * [adapt] P4-W14 级联取消兜底扫描:父运行已终态但其活跃子运行尚未取消的
+     * 泄漏场景(父被跨实例租约收敛 FAILED、或取消树与子准入竞态窗口外终态化),
+     * 由维护调度周期兜底。以每个孤儿子运行为根请求内部取消树——孙辈随单次
+     * 树遍历级联——再走统一的发布/中断链路;候选消失(404)按已收敛跳过。
+     */
+    public Mono<Void> cancelOrphanedChildren(int limit) {
+        return journal(() -> runs.findOrphanedActiveChildren(limit))
+                .flatMapMany(Flux::fromIterable)
+                .concatMap(orphan -> requestInternal(orphan.getRunId())
+                        .flatMap(tree -> publishAndInterrupt(tree.affected()))
+                        .onErrorResume(BusinessException.class, ignored -> Mono.empty()))
+                .then();
     }
 
     public Mono<Void> retry(String runId) {

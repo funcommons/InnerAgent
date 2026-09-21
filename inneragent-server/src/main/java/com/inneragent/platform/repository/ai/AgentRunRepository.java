@@ -227,6 +227,12 @@ public class AgentRunRepository {
                 databaseNow(), limit));
     }
 
+    /** [adapt] P4-W14 兜底扫描:父已终态但自身仍活跃的孤儿子运行。 */
+    public List<AgentRun> findOrphanedActiveChildren(int limit) {
+        requireBatchLimit(limit);
+        return List.copyOf(runMapper.selectOrphanedActiveChildren(limit));
+    }
+
     private CancellationTree requestCancellationTree(
             AgentRun root, boolean includeRoot) {
         LocalDateTime now = databaseNow();

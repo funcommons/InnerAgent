@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -217,6 +218,22 @@ class McpToolCatalogThirdPartyTests {
         assertThat(catalog.findForUser(APP_ID, USER_B, "mcp__mytools__a_tool")).isEmpty();
         // 应用级 find 不含用户级条目
         assertThat(catalog.find(APP_ID, "mcp__mytools__a_tool")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("无自遮蔽:catalogForUser 仅追加用户层(应用级已在 higher 占位),不产生虚假审计")
+    void userAppendDoesNotReAppendAppLayer() {
+        when(registryMapper.selectList(any())).thenReturn(List.of(hostTool("host", "echo")));
+        when(thirdPartyCache.enabledAppServers(APP_ID)).thenReturn(List.of(appRef("crm")));
+        when(thirdPartyCache.tools(appRef("crm"))).thenReturn(List.of(tool("crm_tool")));
+        when(thirdPartyCache.enabledUserServers(APP_ID, USER_A))
+                .thenReturn(List.of(userRef(USER_A, "mytools")));
+        when(thirdPartyCache.tools(userRef(USER_A, "mytools"))).thenReturn(List.of(tool("a_tool")));
+
+        assertThat(catalog.catalogForUser(APP_ID, USER_A))
+                .extracting(McpToolCatalogEntry::fqn)
+                .containsExactly("mcp__host__echo", "mcp__crm__crm_tool", "mcp__mytools__a_tool");
+        verify(auditService, never()).append(any(ToolAuditService.ToolAuditEntry.class));
     }
 
     // ------------------------------------------------------------------

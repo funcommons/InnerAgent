@@ -120,10 +120,11 @@ public class McpToolCatalog implements ToolCatalogInvalidator, McpThirdPartyConf
      * DEFAULT 模式需确认)。
      */
     public List<McpToolCatalogEntry> catalogForUser(long appId, Long userId) {
-        List<McpToolCatalogEntry> base = appendThirdParty(appId, userId, catalog(appId));
         if (userId == null) {
-            return base;
+            // catalog(appId) 已是「宿主 + 应用级三方」聚合快照,直接返回
+            return catalog(appId);
         }
+        List<McpToolCatalogEntry> base = appendThirdParty(appId, userId, catalog(appId));
         Set<String> grantedFqns = grantService.activePermanentFqns(userId);
         return base.stream()
                 .map(entry -> entry.granted()
@@ -220,7 +221,8 @@ public class McpToolCatalog implements ToolCatalogInvalidator, McpThirdPartyConf
     }
 
     /**
-     * 三方层聚合(需求 #3):应用级先行、用户级(userId 非空时)殿后;
+     * 三方层聚合(需求 #3):userId 为空 → 追加应用级(入目录快照);
+     * userId 非空 → 仅追加该用户级(行级隔离;higher 已含应用级)。
      * 与更高优先层 FQN/裸名冲突的工具被丢弃(WARN + 审计)。
      */
     private List<McpToolCatalogEntry> appendThirdParty(
@@ -236,11 +238,9 @@ public class McpToolCatalog implements ToolCatalogInvalidator, McpThirdPartyConf
             occupiedFqns.add(normalize(entry.fqn()));
             occupiedNames.add(normalize(entry.toolName()));
         }
-        List<McpThirdPartyToolListCache.ServerRef> refs = new ArrayList<>(
-                cache.enabledAppServers(appId));
-        if (userId != null) {
-            refs.addAll(cache.enabledUserServers(appId, userId));
-        }
+        List<McpThirdPartyToolListCache.ServerRef> refs = userId == null
+                ? cache.enabledAppServers(appId)
+                : cache.enabledUserServers(appId, userId);
         List<McpToolCatalogEntry> combined = new ArrayList<>(higher);
         for (McpThirdPartyToolListCache.ServerRef ref : refs) {
             for (McpThirdPartyToolListCache.ThirdPartyTool tool : cache.tools(ref)) {

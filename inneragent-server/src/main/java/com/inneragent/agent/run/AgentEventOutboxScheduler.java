@@ -35,13 +35,18 @@ public final class AgentEventOutboxScheduler {
         if (!running.compareAndSet(false, true)) {
             return;
         }
-        publisher.publishBatch(instanceIdentity.value(), BATCH_SIZE)
-                .doFinally(ignored -> running.set(false))
-                .subscribe(
-                        ignored -> { },
-                        failure -> log.error(
-                                "Agent outbox publish failed: type={}",
-                                failure.getClass().getSimpleName(),
-                                failure));
+        // [adapt] 多应用运行 500 二轮根修:outbox 扫描为平台级系统路径——
+        // 租户+应用行级注入均跳过,多应用部署下 app≠1 的待发布事件同样
+        // 被认领唤醒(此前按缺省 app 1 注入,非缺省应用事件永远扫不到)。
+        com.inneragent.platform.tenant.TenantContext.runAsSystem(() ->
+                com.inneragent.platform.context.AppContext.runAsSystem(() ->
+                        publisher.publishBatch(instanceIdentity.value(), BATCH_SIZE)
+                                .doFinally(ignored -> running.set(false))
+                                .subscribe(
+                                        ignored -> { },
+                                        failure -> log.error(
+                                                "Agent outbox publish failed: type={}",
+                                                failure.getClass().getSimpleName(),
+                                                failure))));
     }
 }

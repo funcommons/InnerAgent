@@ -17,6 +17,8 @@ import com.inneragent.agent.run.model.AgentEventEnvelope;
 import com.inneragent.agent.run.model.CommittedAgentEvent;
 import com.inneragent.agent.run.model.RunTerminalRequest;
 import com.inneragent.agent.run.model.SystemTerminalActor;
+import com.inneragent.platform.context.AppContext;
+import com.inneragent.platform.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,16 +56,24 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
         requireOwnerArguments(runId, ownerInstanceId, ownerEpoch);
         Objects.requireNonNull(event, "event must not be null");
 
-        AgentRun run = runMapper.selectByRunIdForUpdate(runId);
-        LocalDateTime databaseNow = runMapper.selectDatabaseNow();
-        if (!isCurrentOwner(run, ownerInstanceId, ownerEpoch, databaseNow)) {
-            return Optional.empty();
-        }
-        AgentEventEnvelope safeEvent = sanitize(event);
-        long sequence = requireNextSequence(run);
-        advanceSequence(run, sequence + 1, databaseNow);
-        AgentEvent inserted = insertEvent(run, sequence, safeEvent, databaseNow);
-        return Optional.of(toCommitted(inserted, safeEvent, databaseNow));
+        // [adapt] 多应用运行 500 二轮根修:运行日志按全局唯一 run_id + 显式
+        // owner 租约 fencing 定位,属系统路径 —— 事件可能由丢失 ThreadLocal
+        // 上下文的内核/唤醒线程提交,环境行级注入(app 缺省回落 1)会把行
+        // 过滤成「不存在」→ isCurrentOwner 判空 → append 被误判失租,执行
+        // 流中断(真机实证:运行中途 OWNER_LOST)。以系统模式读行与写入,
+        // 事件归属显式取运行行(见 insertEvent)。
+        return TenantContext.runAsSystem(() -> AppContext.runAsSystem(() -> {
+            AgentRun run = runMapper.selectByRunIdForUpdate(runId);
+            LocalDateTime databaseNow = runMapper.selectDatabaseNow();
+            if (!isCurrentOwner(run, ownerInstanceId, ownerEpoch, databaseNow)) {
+                return Optional.empty();
+            }
+            AgentEventEnvelope safeEvent = sanitize(event);
+            long sequence = requireNextSequence(run);
+            advanceSequence(run, sequence + 1, databaseNow);
+            AgentEvent inserted = insertEvent(run, sequence, safeEvent, databaseNow);
+            return Optional.of(toCommitted(inserted, safeEvent, databaseNow));
+        }));
     }
 
     @Override
@@ -75,13 +85,15 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
         Objects.requireNonNull(request, "request must not be null");
         requireOwnerArguments(request.runId(), ownerInstanceId, ownerEpoch);
 
-        AgentRun run = runMapper.selectByRunIdForUpdate(request.runId());
-        LocalDateTime databaseNow = runMapper.selectDatabaseNow();
-        if (!OWNED_TERMINAL_SOURCE.equals(request.expectedStatuses())
-                || !isCurrentOwner(run, ownerInstanceId, ownerEpoch, databaseNow)) {
-            return Optional.empty();
-        }
-        return Optional.of(insertTerminal(run, request, databaseNow));
+        return TenantContext.runAsSystem(() -> AppContext.runAsSystem(() -> {
+            AgentRun run = runMapper.selectByRunIdForUpdate(request.runId());
+            LocalDateTime databaseNow = runMapper.selectDatabaseNow();
+            if (!OWNED_TERMINAL_SOURCE.equals(request.expectedStatuses())
+                    || !isCurrentOwner(run, ownerInstanceId, ownerEpoch, databaseNow)) {
+                return Optional.empty();
+            }
+            return Optional.of(insertTerminal(run, request, databaseNow));
+        }));
     }
 
     @Override
@@ -92,12 +104,14 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(actor, "actor must not be null");
 
-        AgentRun run = runMapper.selectByRunIdForUpdate(request.runId());
-        LocalDateTime databaseNow = runMapper.selectDatabaseNow();
-        if (!systemTransitionAllowed(run, request, actor, databaseNow)) {
-            return Optional.empty();
-        }
-        return Optional.of(insertTerminal(run, request, databaseNow));
+        return TenantContext.runAsSystem(() -> AppContext.runAsSystem(() -> {
+            AgentRun run = runMapper.selectByRunIdForUpdate(request.runId());
+            LocalDateTime databaseNow = runMapper.selectDatabaseNow();
+            if (!systemTransitionAllowed(run, request, actor, databaseNow)) {
+                return Optional.empty();
+            }
+            return Optional.of(insertTerminal(run, request, databaseNow));
+        }));
     }
 
     @Override
@@ -246,8 +260,10 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
         boolean publishRequired = envelope.outputType() != null;
         AgentEvent row = AgentEvent.builder()
                 .runId(run.getRunId())
-                // 运行期落库运行在系统模式（跳过租户注入），租户归属必须显式取自运行行
+                // 运行期落库多在系统模式（跳过行级注入），租户/应用归属必须
+                // 显式取自运行行（appId 列已显式落列时拦截器不再重复注入）
                 .tenantId(run.getTenantId())
+                .appId(run.getAppId())
                 .sequenceNo(sequence)
                 .schemaVersion(1)
                 .rawEventId(envelope.rawEventId())

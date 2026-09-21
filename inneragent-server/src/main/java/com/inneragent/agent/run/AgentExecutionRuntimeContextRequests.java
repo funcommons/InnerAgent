@@ -19,6 +19,7 @@ import com.inneragent.agent.runtime.AgentRuntimeSchedulers;
 import com.inneragent.agent.run.model.ResumedAgentRun;
 import com.inneragent.agent.run.model.StartedAgentRun;
 import com.inneragent.platform.context.AppContext;
+import com.inneragent.platform.tenant.TenantContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -26,6 +27,7 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 @Component
 public final class AgentExecutionRuntimeContextRequests {
@@ -58,7 +60,7 @@ public final class AgentExecutionRuntimeContextRequests {
         Objects.requireNonNull(started, "started must not be null");
         Objects.requireNonNull(parentRun, "parentRun must not be null");
         Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
-        return load(started.runId()).map(run -> create(
+        return load(started.runId()).map(run -> inRunApp(run, () -> create(
                 run,
                 agentDefinitionStableKey,
                 started.ownerInstanceId(),
@@ -67,7 +69,7 @@ public final class AgentExecutionRuntimeContextRequests {
                 projectContext,
                 parentRun,
                 toolExecutionMode,
-                PipelineRequestContext.Kind.PIPELINE));
+                PipelineRequestContext.Kind.PIPELINE)));
     }
 
     public Mono<AgentScopeRuntimeContextRequest> forRoot(
@@ -82,7 +84,7 @@ public final class AgentExecutionRuntimeContextRequests {
                 throw new IllegalArgumentException(
                         "Root RuntimeContext cannot be created for a child run");
             }
-            return create(
+            return inRunApp(run, () -> create(
                     run,
                     agentDefinitionStableKey,
                     started.ownerInstanceId(),
@@ -91,7 +93,7 @@ public final class AgentExecutionRuntimeContextRequests {
                     projectContext,
                     null,
                     toolExecutionMode,
-                    PipelineRequestContext.Kind.PIPELINE);
+                    PipelineRequestContext.Kind.PIPELINE));
         });
     }
 
@@ -101,7 +103,7 @@ public final class AgentExecutionRuntimeContextRequests {
             ToolExecutionMode toolExecutionMode) {
         Objects.requireNonNull(resumed, "resumed must not be null");
         Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
-        return load(resumed.runId()).map(run -> create(
+        return load(resumed.runId()).map(run -> inRunApp(run, () -> create(
                 run,
                 agentDefinitionStableKey,
                 resumed.newOwnerInstanceId(),
@@ -110,18 +112,37 @@ public final class AgentExecutionRuntimeContextRequests {
                 run.getProjectId() != null ? new ProjectContext(run.getProjectId()) : null,
                 parentForResume(run),
                 toolExecutionMode,
-                PipelineRequestContext.Kind.PIPELINE));
+                PipelineRequestContext.Kind.PIPELINE)));
     }
 
+    /**
+     * [adapt] 多应用运行 500 二轮根修:按全局唯一 run_id 的系统查找脱离
+     * 环境行级注入。run_id 全局唯一且入口已鉴权,此处查找可能在丢失
+     * ThreadLocal 上下文的调度线程上执行(netty/agentscope 内部线程提交),
+     * 环境 AppContext/TenantContext 缺失时行级拦截器按缺省 app 1/环境租户
+     * 过滤,查不到非缺省应用的 run 行(真机实证:注入 app_id 正确、但
+     * 租户过滤与环境回落租户错位同样致命)。改为系统模式(双列注入均跳过)
+     * 查行,行到手后以行归属恢复上下文(inRunApp)。
+     */
     private Mono<AgentRun> load(String runId) {
         return Mono.fromCallable(() -> {
-                    AgentRun run = runRepository.findRun(runId);
+                    AgentRun run = TenantContext.runAsSystem(() ->
+                            AppContext.runAsSystem(() ->
+                                    runRepository.findRun(runId)));
                     if (run == null) {
                         throw new IllegalStateException("Agent run does not exist: " + runId);
                     }
                     return run;
                 })
                 .subscribeOn(schedulers.journal());
+    }
+
+    /**
+     * 以运行行归属执行组装:权限面(grant 目录/resolve_scope)按行的 app
+     * 解析,不再依赖执行线程的环境 AppContext。
+     */
+    private <T> T inRunApp(AgentRun run, Supplier<T> action) {
+        return AppContext.runInApp(run.getAppId(), action);
     }
 
     private AgentScopeRuntimeContextRequest create(
@@ -170,10 +191,17 @@ public final class AgentExecutionRuntimeContextRequests {
                 project,
                 new PipelineRequestContext(
                         persisted.getRunId(), requestKind),
-                new ToolExecutionContext(userId, 1, userId, persisted.getTenantId(),
+                // 内核契约要求正数租户(ToolExecutionContext 构造校验);运行行
+                // 的 tenant_id 现与会话/消息/事件行同口径保留 0(=无租户),
+                // 仅在此处对内核入参兜底,不再污染运行行归属。
+                new ToolExecutionContext(userId, 1, userId, kernelTenantId(persisted.getTenantId()),
                         persisted.getRunId()),
                 CancellationContext.noop(),
                 permissionContext(userId, toolExecutionMode));
+    }
+
+    private static long kernelTenantId(Long tenantId) {
+        return tenantId != null && tenantId > 0 ? tenantId : 1L;
     }
 
     /**
@@ -197,7 +225,10 @@ public final class AgentExecutionRuntimeContextRequests {
         if (child.getParentRunId() == null) {
             return null;
         }
-        AgentRun parent = runRepository.findRun(child.getParentRunId());
+        // 父行同按全局唯一 run_id 系统查找(见 load 注释)
+        AgentRun parent = TenantContext.runAsSystem(() ->
+                AppContext.runAsSystem(() ->
+                        runRepository.findRun(child.getParentRunId())));
         if (parent == null
                 || parent.getOwnerInstanceId() == null
                 || parent.getOwnerInstanceId().isBlank()

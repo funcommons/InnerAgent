@@ -20,6 +20,14 @@ import com.inneragent.platform.common.TenantBaseEntity;
 @AllArgsConstructor
 public class AgentEvent {
 
+    /**
+     * [adapt] 多应用运行 500 二轮根修:所属应用 ID。运行期事件写入以运行行
+     * 归属显式落列(见 MySqlAgentEventRepository#insertEvent,与 tenantId
+     * 同范);未显式设置时(null,NOT_NULL 策略不落列)仍由行级拦截器按
+     * 环境注入,读路径 SELECT * 反查映射。
+     */
+    private Long appId;
+
     @TableId(type = IdType.AUTO)
     private Long id;
 

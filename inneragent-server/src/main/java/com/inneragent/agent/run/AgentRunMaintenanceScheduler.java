@@ -55,8 +55,14 @@ public final class AgentRunMaintenanceScheduler {
             fixedDelayString =
                     "${fusion.agentscope.v2.execution.maintenance-delay-ms:5000}")
     public void maintain() {
-        // 定时任务线程天然跨租户：统一以系统模式执行
-        TenantContext.runAsSystem(() -> domaintain());
+        // 定时任务线程天然跨租户跨应用：统一以系统模式执行(租户+应用行级
+        // 注入均跳过,AppContext.runAsSystem 与 TenantContext.runAsSystem 对齐;
+        // 调度器传播器会延续系统身份到 journal 线程)。此前只跳过租户,应用列
+        // 仍按缺省 1 注入——多应用部署下 app≠1 的运行租约收敛/取消重试/投影
+        // 恢复扫描全部扫不到(多应用运行 500 二轮根修顺带修正)。
+        TenantContext.runAsSystem(() ->
+                com.inneragent.platform.context.AppContext.runAsSystem(
+                        this::domaintain));
     }
 
     void domaintain() {

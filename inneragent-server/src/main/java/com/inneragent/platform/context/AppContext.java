@@ -18,12 +18,29 @@ public final class AppContext {
     private static final long DEFAULT_APP_ID = 1L;
 
     private static final ThreadLocal<Long> APP_ID = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> IGNORE = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     private AppContext() {
     }
 
     public static void setAppId(Long appId) {
         APP_ID.set(appId);
+    }
+
+    /**
+     * 当前是否处于系统模式（按全局唯一 ID 的系统查找，行级拦截器跳过
+     * app_id 注入）。与 {@link com.inneragent.platform.tenant.TenantContext#isIgnored()}
+     * 语义对齐。
+     */
+    public static boolean isIgnored() {
+        return Boolean.TRUE.equals(IGNORE.get());
+    }
+
+    /**
+     * 供跨线程传播（如调度器任务装饰器）显式恢复系统模式。
+     */
+    public static void setIgnore(boolean ignore) {
+        IGNORE.set(ignore);
     }
 
     /**
@@ -43,6 +60,29 @@ public final class AppContext {
 
     public static void clear() {
         APP_ID.remove();
+        IGNORE.remove();
+    }
+
+    public static void runAsSystem(Runnable action) {
+        runAsSystem(() -> {
+            action.run();
+            return null;
+        });
+    }
+
+    /**
+     * 系统模式执行：跳过 app_id 行级注入，用于按全局唯一 ID（run_id 等）
+     * 定位数据的调度/系统路径。调用方必须已完成归属校验，或在拿到行后
+     * 以 {@link #runInApp(Long, Runnable)} 恢复行级归属。
+     */
+    public static <T> T runAsSystem(Supplier<T> action) {
+        Boolean previous = IGNORE.get();
+        IGNORE.set(Boolean.TRUE);
+        try {
+            return action.get();
+        } finally {
+            IGNORE.set(previous);
+        }
     }
 
     public static void runInApp(Long appId, Runnable action) {

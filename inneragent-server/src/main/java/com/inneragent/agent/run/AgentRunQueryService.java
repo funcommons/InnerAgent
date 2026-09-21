@@ -172,7 +172,10 @@ public final class AgentRunQueryService {
         }
         if ("TOOL_CALL".equals(event.outputType())
                 || "TOOL_FINISHED".equals(event.outputType())) {
-            return journal(() -> projectNow(run, event));
+            // [adapt] 多应用运行 500 二轮根修:工具增量按全局 run_id+tool_call_id
+            // 读事件行,可能由丢失上下文的唤醒/轮询线程提交 —— 系统模式读取,
+            // 用户归属鉴权已在入口完成
+            return systemJournal(() -> projectNow(run, event));
         }
         return Mono.fromSupplier(() -> projectNow(run, event));
     }
@@ -182,7 +185,7 @@ public final class AgentRunQueryService {
         if (terminalSequence == null) {
             return Mono.empty();
         }
-        return journal(() -> {
+        return systemJournal(() -> {
             List<CommittedAgentEvent> events = eventRepository.loadReplayPage(
                     run.getRunId(), terminalSequence - 1, terminalSequence, 1);
             if (events.size() != 1
@@ -558,6 +561,17 @@ public final class AgentRunQueryService {
 
     private <T> Mono<T> journal(Supplier<T> operation) {
         return Mono.fromCallable(operation::get)
+                .subscribeOn(schedulers.journal());
+    }
+
+    /**
+     * [adapt] 多应用运行 500 二轮根修:按全局唯一 run_id 的系统读——租户与
+     * 应用行级注入均跳过(见 AgentExecutionRuntimeContextRequests.load 注释)。
+     */
+    private <T> Mono<T> systemJournal(Supplier<T> operation) {
+        return Mono.fromCallable(() -> com.inneragent.platform.tenant.TenantContext
+                        .runAsSystem(() -> com.inneragent.platform.context.AppContext
+                                .runAsSystem(operation::get)))
                 .subscribeOn(schedulers.journal());
     }
 

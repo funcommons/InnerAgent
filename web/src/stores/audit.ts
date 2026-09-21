@@ -27,7 +27,8 @@ export interface DecisionSourceOption {
   desc: string
 }
 
-/** decision_source 字典兜底(V22 真实码值 + V8 expired;「高危 100% 确认」的日志证明锚点) */
+/** decision_source 字典兜底(V22 真实码值 + V8 expired + P2-W5 admin;「高危 100%
+ *  确认」的日志证明锚点) */
 export const DECISION_SOURCES: Array<{ value: DecisionSource; label: string; desc: string }> = [
   { value: 'mode-default', label: '模式默认', desc: '按权限模式:只读直通/写确认' },
   { value: 'user-grant', label: '用户授权', desc: '命中用户「总是允许」授权' },
@@ -35,6 +36,7 @@ export const DECISION_SOURCES: Array<{ value: DecisionSource; label: string; des
   { value: 'live-confirm', label: '实时确认', desc: '用户在确认卡上批准/拒绝(T3b 实弹决策)' },
   { value: 'expired', label: '确认超时', desc: '确认等待超时系统裁决(过期=denied)' },
   { value: 'full-access', label: 'FULL_ACCESS', desc: '全放行模式(一次性确认已审计)' },
+  { value: 'admin', label: '管理面', desc: '管理面定义变更(提示词编辑/导入导出)' },
 ]
 
 /** 字典项 → 下拉选项:已知码值沿用中文标签,新档位以 code 展示 + 服务端说明 */
@@ -43,7 +45,8 @@ function optionFor(entry: AuditDictionaryEntry): DecisionSourceOption {
   return known ?? { value: entry.code, label: entry.code, desc: entry.description }
 }
 
-/** decision 字典(ia_audit_log.decision 真实码值) */
+/** decision 字典(ia_audit_log.decision 真实码值;run-terminated=terminate-run
+ *  审计,blocked/redacted=内容安全 ingress/egress——字典端点尚未枚举,兜底补齐) */
 export const AUDIT_DECISIONS: Array<{ value: AuditDecision; label: string; tag: 'success' | 'danger' | 'warning' | 'info' }> = [
   { value: 'allowed', label: '放行', tag: 'success' },
   { value: 'denied', label: '拒绝', tag: 'danger' },
@@ -54,6 +57,11 @@ export const AUDIT_DECISIONS: Array<{ value: AuditDecision; label: string; tag: 
   { value: 'tool_disabled', label: '停用失效', tag: 'warning' },
   { value: 'schema_compatible', label: 'schema 兼容刷新', tag: 'info' },
   { value: 'schema_breaking', label: 'schema 破坏待确认', tag: 'warning' },
+  { value: 'run-terminated', label: '运行终止', tag: 'danger' },
+  { value: 'blocked', label: '内容拦截', tag: 'danger' },
+  { value: 'redacted', label: '内容脱敏', tag: 'warning' },
+  { value: 'definition-updated', label: '定义变更', tag: 'info' },
+  { value: 'definition-imported', label: '定义导入', tag: 'success' },
 ]
 
 export const useAuditStore = defineStore('audit', {

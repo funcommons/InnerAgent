@@ -1,10 +1,14 @@
 /**
  * [new] msw 请求处理器全集(dev 模式演示后端/单测拦截层)。
  * 行为按服务端真实控制器逐条镜像(AdminAppController/AdminToolController/
- * AdminGrantController/AdminAuditController/AdminModelConfigController/
- * WebhookDeliveryAdminController + 对应 Service);信封 {code,msg,data},
- * 错误 HTTP 状态=业务 code;认证对齐 AdminTokenFilter 双轨(DEF-01:Bearer
- * 会话 token 无效 401;X-IA-Admin-Key 缺失/无效 403 缺省封闭)。
+ * AdminGrantController/AdminAgentDefinitionController/AdminAuditController/
+ * AdminModelConfigController/WebhookDeliveryAdminController + 对应 Service);
+ * 信封 {code,msg,data},错误 HTTP 状态=业务 code;认证对齐 AdminTokenFilter
+ * 双轨(DEF-01:Bearer 会话 token 无效 401;X-IA-Admin-Key 缺失/无效 403
+ * 缺省封闭)。
+ * P2 尾批镜像:tools/grants 分页兼容形(缺省数组/传参 PageResult)、工具体检
+ * check+check-batch(V17 检查矩阵)、definitions 全域(列表/详情/提示词编辑/
+ * export/import)、审计字典扩档(admin/definition-*)。
  * 待服务端落地的端点暂由本层供数(跟踪:99-优化建议.md #2):circuit-breaker
  * 全域、/webhooks/config 配置域;落地后 msw 仅作 dev 演示,不参与联调。
  *
@@ -25,11 +29,16 @@ import type { DefaultBodyType } from 'msw'
 import type { CommonResult, PageResult } from '@/api/common'
 import type {
   CircuitBreakerEvent,
+  DefinitionBundleEntry,
+  IaAgentDefinition,
   IaApp,
   IaModelApiConfig,
   IaToolGrant,
   IaToolRegistry,
   IaToolSchemaHistory,
+  ToolCheckResult,
+  ToolHealthCheckItem,
+  ToolHealthStatus,
   ToolRegisterReq,
   WebhookDelivery,
   WebhookEvent,
@@ -258,16 +267,23 @@ function invalidateGrantsByFqn(toolFqn: string, reason: IaToolGrant['invalidated
 }
 
 const toolHandlers = [
+  // P2-W5 分页兼容形(镜像 AdminToolController.list):pageNo/pageSize 均缺省 →
+  // 旧全量数组;任一出现 → PageResult(list/total/pageNo/pageSize,缺省 1/100);
+  // 排序镜像 orderByAsc(serverKey, toolName)。
   http.get('/ia/api/v1/admin/tools', ({ request }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied
     const url = new URL(request.url)
     const serverKey = url.searchParams.get('serverKey')
     const enabled = url.searchParams.get('enabled')
-    let list = store.tools
+    const pageNo = url.searchParams.get('pageNo')
+    const pageSize = url.searchParams.get('pageSize')
+    let list = [...store.tools].sort((a, b) =>
+      a.serverKey.localeCompare(b.serverKey) || a.toolName.localeCompare(b.toolName))
     if (serverKey) list = list.filter(t => t.serverKey === serverKey)
     if (enabled !== null) list = list.filter(t => String(t.enabled) === enabled)
-    return ok(list) // 真实形:数组,无分页
+    if (pageNo === null && pageSize === null) return ok(list) // 兼容形:数组
+    return ok(paginate(list, Number(pageNo ?? 1), Number(pageSize ?? 100)))
   }),
   http.get('/ia/api/v1/admin/tools/:id', ({ request, params }) => {
     const denied = requireAdminCredential(request)
@@ -487,11 +503,102 @@ const toolHandlers = [
     store.tools.splice(idx, 1)
     return ok(true)
   }),
+  // 工具体检 v1(V17,镜像 ToolHealthService 检查矩阵):endpoint_reachable →
+  // tool_present → schema_fingerprint → annotations_diff;任一漂移 → degraded,
+  // 握手失败 → unreachable。结论与明细落库(GET /admin/tools/{id} 可回读)。
+  http.post('/ia/api/v1/admin/tools/:id/check', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const t = store.tools.find(x => x.id === Number(params.id))
+    if (!t) return fail(404, `工具不存在: ${params.id}`)
+    return ok(runMockCheck(t))
+  }),
+  // 批量/全量体检(镜像 AdminToolController.checkBatch 受理回执形;mock 同步
+  // 执行完再返回,服务端为异步单线程逐个——UI 均按「受理后刷新可查」处理)
+  http.post('/ia/api/v1/admin/tools/check-batch', async ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const body = await request.json().catch(() => ({})) as { ids?: number[] }
+    const wanted = Array.isArray(body?.ids) && body.ids.length ? [...new Set(body.ids)] : null
+    const targets = wanted ? store.tools.filter(t => wanted.includes(t.id)) : [...store.tools]
+    const skipped = wanted ? wanted.filter(id => !targets.some(t => t.id === id)) : []
+    for (const t of targets) runMockCheck(t)
+    return ok({ accepted: true, total: targets.length, skipped })
+  }),
 ]
+
+/**
+ * mock 宿主清单(镜像 McpToolHealthChecker 探活通道的 mock 形):
+ * - host_app 经宿主桥一律可达;third_party endpointUrl 含 'down' → 握手失败
+ *   (unreachable);清单缺失注册工具名 → tool_present 漂移(degraded);
+ * - 清单条目 schemaSha256/annotationsJson 给定且与注册行不等 → 指纹/注解
+ *   漂移(degraded);缺省=与注册一致(pass)。
+ */
+const MOCK_HOST_MANIFEST: Record<string, Array<{ name: string; schemaSha256?: string; annotationsJson?: string }>> = {
+  demo_host: [
+    { name: 'get_user' },
+    { name: 'update_user' },
+    { name: 'reset_password' },
+    { name: 'list_login_records' },
+    // 注解漂移演示:宿主不再上报 destructiveHint(注册行仍有)
+    { name: 'delete_flow', annotationsJson: '{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":false}' },
+    // 指纹漂移演示:宿主 schema 与注册快照不一致
+    { name: 'refresh_cache', schemaSha256: 'sha256:drift0008' },
+    { name: 'export_users' },
+  ],
+  crm: [{ name: 'search_customers' }],
+}
+
+/** 执行检查矩阵并落库体检位(镜像 ToolHealthService.executeAndPersist) */
+function runMockCheck(t: IaToolRegistry): ToolCheckResult {
+  const checks: ToolHealthCheckItem[] = []
+  const finish = (status: ToolHealthStatus): ToolCheckResult => {
+    const detail = { status, checks: checks.map(c => ({ ...c, detail: c.detail ?? undefined, advice: c.advice ?? undefined })) }
+    t.healthStatus = status
+    t.lastCheckedAt = nowIso()
+    t.healthDetailJson = JSON.stringify(detail)
+    return { toolId: t.id, fqn: t.fqn, toolName: t.toolName, status, checks, detailJson: t.healthDetailJson }
+  }
+  if (t.endpointUrl?.includes('down')) {
+    checks.push({ check: 'endpoint_reachable', status: 'drift', detail: 'MCP initialize 握手失败(连接拒绝/超时)', advice: '宿主端点不可达:核对 endpoint_url 与宿主桥可用性,或注销该工具' })
+    return finish('unreachable')
+  }
+  checks.push({ check: 'endpoint_reachable', status: 'pass', detail: 'MCP initialize/listTools 握手成功' })
+  const manifest = MOCK_HOST_MANIFEST[t.serverKey] ?? []
+  const host = manifest.find(m => m.name === t.toolName)
+  if (!host) {
+    checks.push({ check: 'tool_present', status: 'drift', detail: `宿主清单 ${manifest.length} 个工具中不含 ${t.toolName}`, advice: '宿主可能已下线/改名该工具:核对宿主,或注销注册行(v1 归入 degraded 档)' })
+    return finish('degraded')
+  }
+  checks.push({ check: 'tool_present', status: 'pass', detail: 'toolName 在宿主清单中' })
+  let status: ToolHealthStatus = 'ok'
+  if (host.schemaSha256 !== undefined && host.schemaSha256 !== t.schemaSha256) {
+    checks.push({ check: 'schema_fingerprint', status: 'drift', detail: `注册 ${shortSha(t.schemaSha256)} ≠ 宿主 ${shortSha(host.schemaSha256)}`, advice: 'schema 指纹漂移:建议经 POST /admin/tools/{id}/schema 重发走活刷新分诊' })
+    status = 'degraded'
+  } else {
+    checks.push({ check: 'schema_fingerprint', status: 'pass', detail: '指纹一致' })
+  }
+  if (host.annotationsJson !== undefined && host.annotationsJson !== t.annotationsJson) {
+    checks.push({ check: 'annotations_diff', status: 'drift', detail: '差异键: destructiveHint', advice: '注解与宿主上报存在差异(readOnlyHint/idempotentHint 等策略软输入):建议复核风险级与 resumeSafe' })
+    status = 'degraded'
+  } else {
+    checks.push({ check: 'annotations_diff', status: 'pass', detail: '注解一致' })
+  }
+  return finish(status)
+}
+
+/** 指纹短形(镜像 ToolHealthService.shortSha) */
+function shortSha(sha: string | null): string {
+  if (!sha) return '(empty)'
+  return sha.length <= 8 ? sha : sha.slice(0, 8) + '…'
+}
 
 // ==================== 工具授权(镜像 AdminGrantController/ToolGrantService) ====================
 
 const grantHandlers = [
+  // P2-W5 分页兼容形(镜像 AdminGrantController.list):pageNo/pageSize 均缺省 →
+  // 旧全量数组;任一出现 → PageResult(缺省 1/100);activeOnly 默认 true 且已
+  // 下推 SQL 条件(invalidated=FALSE),计数与过滤一致。
   http.get('/ia/api/v1/admin/grants', ({ request }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied
@@ -499,6 +606,8 @@ const grantHandlers = [
     const userId = url.searchParams.get('userId')
     const toolName = url.searchParams.get('toolName')
     const scope = url.searchParams.get('scope')
+    const pageNo = url.searchParams.get('pageNo')
+    const pageSize = url.searchParams.get('pageSize')
     const activeOnly = url.searchParams.get('activeOnly') !== 'false' // 服务端默认 true
     let list = [...store.grants].sort((a, b) => b.id - a.id) // 镜像 orderByDesc(id)
     if (userId) list = list.filter(g => g.userId === Number(userId))
@@ -509,7 +618,8 @@ const grantHandlers = [
       list = tool ? list.filter(g => g.toolFqn === tool.fqn) : []
     }
     if (activeOnly) list = list.filter(g => !g.invalidated) // deleted 行已物理移除
-    return ok(list) // 真实形:数组,无分页
+    if (pageNo === null && pageSize === null) return ok(list) // 兼容形:数组
+    return ok(paginate(list, Number(pageNo ?? 1), Number(pageSize ?? 100)))
   }),
   http.post('/ia/api/v1/admin/grants', async ({ request }) => {
     const denied = requireAdminCredential(request)
@@ -567,10 +677,249 @@ const grantHandlers = [
   }),
 ]
 
+// ==================== Agent 定义(镜像 AdminAgentDefinitionController,P2-W5) ====================
+
+const DEFINITION_SLOTS = ['systemPrompt', 'instructionTemplate', 'greeting'] as const
+const DEFINITION_KINDS = ['main', 'sub']
+const MAX_PROMPT_LENGTH = 65_536
+
+/** 定义行 → bundle 条目(镜像 AgentDefinitionAdminService.toEntry:三槽全量导出) */
+function toBundleEntry(d: IaAgentDefinition): DefinitionBundleEntry {
+  return {
+    definitionId: d.id,
+    agentType: d.agentType,
+    name: d.name,
+    specJson: d.spec,
+    prompts: [
+      { slot: 'systemPrompt', content: d.prompts.systemPrompt },
+      { slot: 'instructionTemplate', content: d.prompts.instructionTemplate },
+      { slot: 'greeting', content: d.prompts.greeting },
+    ],
+  }
+}
+
+/** 定义管理审计(镜像 auditImport/updatePrompt:tool_fqn=agent-definition:<key>) */
+function pushDefinitionAudit(
+  decision: 'definition-updated' | 'definition-imported',
+  agentType: string,
+  params: Record<string, unknown>,
+  summary: string,
+): void {
+  store.auditLogs.unshift({
+    id: genId(), appId: 1, tenantId: 0, userId: null, conversationId: null, runId: null,
+    toolFqn: `agent-definition:${agentType}`,
+    decision, decisionSource: 'admin',
+    riskLevel: null, paramsMaskedJson: JSON.stringify(params),
+    resultSummary: summary, errorText: null, durationMs: null, createTime: nowIso(),
+  })
+}
+
+const definitionHandlers = [
+  // 列表:端点缺省即分页形 PageResult(缺省 1/10,agentKey 升序)——无数组兼容档
+  http.get('/ia/api/v1/admin/definitions', ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const url = new URL(request.url)
+    const list = [...store.definitions].sort((a, b) => a.agentType.localeCompare(b.agentType))
+    return ok(paginate(list, Number(url.searchParams.get('pageNo') ?? 1), Number(url.searchParams.get('pageSize') ?? 10)))
+  }),
+  http.get('/ia/api/v1/admin/definitions/:id', ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const d = store.definitions.find(x => x.id === Number(params.id))
+    return d ? ok(d) : fail(404, `Agent 定义不存在: ${params.id}`)
+  }),
+  // 提示词单槽编辑(镜像 AgentDefinitionAdminService.updatePrompt:slot 值域/
+  // content 非空/65536 上限/systemPrompt 非空白;旧值快照落审计,fail-closed)
+  http.put('/ia/api/v1/admin/definitions/:id/prompt', async ({ request, params }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const d = store.definitions.find(x => x.id === Number(params.id))
+    if (!d) return fail(404, `Agent 定义不存在: ${params.id}`)
+    const body = (await request.json()) as { slot?: string; content?: string | null }
+    const slot = typeof body.slot === 'string' ? body.slot.trim() : ''
+    if (!DEFINITION_SLOTS.includes(slot as never)) {
+      return fail(400, `未知提示词槽位: ${body.slot ?? ''},允许值 ${DEFINITION_SLOTS.join('/')}`)
+    }
+    if (body.content === null || body.content === undefined) {
+      return fail(400, 'content 不能为空(清空槽位传空字符串)')
+    }
+    if (body.content.length > MAX_PROMPT_LENGTH) {
+      return fail(400, `提示词超过长度上限 ${MAX_PROMPT_LENGTH} 字符: 当前 ${body.content.length}`)
+    }
+    if (slot === 'systemPrompt' && !body.content.trim()) {
+      return fail(400, 'systemPrompt 不能为空白')
+    }
+    const oldContent = d.prompts[slot as keyof typeof d.prompts]
+    d.prompts[slot as keyof typeof d.prompts] = body.content
+    pushDefinitionAudit('definition-updated', d.agentType, {
+      definitionId: d.id, agentType: d.agentType, slot, oldContent: oldContent ?? '',
+    }, `prompt edited via admin; slot=${slot}`)
+    return ok(d)
+  }),
+  // 导出 bundle(schemaVersion=1;ids 缺省=全量,未知 id 静默忽略)
+  http.post('/ia/api/v1/admin/definitions/export', async ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const body = await request.json().catch(() => ({})) as { ids?: number[] }
+    let rows = [...store.definitions].sort((a, b) => a.agentType.localeCompare(b.agentType))
+    if (Array.isArray(body?.ids) && body.ids.length) {
+      const wanted = new Set(body.ids)
+      rows = rows.filter(d => wanted.has(d.id))
+    }
+    return ok({ schemaVersion: 1, exportedAt: nowIso(), definitions: rows.map(toBundleEntry) })
+  }),
+  // 导入(镜像 AgentDefinitionAdminService.importBundle:bundle 级校验 400 →
+  // 条目级校验进 errors[] 继续其余 → 冲突按 skip/overwrite;dryRun 零副作用;
+  // created+updated+skipped 只含有效条目,errors[] 不占 skipped)
+  http.post('/ia/api/v1/admin/definitions/import', async ({ request }) => {
+    const denied = requireAdminCredential(request)
+    if (denied) return denied
+    const body = (await request.json()) as { bundle?: unknown; conflictPolicy?: string; dryRun?: boolean }
+    const policy = body.conflictPolicy ? body.conflictPolicy.trim().toLowerCase() : 'skip'
+    if (policy !== 'skip' && policy !== 'overwrite') {
+      return fail(400, `conflictPolicy 仅支持 skip/overwrite: ${body.conflictPolicy}`)
+    }
+    const dryRun = body.dryRun === true
+    const bundle = (body.bundle ?? null) as { schemaVersion?: unknown; definitions?: unknown } | null
+    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
+      return fail(400, 'bundle 必须为 JSON 对象')
+    }
+    if (bundle.schemaVersion !== 1) {
+      return fail(400, `不支持的 bundle schemaVersion: ${String(bundle.schemaVersion)},当前仅支持 1`)
+    }
+    if (!Array.isArray(bundle.definitions)) {
+      return fail(400, 'bundle.definitions 必须为数组')
+    }
+    const errors: Array<{ agentType: string | null; reason: string }> = []
+    let created = 0
+    let updated = 0
+    let skipped = 0
+    for (const element of bundle.definitions) {
+      const echoType = (element as { agentType?: unknown })?.agentType
+      const agentTypeEcho = typeof echoType === 'string' ? echoType : null
+      try {
+        const entry = parseDefinitionEntry(element)
+        const existing = store.definitions.find(d => d.agentType === entry.agentType)
+        if (!existing) {
+          if (!dryRun) {
+            const row = entryToRow(entry)
+            store.definitions.push(row)
+            pushDefinitionAudit('definition-imported', entry.agentType,
+              { agentType: entry.agentType, action: 'created', schemaVersion: 1 },
+              'definition imported via admin; action=created')
+          }
+          created++
+        } else if (policy === 'skip') {
+          skipped++
+        } else {
+          if (!dryRun) {
+            existing.name = entry.name
+            if (entry.specJson) existing.spec = { ...existing.spec, ...entry.specJson }
+            if (typeof entry.specJson?.kind === 'string') existing.kind = entry.specJson.kind as 'main' | 'sub'
+            if (typeof entry.specJson?.enabled === 'boolean') existing.enabled = entry.specJson.enabled
+            for (const p of entry.prompts) {
+              existing.prompts[p.slot as keyof typeof existing.prompts] = p.content
+            }
+            pushDefinitionAudit('definition-updated', entry.agentType,
+              { agentType: entry.agentType, action: 'overwritten', schemaVersion: 1 },
+              'definition imported via admin; action=overwritten')
+          }
+          updated++
+        }
+      } catch (invalidEntry) {
+        errors.push({ agentType: agentTypeEcho, reason: invalidEntry instanceof Error ? invalidEntry.message : String(invalidEntry) })
+      }
+    }
+    return ok({ dryRun, created, updated, skipped, errors })
+  }),
+]
+
+/** 条目级解析与校验(镜像 parseEntry/validateSpec/toNewRow 的 400 语义) */
+function parseDefinitionEntry(element: unknown): DefinitionBundleEntry {
+  if (!element || typeof element !== 'object' || Array.isArray(element)) {
+    throw new Error('定义条目必须为 JSON 对象')
+  }
+  const e = element as Record<string, unknown>
+  const agentType = typeof e.agentType === 'string' ? e.agentType.trim() : ''
+  if (!agentType) throw new Error('agentType 不能为空')
+  if (agentType.length > 64) throw new Error(`agentType 超长(≤64): ${agentType}`)
+  const name = typeof e.name === 'string' ? e.name.trim() : ''
+  if (!name) throw new Error(`name 不能为空: ${agentType}`)
+  if (name.length > 255) throw new Error(`name 超长(≤255): ${agentType}`)
+  const specJson = (e.specJson ?? null) as Record<string, unknown> | null
+  if (specJson && (Array.isArray(specJson) || typeof specJson !== 'object')) {
+    throw new Error(`specJson 必须为 JSON 对象: ${agentType}`)
+  }
+  if (specJson) {
+    const kind = specJson.kind
+    if (kind !== undefined && kind !== null && (typeof kind !== 'string' || !DEFINITION_KINDS.includes(kind))) {
+      throw new Error(`specJson.kind 仅支持 main/sub: ${agentType}`)
+    }
+    const enabled = specJson.enabled
+    if (enabled !== undefined && enabled !== null && typeof enabled !== 'boolean') {
+      throw new Error(`specJson.enabled 必须为布尔: ${agentType}`)
+    }
+    for (const field of ['toolWhitelist', 'subAgentTools'] as const) {
+      const v = specJson[field]
+      if (v !== undefined && v !== null && !Array.isArray(v)) {
+        throw new Error(`specJson.${field} 必须为数组: ${agentType}`)
+      }
+    }
+  }
+  const prompts = (e.prompts ?? []) as Array<{ slot?: unknown; content?: unknown }>
+  if (!Array.isArray(prompts)) throw new Error(`prompts 必须为数组: ${agentType}`)
+  const normalizedPrompts: DefinitionBundleEntry['prompts'] = []
+  for (const p of prompts) {
+    if (!p || typeof p !== 'object') throw new Error(`prompts 条目必须为对象: ${agentType}`)
+    const slot = typeof p.slot === 'string' ? p.slot : ''
+    if (!DEFINITION_SLOTS.includes(slot as never)) {
+      throw new Error(`未知提示词槽位: ${p.slot ?? ''},允许值 ${DEFINITION_SLOTS.join('/')}: ${agentType}`)
+    }
+    normalizedPrompts.push({ slot: slot as (typeof DEFINITION_SLOTS)[number], content: typeof p.content === 'string' ? p.content : null })
+  }
+  // 新定义必须带非空白 systemPrompt(镜像 toNewRow 落库前校验;overwrite 不受限)
+  const systemPromptEntry = normalizedPrompts.find(p => p.slot === 'systemPrompt')
+  const isNew = !store.definitions.some(d => d.agentType === agentType)
+  if (isNew && !(systemPromptEntry?.content ?? '').trim()) {
+    throw new Error(`新定义 systemPrompt 不能为空: ${agentType}`)
+  }
+  return {
+    definitionId: typeof e.definitionId === 'number' ? e.definitionId : null,
+    agentType,
+    name,
+    specJson,
+    prompts: normalizedPrompts,
+  }
+}
+
+/** bundle 条目 → 新库行(镜像 toNewRow:缺省 kind=main/enabled=true) */
+function entryToRow(entry: DefinitionBundleEntry): IaAgentDefinition {
+  const spec = entry.specJson ?? {}
+  const prompts = { systemPrompt: null, instructionTemplate: null, greeting: null } as IaAgentDefinition['prompts']
+  for (const p of entry.prompts) {
+    prompts[p.slot as keyof typeof prompts] = p.content
+  }
+  return {
+    id: genId(),
+    appId: 1,
+    agentType: entry.agentType,
+    kind: (typeof spec.kind === 'string' && DEFINITION_KINDS.includes(spec.kind) ? spec.kind : 'main') as IaAgentDefinition['kind'],
+    name: entry.name,
+    enabled: typeof spec.enabled === 'boolean' ? spec.enabled : true,
+    prompts,
+    spec: { kind: 'main', enabled: true, modelId: null, toolWhitelist: null, subAgentTools: null, contextTemplate: null, ...spec },
+    modelId: typeof spec.modelId === 'number' ? spec.modelId : null,
+  }
+}
+
 // ==================== 审计查询(镜像 AdminAuditController,W5) ====================
 
 const auditHandlers = [
-  // 字典端点(#12):decision_source/decision 实际值域(含 V8 增补 expired)
+  // 字典端点(#12):decision_source/decision 实际值域(逐条镜像
+  // ToolAuditQueryService 字典:V8 expired + P2-W5 admin/definition-updated/
+  // definition-imported。run-terminated/blocked/redacted 为真实落库码值但
+  // 服务端字典尚未枚举——web 兜底常量补齐,见 stores/audit.ts)
   http.get('/ia/api/v1/admin/audit-logs/dictionary', ({ request }) => {
     const denied = requireAdminCredential(request)
     if (denied) return denied
@@ -582,6 +931,7 @@ const auditHandlers = [
         { code: 'live-confirm', description: '确认流实弹批准' },
         { code: 'expired', description: '确认超时系统裁决(过期=denied)' },
         { code: 'full-access', description: 'FULL_ACCESS 全开放' },
+        { code: 'admin', description: '管理面定义变更(提示词编辑/导入导出)' },
       ],
       decisions: [
         { code: 'allowed', description: '工具调用放行' },
@@ -593,6 +943,8 @@ const auditHandlers = [
         { code: 'schema_breaking', description: 'schema 安全相关差异强确认' },
         { code: 'risk_upgraded', description: '风险级人工上调' },
         { code: 'tool_disabled', description: '工具停用' },
+        { code: 'definition-updated', description: 'Agent 定义变更(提示词编辑/覆盖导入)' },
+        { code: 'definition-imported', description: 'Agent 定义导入新建' },
       ],
     })
   }),
@@ -845,6 +1197,7 @@ export const handlers = [
   ...appHandlers,
   ...toolHandlers,
   ...grantHandlers,
+  ...definitionHandlers,
   ...auditHandlers,
   ...modelHandlers,
   ...circuitHandlers,

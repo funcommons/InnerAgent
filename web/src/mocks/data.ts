@@ -7,6 +7,7 @@
  */
 import type {
   CircuitBreakerEvent,
+  IaAgentDefinition,
   IaApp,
   IaAuditLog,
   IaModelApiConfig,
@@ -113,17 +114,88 @@ function tool(partial: Partial<IaToolRegistry> & Pick<IaToolRegistry, 'id' | 'se
 }
 
 export const seedTools: IaToolRegistry[] = [
-  tool({ id: 1, serverKey: 'demo_host', toolName: 'get_user', description: '按 ID 查询用户信息', riskLevel: 'low', resumeSafe: true, annotationsJson: '{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}' }),
+  tool({
+    id: 1, serverKey: 'demo_host', toolName: 'get_user', description: '按 ID 查询用户信息', riskLevel: 'low', resumeSafe: true,
+    annotationsJson: '{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}',
+    // 体检演示行:全项通过 → ok(结论与明细同源,镜像 ToolHealthService.detailJson)
+    healthStatus: 'ok', lastCheckedAt: '2026-09-19T22:00:00Z',
+    healthDetailJson: JSON.stringify({
+      status: 'ok',
+      checks: [
+        { check: 'endpoint_reachable', status: 'pass', detail: 'MCP initialize/listTools 握手成功' },
+        { check: 'tool_present', status: 'pass', detail: 'toolName 在宿主清单中' },
+        { check: 'schema_fingerprint', status: 'pass', detail: '指纹一致: sha256:0001fp' },
+        { check: 'annotations_diff', status: 'pass', detail: '注解一致' },
+      ],
+    }),
+  }),
   tool({ id: 2, serverKey: 'demo_host', toolName: 'update_user', description: '更新用户资料字段', riskLevel: 'high' }),
   // 凭据类关键词(password)强制高危,且管理员不可下调(服务端 400)
   tool({ id: 3, serverKey: 'demo_host', toolName: 'reset_password', description: '重置用户密码(高危:凭据类)', riskLevel: 'high', annotationsJson: '{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":false}' }),
   tool({ id: 4, serverKey: 'demo_host', toolName: 'list_login_records', description: '查询登录记录(只读)', riskLevel: 'low', resumeSafe: true, annotationsJson: '{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}' }),
-  // 删除类关键词(delete)强制高危;lastTestStatus 为最近体检结果(真实列)
+  // 删除类关键词(delete)强制高危;lastTestStatus 为最近连通性测试结果(真实列)
   tool({ id: 5, serverKey: 'demo_host', toolName: 'delete_flow', description: '删除流程(高危:删除类)', riskLevel: 'high', adminPolicy: 'force-ask', lastTestStatus: '连通性测试超时(2026-09-19)', annotationsJson: '{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":false}' }),
   tool({ id: 6, serverKey: 'crm', toolName: 'search_customers', description: '检索客户(三方 MCP,一律确认)', riskLevel: 'medium', adminPolicy: 'force-ask', annotationsJson: '{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}' }),
-  tool({ id: 7, serverKey: 'crm', toolName: 'update_customer_note', description: '写入 CRM 客户备注', riskLevel: 'high', annotationsJson: '{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":true}' }),
+  // 体检演示行:宿主清单缺失该工具 → tool_present 漂移 → degraded(体检历史)
+  tool({
+    id: 7, serverKey: 'crm', toolName: 'update_customer_note', description: '写入 CRM 客户备注', riskLevel: 'high',
+    annotationsJson: '{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":true}',
+    healthStatus: 'degraded', lastCheckedAt: '2026-09-19T21:30:00Z',
+    healthDetailJson: JSON.stringify({
+      status: 'degraded',
+      checks: [
+        { check: 'endpoint_reachable', status: 'pass', detail: 'MCP initialize/listTools 握手成功' },
+        { check: 'tool_present', status: 'drift', detail: '宿主清单 1 个工具中不含 update_customer_note', advice: '宿主可能已下线/改名该工具:核对宿主,或注销注册行(v1 归入 degraded 档)' },
+      ],
+    }),
+  }),
   tool({ id: 8, serverKey: 'demo_host', toolName: 'refresh_cache', description: '刷新宿主缓存(幂等写)', riskLevel: 'medium', resumeSafe: true, annotationsJson: '{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}' }),
   tool({ id: 9, serverKey: 'demo_host', toolName: 'export_users', description: '导出用户清单(停用示例)', riskLevel: 'medium', enabled: false }),
+]
+
+// ==================== Agent 定义(ia_agent_definition,DefinitionView 视图形) ====================
+
+/**
+ * 定义种子(镜像 AgentDefinitionSeeder 播种后的库行:agentType 取自
+ * AiAgentRegistry 内置定义;kind=被 subAgentTools 引用者为 sub)。列表/详情
+ * 出参含提示词三槽与规格 spec(与 bundle specJson 同构)。
+ */
+function definition(partial: Partial<IaAgentDefinition> & Pick<IaAgentDefinition, 'id' | 'agentType' | 'name'>): IaAgentDefinition {
+  const base: Omit<IaAgentDefinition, 'id' | 'agentType' | 'name'> = {
+    appId: 1,
+    kind: 'main',
+    enabled: true,
+    prompts: { systemPrompt: null, instructionTemplate: null, greeting: null },
+    spec: { kind: 'main', enabled: true, modelId: null, toolWhitelist: null, subAgentTools: null, contextTemplate: null },
+    modelId: null,
+  }
+  const merged = { ...base, ...partial } as IaAgentDefinition
+  // spec.kind/enabled 与列保持一致(镜像 specJsonOf 装配)
+  merged.spec = { ...(merged.spec ?? {}), kind: merged.kind, enabled: merged.enabled }
+  return merged
+}
+
+export const seedDefinitions: IaAgentDefinition[] = [
+  definition({
+    id: 81, agentType: 'ai_media', name: '默认助手',
+    prompts: { systemPrompt: '你是 InnerAgent 默认助手,以安全可控的方式协助宿主用户完成任务。', instructionTemplate: null, greeting: '你好,我是默认助手,有什么可以帮你?' },
+    spec: { kind: 'main', enabled: true, modelId: null, toolWhitelist: null, subAgentTools: null, contextTemplate: null },
+  }),
+  definition({
+    id: 82, agentType: 'demo', name: 'InnerAgent 演示助手',
+    prompts: { systemPrompt: '你是 InnerAgent 演示助手,负责演示工具调用与确认流(高危工具一律确认)。', instructionTemplate: '收到请求后先复述目标,再选择工具执行。', greeting: '演示开始:试试让我查询或更新用户资料。' },
+    spec: { kind: 'main', enabled: true, modelId: null, toolWhitelist: ['get_user', 'update_user'], subAgentTools: null, contextTemplate: null },
+  }),
+  definition({
+    id: 83, agentType: 'script_assistant', name: '剧本对话助手',
+    prompts: { systemPrompt: '你是剧本对话助手,基于宿主上传的剧本回答结构与场次问题。', instructionTemplate: null, greeting: null },
+    spec: { kind: 'main', enabled: true, modelId: null, toolWhitelist: null, subAgentTools: null, contextTemplate: null },
+  }),
+  definition({
+    id: 84, agentType: 'storyboard_frame_executor', kind: 'sub', name: '分镜首尾帧生成执行器',
+    prompts: { systemPrompt: '你是分镜首尾帧生成执行器(子代理),仅响应宿主委派的帧生成任务。', instructionTemplate: null, greeting: null },
+    spec: { kind: 'sub', enabled: true, modelId: null, toolWhitelist: null, subAgentTools: null, contextTemplate: null },
+  }),
 ]
 
 // ==================== 工具授权(ia_tool_grant 真实列形) ====================
@@ -224,6 +296,8 @@ export interface MockStore {
   /** schema 指纹变更历史(ia_tool_schema_history,仅追加) */
   schemaHistory: IaToolSchemaHistory[]
   grants: IaToolGrant[]
+  /** Agent 定义(ia_agent_definition,P2-W5 定义管理域) */
+  definitions: IaAgentDefinition[]
   auditLogs: IaAuditLog[]
   modelConfigs: IaModelApiConfig[]
   limits: ResourceLimits
@@ -238,6 +312,7 @@ export const store: MockStore = {
   tools: [],
   schemaHistory: [],
   grants: [],
+  definitions: [],
   auditLogs: [],
   modelConfigs: [],
   limits: { ...seedLimits },
@@ -252,6 +327,7 @@ export function resetMockData(): void {
   store.apps = structuredClone(seedApps)
   store.tools = structuredClone(seedTools)
   store.schemaHistory = []
+  store.definitions = structuredClone(seedDefinitions)
   store.grants = structuredClone(seedGrants)
   store.auditLogs = structuredClone(seedAuditLogs)
   store.modelConfigs = structuredClone(seedModelConfigs)

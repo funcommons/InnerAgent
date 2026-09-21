@@ -9,6 +9,7 @@ import {
   appAdminApi,
   auditAdminApi,
   circuitAdminApi,
+  definitionAdminApi,
   modelConfigAdminApi,
   toolAdminApi,
   toolGrantAdminApi,
@@ -381,5 +382,225 @@ describe('mock 后端:契约稳健性', () => {
     expect(err.status).toBe(404)
     expect(err.code).toBe(404)
     expect(err.message).toContain('应用不存在')
+  })
+})
+
+describe('mock 后端:tools/grants 分页兼容形(P2-W5)', () => {
+  beforeEach(() => setAdminKeyGetter(() => 'k'))
+
+  it('tools:无分页参数 → 数组;带 pageNo/pageSize → PageResult(排序 serverKey,toolName)', async () => {
+    // 兼容形:数组全量(旧形不破)
+    const all = await toolAdminApi.list()
+    expect(Array.isArray(all)).toBe(true)
+    expect(all).toHaveLength(9)
+    // 分页形:任一参数出现即 PageResult
+    const page = await toolAdminApi.page({ pageNo: 1, pageSize: 4 })
+    expect(page.total).toBe(9)
+    expect(page.list).toHaveLength(4)
+    expect(page.pageNo).toBe(1)
+    expect(page.pageSize).toBe(4)
+    // 排序镜像 orderByAsc(serverKey, toolName):crm < demo_host
+    expect(page.list.map(t => t.serverKey)).toEqual(['crm', 'crm', 'demo_host', 'demo_host'])
+    // 过滤与分页同发:enabled=false 仅 1 行
+    const disabled = await toolAdminApi.page({ enabled: false, pageNo: 1, pageSize: 10 })
+    expect(disabled.total).toBe(1)
+    expect(disabled.list[0]!.fqn).toBe('mcp__demo_host__export_users')
+  })
+
+  it('grants:无分页参数 → 数组;带分页参数 → PageResult(activeOnly 默认 true)', async () => {
+    const all = await toolGrantAdminApi.list()
+    expect(Array.isArray(all)).toBe(true)
+    expect(all).toHaveLength(2) // 默认仅有效授权
+    const page = await toolGrantAdminApi.page({ activeOnly: false, pageNo: 1, pageSize: 2 })
+    expect(page.total).toBe(5)
+    expect(page.list).toHaveLength(2)
+    expect(page.list[0]!.id).toBeGreaterThan(page.list[1]!.id) // id 倒序
+    const valid = await toolGrantAdminApi.page({ pageNo: 1, pageSize: 10 })
+    expect(valid.total).toBe(2)
+  })
+})
+
+describe('mock 后端:工具体检(V17 检查矩阵)', () => {
+  beforeEach(() => setAdminKeyGetter(() => 'k'))
+
+  it('check:宿主清单缺失 → degraded(tool_present 漂移+advice);结论落库可查', async () => {
+    const result = await toolAdminApi.checkHealth(7) // crm update_customer_note 不在宿主清单
+    expect(result.status).toBe('degraded')
+    expect(result.fqn).toBe('mcp__crm__update_customer_note')
+    const present = result.checks.find(c => c.check === 'tool_present')!
+    expect(present.status).toBe('drift')
+    expect(present.advice).toContain('宿主可能已下线')
+    expect(result.detailJson).toContain('"status":"degraded"')
+    // 结论与明细落库(GET /admin/tools/{id} 可回读)
+    const row = await toolAdminApi.get(7)
+    expect(row.healthStatus).toBe('degraded')
+    expect(row.lastCheckedAt).toBeTruthy()
+    expect(JSON.parse(row.healthDetailJson!).checks).toHaveLength(2)
+  })
+
+  it('check:指纹漂移/注解漂移 → degraded(分项矩阵);全过 → ok', async () => {
+    // refresh_cache:宿主清单携带不同 schemaSha256 → 指纹漂移
+    const drift = await toolAdminApi.checkHealth(8)
+    expect(drift.status).toBe('degraded')
+    expect(drift.checks.find(c => c.check === 'schema_fingerprint')!.status).toBe('drift')
+    expect(drift.checks.find(c => c.check === 'annotations_diff')!.status).toBe('pass')
+    // delete_flow:宿主注解不再上报 destructiveHint → 注解漂移
+    const annotations = await toolAdminApi.checkHealth(5)
+    expect(annotations.status).toBe('degraded')
+    expect(annotations.checks.find(c => c.check === 'annotations_diff')!.status).toBe('drift')
+    expect(annotations.checks.find(c => c.check === 'annotations_diff')!.advice).toContain('复核风险级')
+    // get_user:四项全过 → ok
+    const okCase = await toolAdminApi.checkHealth(1)
+    expect(okCase.status).toBe('ok')
+    expect(okCase.checks).toHaveLength(4)
+    expect(okCase.checks.every(c => c.status === 'pass')).toBe(true)
+  })
+
+  it('check:third_party endpoint 含 down → unreachable(后续检查跳过)', async () => {
+    const t = await toolAdminApi.register({
+      serverKey: 'downstream', toolName: 'ping', source: 'third_party',
+      endpointUrl: 'http://down.example.com/mcp',
+    })
+    const result = await toolAdminApi.checkHealth(t.id)
+    expect(result.status).toBe('unreachable')
+    expect(result.checks).toHaveLength(1)
+    expect(result.checks[0]!.check).toBe('endpoint_reachable')
+    expect(result.checks[0]!.status).toBe('drift')
+    expect((await toolAdminApi.get(t.id)).healthStatus).toBe('unreachable')
+  })
+
+  it('check-batch:全量受理回执 + 逐行落库;ids 指定含未知 → skipped', async () => {
+    const receipt = await toolAdminApi.checkHealthBatch()
+    expect(receipt.accepted).toBe(true)
+    expect(receipt.total).toBe(9)
+    expect(receipt.skipped).toEqual([])
+    // mock 同步执行完:全部行已落体检位
+    const page = await toolAdminApi.page({ pageNo: 1, pageSize: 100 })
+    expect(page.list.every(t => t.healthStatus !== null && t.lastCheckedAt !== null)).toBe(true)
+
+    const partial = await toolAdminApi.checkHealthBatch([1, 999])
+    expect(partial.total).toBe(1)
+    expect(partial.skipped).toEqual([999])
+    await expect(toolAdminApi.checkHealth(99999)).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('字典端点扩档:decision_source 含 admin;decision 含 definition-updated/definition-imported', async () => {
+    const dict = await auditAdminApi.dictionary()
+    expect(dict.decisionSources.map(s => s.code)).toContain('admin')
+    const decisions = dict.decisions.map(d => d.code)
+    expect(decisions).toContain('definition-updated')
+    expect(decisions).toContain('definition-imported')
+  })
+})
+
+describe('mock 后端:Agent 定义管理域(P2-W5)', () => {
+  beforeEach(() => setAdminKeyGetter(() => 'k'))
+
+  it('列表:缺省即分页形(agentKey 升序);详情 404 兜底', async () => {
+    const page = await definitionAdminApi.page({ pageNo: 1, pageSize: 2 })
+    expect(page.total).toBe(4)
+    expect(page.list).toHaveLength(2)
+    expect(page.list.map(d => d.agentType)).toEqual(['ai_media', 'demo']) // 升序
+    const row = page.list[0]!
+    expect(row.prompts.systemPrompt).toBeTruthy()
+    expect(row.spec).toHaveProperty('kind')
+    await expect(definitionAdminApi.get(99999)).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('updatePrompt:三槽编辑生效;systemPrompt 空白/未知槽位 → 400;审计留痕 definition-updated/admin', async () => {
+    const updated = await definitionAdminApi.updatePrompt(82, { slot: 'greeting', content: '新问候语' })
+    expect(updated.prompts.greeting).toBe('新问候语')
+    // 清空槽位:传空字符串合法(instructionTemplate 原本有值)
+    const cleared = await definitionAdminApi.updatePrompt(82, { slot: 'instructionTemplate', content: '' })
+    expect(cleared.prompts.instructionTemplate).toBe('')
+    // systemPrompt 空白 → 400;未知槽位 → 400;content 缺失 → 400
+    await expect(definitionAdminApi.updatePrompt(82, { slot: 'systemPrompt', content: '   ' }))
+      .rejects.toMatchObject({ status: 400 })
+    await expect(definitionAdminApi.updatePrompt(82, { slot: 'defaultUserMessage' as never, content: 'x' }))
+      .rejects.toMatchObject({ status: 400 })
+    // 审计留痕:旧值快照进 params_masked_json(decision=definition-updated,source=admin)
+    const audit = await auditAdminApi.page({ decision: 'definition-updated', decisionSource: 'admin', pageSize: 10 })
+    expect(audit.total).toBeGreaterThanOrEqual(2)
+    const snapshot = JSON.parse(audit.list[0]!.paramsMaskedJson!)
+    expect(snapshot).toHaveProperty('slot')
+    expect(snapshot).toHaveProperty('oldContent')
+    expect(audit.list[0]!.toolFqn).toBe('agent-definition:demo')
+  })
+
+  it('export:全量 bundle(schemaVersion=1 + 三槽);ids 过滤;未知 id 静默忽略', async () => {
+    const full = await definitionAdminApi.export()
+    expect(full.schemaVersion).toBe(1)
+    expect(full.exportedAt).toBeTruthy()
+    expect(full.definitions).toHaveLength(4)
+    const entry = full.definitions.find(d => d.agentType === 'demo')!
+    expect(entry.definitionId).toBe(82)
+    expect(entry.prompts.map(p => p.slot)).toEqual(['systemPrompt', 'instructionTemplate', 'greeting'])
+    expect(entry.specJson).toHaveProperty('toolWhitelist')
+
+    const partial = await definitionAdminApi.export({ ids: [82, 999] })
+    expect(partial.definitions).toHaveLength(1)
+    expect(partial.definitions[0]!.agentType).toBe('demo')
+  })
+
+  it('import:dryRun 预演零副作用;skip 冲突计数;errors[] 收条目级校验', async () => {
+    const bundle = {
+      schemaVersion: 1,
+      exportedAt: '2026-09-21T00:00:00Z',
+      definitions: [
+        { agentType: 'demo', name: '演示助手(改)', prompts: [{ slot: 'greeting', content: '覆盖问候' }] },
+        { agentType: 'brand_new_agent', name: '全新定义', prompts: [{ slot: 'systemPrompt', content: '你是全新定义' }] },
+        { agentType: 'bad_entry', name: '', prompts: [] }, // name 缺失 → 条目级错误
+        { agentType: 'no_prompt_agent', name: '缺系统提示词', prompts: [] }, // 新定义无 systemPrompt → 错误
+      ],
+    }
+    const preview = await definitionAdminApi.import({ bundle, conflictPolicy: 'skip', dryRun: true })
+    expect(preview.dryRun).toBe(true)
+    expect(preview.created).toBe(1) // brand_new_agent
+    expect(preview.updated).toBe(0)
+    expect(preview.skipped).toBe(1) // demo 冲突按 skip
+    expect(preview.errors).toHaveLength(2)
+    expect(preview.errors.map(e => e.agentType)).toEqual(['bad_entry', 'no_prompt_agent'])
+    // 预演零副作用:库行数与内容不变
+    const after = await definitionAdminApi.page({ pageSize: 50 })
+    expect(after.total).toBe(4)
+    expect(after.list.find(d => d.agentType === 'demo')!.name).toBe('InnerAgent 演示助手')
+  })
+
+  it('import:正式导入 overwrite 覆盖+审计;bundle 级校验失败 400', async () => {
+    const bundle = {
+      schemaVersion: 1,
+      exportedAt: '2026-09-21T00:00:00Z',
+      definitions: [
+        { agentType: 'demo', name: '演示助手(覆盖)', prompts: [{ slot: 'greeting', content: '覆盖问候' }] },
+        { agentType: 'brand_new_agent', name: '全新定义', prompts: [{ slot: 'systemPrompt', content: '你是全新定义' }] },
+      ],
+    }
+    const result = await definitionAdminApi.import({ bundle, conflictPolicy: 'overwrite', dryRun: false })
+    expect(result.dryRun).toBe(false)
+    expect(result.created).toBe(1)
+    expect(result.updated).toBe(1)
+    expect(result.skipped).toBe(0)
+    expect(result.errors).toHaveLength(0)
+    // overwrite:bundle 出现的槽位覆盖,未出现的槽位(systemPrompt)保持现值
+    const demo = (await definitionAdminApi.page({ pageSize: 50 })).list.find(d => d.agentType === 'demo')!
+    expect(demo.name).toBe('演示助手(覆盖)')
+    expect(demo.prompts.greeting).toBe('覆盖问候')
+    expect(demo.prompts.systemPrompt).toContain('演示助手')
+    // created:新定义已落库
+    const created = (await definitionAdminApi.page({ pageSize: 50 })).list.find(d => d.agentType === 'brand_new_agent')!
+    expect(created.kind).toBe('main')
+    expect(created.prompts.systemPrompt).toBe('你是全新定义')
+    // 审计:definition-imported(admin)1 条
+    const importedAudit = await auditAdminApi.page({ decision: 'definition-imported', decisionSource: 'admin', pageSize: 10 })
+    expect(importedAudit.total).toBe(1)
+    expect(importedAudit.list[0]!.toolFqn).toBe('agent-definition:brand_new_agent')
+
+    // bundle 级校验:schemaVersion 不符/definitions 非数组/conflictPolicy 非法 → 400
+    await expect(definitionAdminApi.import({ bundle: { schemaVersion: 2, definitions: [] }, conflictPolicy: 'skip' }))
+      .rejects.toMatchObject({ status: 400 })
+    await expect(definitionAdminApi.import({ bundle: { schemaVersion: 1, definitions: {} }, conflictPolicy: 'skip' }))
+      .rejects.toMatchObject({ status: 400 })
+    await expect(definitionAdminApi.import({ bundle, conflictPolicy: 'merge' as never }))
+      .rejects.toMatchObject({ status: 400 })
   })
 })

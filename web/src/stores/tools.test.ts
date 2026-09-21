@@ -39,8 +39,9 @@ describe('tools store', () => {
     })
     expect(entry.fqn).toBe('mcp__x-host__do_thing')
     expect(store.toolsTotal).toBe(10)
-    expect(store.tools[0]!.fqn).toBe('mcp__x-host__do_thing')
-    expect(parseAnnotations(store.tools[0]!.annotationsJson)?.readOnlyHint).toBe(true)
+    // 列表按服务端排序(serverKey,toolName);新行在册即可
+    const row = store.tools.find(t => t.fqn === 'mcp__x-host__do_thing')!
+    expect(parseAnnotations(row.annotationsJson)?.readOnlyHint).toBe(true)
   })
 
   it('refreshSchema 分诊:unchanged/compatible/breaking 三类并存 lastTriage', async () => {

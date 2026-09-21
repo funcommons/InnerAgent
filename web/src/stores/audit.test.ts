@@ -78,20 +78,25 @@ describe('audit store', () => {
     expect(rows.every(r => r.decision === 'denied')).toBe(true)
   })
 
-  it('decision_source 与 decision 字典完备(真实码值,含 V8 expired)', () => {
-    expect(DECISION_SOURCES.map(d => d.value)).toEqual(['mode-default', 'user-grant', 'forced-policy', 'live-confirm', 'expired', 'full-access'])
+  it('decision_source 与 decision 字典完备(真实码值,含 V8 expired + P2 扩档)', () => {
+    expect(DECISION_SOURCES.map(d => d.value)).toEqual(['mode-default', 'user-grant', 'forced-policy', 'live-confirm', 'expired', 'full-access', 'admin'])
     expect(AUDIT_DECISIONS.map(d => d.value)).toEqual([
       'allowed', 'denied', 'granted', 'revoked', 'invalidated',
       'risk_upgraded', 'tool_disabled', 'schema_compatible', 'schema_breaking',
+      // P2 扩档:run-terminated(运行治理)/blocked、redacted(内容安全)/
+      // definition-updated、definition-imported(定义管理)——后三者起字典端点
+      // 尚未枚举 run-terminated/blocked/redacted,兜底常量按真实落库码值补齐
+      'run-terminated', 'blocked', 'redacted', 'definition-updated', 'definition-imported',
     ])
   })
 
-  it('#12 字典端点驱动下拉值域(含 expired;失败回退共享常量)', async () => {
+  it('#12 字典端点驱动下拉值域(含 expired + P2-W5 admin;失败回退共享常量)', async () => {
     const store = useAuditStore()
     await store.loadDictionary()
-    // msw 字典含 6 档(V8 expired),且映射保留中文标签
-    expect(store.sourceOptions.map(o => o.value)).toEqual(['mode-default', 'user-grant', 'forced-policy', 'live-confirm', 'expired', 'full-access'])
+    // msw 字典逐条镜像服务端(V8 expired + P2-W5 admin),且映射保留中文标签
+    expect(store.sourceOptions.map(o => o.value)).toEqual(['mode-default', 'user-grant', 'forced-policy', 'live-confirm', 'expired', 'full-access', 'admin'])
     expect(store.sourceOptions.find(o => o.value === 'expired')!.label).toBe('确认超时')
+    expect(store.sourceOptions.find(o => o.value === 'admin')!.label).toBe('管理面')
   })
 
   it('#12 expired 过滤:确认等待超时审计可检索', async () => {

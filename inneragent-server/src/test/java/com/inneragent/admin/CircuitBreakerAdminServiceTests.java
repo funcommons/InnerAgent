@@ -1,5 +1,8 @@
 package com.inneragent.admin;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inneragent.agent.entity.AgentRun;
 import com.inneragent.agent.mapper.AgentRunMapper;
@@ -18,7 +21,9 @@ import com.inneragent.server.admin.AppRegistration;
 import com.inneragent.server.admin.CircuitBreakerAdminService;
 import com.inneragent.server.admin.CircuitBreakerAdminService.CircuitEventView;
 import com.inneragent.server.admin.CircuitBreakerAdminService.StateView;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,6 +57,14 @@ class CircuitBreakerAdminServiceTests {
     private ToolAuditService auditService;
     private CircuitBreakerAdminService service;
     private AgentRuntimeSchedulers schedulers;
+
+    @BeforeAll
+    static void initLambdaColumnCache() {
+        // 恢复路径改定向 LambdaUpdateWrapper:单测内省 SET 子句需 MP 列缓存
+        // (Spring 装配下由 mapper 初始化,切片测试手动补 TableInfo)
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), ""), AppRegistration.class);
+    }
 
     @BeforeEach
     void setUp() {
@@ -193,7 +206,7 @@ class CircuitBreakerAdminServiceTests {
     }
 
     @Test
-    @DisplayName("恢复:清空停用三列 + 事件 reason 固定「人工恢复」(mock 契约)")
+    @DisplayName("恢复:定向 UPDATE 显式清空停用三列(null 须落库)+ 事件 reason 固定「人工恢复」")
     void resumeClearsSwitchAndRecordsEvent() {
         when(appMapper.selectById(1L)).thenReturn(app(true));
 
@@ -201,11 +214,16 @@ class CircuitBreakerAdminServiceTests {
 
         assertThat(view.type()).isEqualTo("resume");
         assertThat(view.reason()).isEqualTo("人工恢复");
-        ArgumentCaptor<AppRegistration> appCaptor = ArgumentCaptor.forClass(AppRegistration.class);
-        verify(appMapper).updateById(appCaptor.capture());
-        assertThat(appCaptor.getValue().getCircuitStopped()).isFalse();
-        assertThat(appCaptor.getValue().getCircuitStoppedAt()).isNull();
-        assertThat(appCaptor.getValue().getCircuitStopReason()).isNull();
+        // DEF-08 守卫发现:updateById 按 MP 缺省字段策略跳过 null 字段,
+        // stopped_at/stop_reason「恢复时清空」不会落库,必须走定向 SET 的 update
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        ArgumentCaptor<LambdaUpdateWrapper<AppRegistration>> wrapperCaptor =
+                ArgumentCaptor.forClass((Class) LambdaUpdateWrapper.class);
+        verify(appMapper).update(org.mockito.ArgumentMatchers.isNull(), wrapperCaptor.capture());
+        assertThat(wrapperCaptor.getValue().getSqlSet())
+                .contains("circuit_stopped=")
+                .contains("circuit_stopped_at=")
+                .contains("circuit_stop_reason=");
     }
 
     @Test

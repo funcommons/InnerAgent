@@ -1,6 +1,7 @@
 package com.inneragent.server.admin;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inneragent.agent.entity.AgentRun;
 import com.inneragent.agent.mapper.AgentRunMapper;
@@ -131,11 +132,15 @@ public class CircuitBreakerAdminService {
     }
 
     public CircuitEventView resume(long appId) {
-        AppRegistration app = requireApp(appId);
-        app.setCircuitStopped(false);
-        app.setCircuitStoppedAt(null);
-        app.setCircuitStopReason(null);
-        appMapper.updateById(app);
+        requireApp(appId);
+        // 恢复须显式清空 stopped_at/stop_reason(V14 DDL「恢复时清空」):
+        // 整行 updateById 按 MP 缺省字段策略跳过 null 字段,清空不会落库
+        // (AppRegistrationWritePathsIT 真库守卫捕获),改定向 UPDATE
+        appMapper.update(null, new LambdaUpdateWrapper<AppRegistration>()
+                .set(AppRegistration::getCircuitStopped, false)
+                .set(AppRegistration::getCircuitStoppedAt, null)
+                .set(AppRegistration::getCircuitStopReason, null)
+                .eq(AppRegistration::getId, appId));
         log.info("应用从紧急停用恢复: appId={}", appId);
         // 文案对齐 mock 契约(resume 事件 reason 固定「人工恢复」)
         return insertEvent(appId, CircuitEvent.TYPE_RESUME, null, "人工恢复", currentOperator());

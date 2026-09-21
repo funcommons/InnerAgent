@@ -1,11 +1,9 @@
 package com.inneragent.server.admin;
 
 import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.inneragent.platform.common.BaseEntity;
-import com.inneragent.platform.common.handler.JsonbTypeHandler;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -22,7 +20,10 @@ import java.time.LocalDateTime;
  * <p>V14:熔断域配置落本行(circuit_limits_json/circuit_stopped 三列,优化
  * 建议 #2 服务端半)与 Webhook 订阅两列(webhook_enabled/webhook_events;
  * url/secret 列 V2 已有),供 CircuitBreakerAdminService/WebhookConfigAdminService
- * 读写。
+ * 读写。V15:circuit_limits_json 定为 TEXT——本行为共享实体,任何 UPDATE
+ * (公钥轮换等)都整行更新携该列,JSONB+MySQL 形 JsonbTypeHandler 在运行态
+ * 连接串(无 stringtype=unspecified)下致全写路径 500(R3 DEF-08);现列
+ * 为纯文本,JSON 序列化/解析收敛在服务层 CircuitBreakerLimits。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -54,8 +55,7 @@ public class AppRegistration extends BaseEntity {
     /** Webhook 回调签名密钥(可空) */
     private String webhookSecret;
 
-    /** 熔断资源上限配置 JSON(V14;§4.7 默认值,执行层接线待后续) */
-    @TableField(typeHandler = JsonbTypeHandler.class)
+    /** 熔断资源上限配置 JSON 文本(V14 落列,V15 起 TEXT;序列化在 CircuitBreakerLimits) */
     private String circuitLimitsJson;
 
     /** 应用级紧急停用总开关(V14;TRUE 时新 run 拒绝 403) */

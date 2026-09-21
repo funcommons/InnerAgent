@@ -1,0 +1,6 @@
+{
+  "name": "report-style",
+  "displayName": "ACME 报告写作规范",
+  "description": "ACME 内部业务报告写作规范:结构模板、语气用词、数字表述与禁用清单,供报告撰写助手按需激活。",
+  "version": "1.0.0"
+}

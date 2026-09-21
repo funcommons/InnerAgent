@@ -136,3 +136,38 @@ pnpm dev        # http://localhost:9203,/api 代理到 :9300,/ia 代理到 :1809
 - [ ] 写工具确认闭环:确认卡四档行为、`/ia/tools` 出现 agent 通道工单、审计可查 `live-confirm`
 - [ ] 管理面 `webhooks/config/test` 通,`/ia/tools` 事件流出现 run 终态
 - [ ] 紧急停用演练:停用后新 run 403、resume 恢复(接入指南 §6.2)
+
+## 5 个演示 Agent(seeds/ 仿真场景库)
+
+`seeds/` 提供按 ACME 业务语境编排的 **5 main + 3 sub 定义**、`report-style` Skill 包、
+3 篇 KB 语料、零依赖三方 MCP echo 服务器,以及一条幂等开通流水线:
+
+```bash
+zsh e2e/env.sh up                        # InnerAgent server @18090(IA_ADMIN_KEY=test-key)
+zsh examples/acme-demo/seeds/provision.sh
+```
+
+流水线做七件事(可重复执行):解析/创建 acme-demo 应用(宿主签名密钥自动生成于
+`seeds/.local/`,已 gitignore)→ bundle dryRun(0 error 才继续)→ overwrite 真实导入并回查
+5+3 → Skill 构建/预览/导入/激活(激活上限 8 内,满员自动停用最早让位)→ KB 文档摄取
+(同名更新重分块 + 检索冒烟)→ 宿主桥工具注册(create_ticket/list_tickets/resolve_scope/
+query_sales;已注册跳过)→ 三方 MCP echo 服务器注册(`serverKey=acme-echo`,
+`ACME_SKIP_MCP=1` 可跳过)。
+
+| agentType | 名称 | kind | 能力主打 |
+| --- | --- | --- | --- |
+| `ticket-assistant` | 客服工单助手 | main | 宿主桥工具 + WRITE 确认卡 + 工单 SLA 语气 |
+| `knowledge-qa` | 企业知识问答 | main | mini KB 检索注入 + [KB:id] 引用溯源 + 无命中不注入 |
+| `report-writer` | 报告撰写助手 | main | Skill 按需注入(激活/不激活输出对比) |
+| `ops-analyst` | 运维数据主管 | main | 子 Agent 编排(引用 sales-query/chart-pitch,工具面收敛) |
+| `master-demo` | 全栈演示官 | main | 四能力串演(确认卡 + KB + Skill + 子 Agent) |
+| `sales-query` / `chart-pitch` / `digest-writer` | 查数/图表建议/摘要 | sub | 被引用的子 Agent(main/sub 引用图无环,深度≤3、扇出≤5) |
+
+每个 main 的 systemPrompt 都声明了「本场景演示什么」,greeting 配好开场引导;
+分场景演示剧本(打开哪页/问什么/预期看到什么)见 **[seeds/README.md](seeds/README.md)**。
+
+已知边界:对话运行内核当前仍读代码注册表(`AiAgentRegistry`),导入的定义先落
+`ia_agent_definition`(管理面「Agent 定义」页可见/可编辑/可导出),聊天直呼新
+agentType 等数据驱动内核批次;KB 文档、宿主工具注册、三方 MCP 配置与 Skill
+导入/激活走默认应用(id=1,管理面 API 无 appId 参数面),定义 bundle 走显式
+`appId`(acme-demo 应用)。

@@ -36,7 +36,8 @@ import org.testcontainers.utility.DockerImageName;
  * P2-safety 批次②随 V17__tool_registry_health_check.sql 工具体检位增补(合并时自 V16 顺延)、
  * P4-W13 随 V18__mcp_third_party_server.sql 三方 MCP 服务器两表增补、
  * P4-W13 Skill 随 V19__skill_hub.sql Skill 包两表增补、
- * P4-W14 随 V20__ia_kb.sql mini KB 两表增补、P4-W15 随 V21__ia_feedback.sql 用户反馈表增补)。
+ * P4-W14 随 V20__ia_kb.sql mini KB 两表增补、P4-W15 随 V21__ia_feedback.sql 用户反馈表增补、
+ * 收尾批次随 V22__ia_storage_config_options_text.sql 存储配置 options 列 JSONB → TEXT 增补)。
  *
  * <p>纯 JDBC + Flyway 编程式 API,不启动 Spring:在真实 PostgreSQL 17(Testcontainers)
  * 上执行 classpath:db/migration 全链迁移,断言 33 张 ia_ 业务表全部建成、种子数据落库,
@@ -118,7 +119,7 @@ class FlywayMigrationSmokeIT {
     void migrateCreatesAllIaTablesAndSeeds() throws SQLException {
         MigrateResult result = flyway().migrate();
 
-        assertEquals(21, result.migrationsExecuted, "应依次执行 V1-V21 二十一个迁移(V17 工具体检位;V18 三方 MCP 服务器两表;V19 Skill 包两表;V20 mini KB 两表;V21 用户反馈表)");
+        assertEquals(22, result.migrationsExecuted, "应依次执行 V1-V22 二十二个迁移(V18 三方 MCP 服务器两表;V19 Skill 包两表;V20 mini KB 两表;V21 用户反馈表;V22 存储配置 options 列 TEXT 化)");
 
         List<String> actualTables = listIaTables();
         assertEquals(EXPECTED_IA_TABLES, actualTables, "information_schema 中应恰好存在 33 张 ia_ 表(V18 三方 MCP 两表;V19 Skill 两表;V20 mini KB 两表;V21 用户反馈表)");
@@ -129,7 +130,7 @@ class FlywayMigrationSmokeIT {
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE");
              ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
-            assertEquals(21, resultSet.getInt(1), "flyway_schema_history 应有 21 条成功记录(V18 三方 MCP 两表 + V19 Skill 两表 + V20 mini KB 两表 + V21 用户反馈表)");
+            assertEquals(22, resultSet.getInt(1), "flyway_schema_history 应有 22 条成功记录(V18 三方 MCP 两表 + V19 Skill 两表 + V20 mini KB 两表 + V21 用户反馈表 + V22 options 列 TEXT 化)");
         }
 
         // V6 分诊/生命周期列就位(活刷新分诊 V14 + 授权自动失效 V18)
@@ -301,6 +302,12 @@ class FlywayMigrationSmokeIT {
             // 仅校验列存在与缺省口径可查(空表无行,不触发 next 断言)
             v18.executeQuery();
         }
+
+        // V22:存储配置 options 列 JSONB → TEXT(DEF-08 同族修复,照 V15 先例:
+        // 共享实体 ia_storage_config 全写路径携该列,JSONB+MySQL 形 typeHandler
+        // 在运行态连接串(无 stringtype=unspecified)下绑定失败)
+        assertEquals("text", columnType("ia_storage_config", "options"),
+                "ia_storage_config.options 应为 TEXT(V22,DEF-08 同族修复:实体纯 String,序列化在服务层)");
     }
 
     @Test

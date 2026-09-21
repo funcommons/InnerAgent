@@ -46,12 +46,14 @@ public class AdminAgentDefinitionController {
     private final AgentDefinitionAdminService definitionService;
 
     @GetMapping
-    @Operation(summary = "定义分页列表(agentKey 升序;出参含提示词与规格 JSON)")
+    @Operation(summary = "定义分页列表(agentKey 升序;出参含提示词与规格 JSON;"
+            + "kind 可选过滤 main/sub,P4-W14 区分子 Agent 定义)")
     public CommonResult<PageResult<DefinitionView>> list(
             @RequestParam(defaultValue = "1") long appId,
             @RequestParam(defaultValue = "1") int pageNo,
-            @RequestParam(defaultValue = "10") int pageSize) {
-        return success(definitionService.page(appId, pageNo, pageSize));
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String kind) {
+        return success(definitionService.page(appId, pageNo, pageSize, kind));
     }
 
     @GetMapping("/{id}")

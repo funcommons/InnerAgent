@@ -32,16 +32,22 @@ public final class AgentRuntimeSchedulers implements AutoCloseable {
      *
      * <p>恢复采用快照精确还原(runInTenant/runAsSystem/runInApp 语义):
      * 池线程上等价于 finally 清理(前一状态恒为空);同步执行类调度器
-     * (如 immediate)上则不打扰调用线程既有上下文。
+     * (如 immediate)上则不打扰调用线程既有上下文。应用侧系统模式
+     * (AppContext.isIgnored)同样捕获恢复——维护/发布等系统线程发起的
+     * 链路保持跨应用系统身份,不回落缺省 app 1。
      */
     private static final java.util.function.Function<Runnable, Runnable> CONTEXT_PROPAGATOR =
             task -> {
                 Long tenantId = TenantContext.getTenantId();
                 boolean ignoreTenant = TenantContext.isIgnored();
                 Long appId = AppContext.getAppId();
+                boolean ignoreApp = AppContext.isIgnored();
                 Runnable tenantScoped = (ignoreTenant || tenantId == null)
                         ? () -> TenantContext.runAsSystem(task)
                         : () -> TenantContext.runInTenant(tenantId, task);
+                if (ignoreApp) {
+                    return () -> AppContext.runAsSystem(tenantScoped);
+                }
                 if (appId == null) {
                     return tenantScoped;
                 }
@@ -155,6 +161,7 @@ public final class AgentRuntimeSchedulers implements AutoCloseable {
                 Long tenantId = TenantContext.getTenantId();
                 boolean ignoreTenant = TenantContext.isIgnored();
                 Long appId = AppContext.getAppId();
+                boolean ignoreApp = AppContext.isIgnored();
                 super.execute(() -> {
                     try {
                         if (ignoreTenant || tenantId == null) {
@@ -162,7 +169,9 @@ public final class AgentRuntimeSchedulers implements AutoCloseable {
                         } else {
                             TenantContext.setTenantId(tenantId);
                         }
-                        if (appId != null) {
+                        if (ignoreApp) {
+                            AppContext.setIgnore(true);
+                        } else if (appId != null) {
                             AppContext.setAppId(appId);
                         }
                         command.run();

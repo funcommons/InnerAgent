@@ -116,7 +116,11 @@ public class AppTenantLineInnerInterceptor implements InnerInterceptor {
     }
 
     /**
-     * app_id 列 Handler：缺省按单应用默认 1，始终注入（防误配弱化隔离）。
+     * app_id 列 Handler：缺省按单应用默认 1，始终注入（防误配弱化隔离）；
+     * 系统模式（{@link AppContext#isIgnored()}，与 tenant 侧系统模式语义
+     * 对齐）下跳过注入——按全局唯一 ID（run_id 等）定位行的调度/系统路径
+     * 使用，拿到行后由调用方 {@code AppContext.runInApp(row.appId, …)}
+     * 恢复行级归属。
      */
     static final class AppIdLineHandler implements TenantLineHandler {
 
@@ -132,7 +136,8 @@ public class AppTenantLineInnerInterceptor implements InnerInterceptor {
 
         @Override
         public boolean ignoreTable(String tableName) {
-            return IGNORED_TABLES.contains(normalize(tableName));
+            return IGNORED_TABLES.contains(normalize(tableName))
+                    || AppContext.isIgnored();
         }
     }
 

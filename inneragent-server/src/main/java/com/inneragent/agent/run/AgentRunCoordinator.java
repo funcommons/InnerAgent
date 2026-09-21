@@ -297,15 +297,20 @@ public class AgentRunCoordinator {
     }
 
     /**
-     * [adapt] P0 演示租户回填补丁的语义修正(P1-T1):租户不再无条件回填演示租户,
-     * 而是按身份优先级解析——① 会话行已有正数租户(embed 认证下由 TenantContext
-     * 随 INSERT 注入)直接沿用;② 其次取当前线程 UserContext 携带的租户
-     * (02-技术方案 §4.2:运行链路在 embed 认证下 UserContext 已带真实 tenantId);
-     * ③ 两者皆缺时才以正数租户兜底,满足内核 ToolExecutionContext 的正数约束,
-     * 并 WARN 提示数据未携带租户归属。
+     * [adapt] P0 演示租户回填补丁的语义修正(P1-T1→多应用 500 二轮根修):
+     * 运行行租户以会话行为单一事实源——会话行携带的租户(含 0=无租户)
+     * 原样沿用,保证运行行与会话/消息/事件行的租户归属同口径;仅当会话行
+     * 租户为 NULL(列上线前的历史行)时按 ① UserContext ② 正数兜底解析。
+     *
+     * <p>真机实证的缺陷:embed 用户(token tenantId=0)的会话行租户为 0,
+     * 旧逻辑把 0 视为缺失而回落 1,运行行租户写成 1;同一运行链的 journal
+     * 线程环境租户为 0,后续按 run_id 回查(RUNTIME CONTEXT 装配、事件
+     * append 的行锁)注入 tenant_id=0 过滤,行(1)与过滤(0)错位 →
+     * 「Agent run does not exist」500。内核 ToolExecutionContext 的正数租户
+     * 约束改由装配点(RuntimeContext create)对入参兜底满足,不再落行。
      */
     private static Long normalizeTenantId(Long tenantId) {
-        if (tenantId != null && tenantId > 0) {
+        if (tenantId != null) {
             return tenantId;
         }
         Long contextTenantId = UserContext.getTenantId();

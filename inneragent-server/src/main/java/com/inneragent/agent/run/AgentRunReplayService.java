@@ -208,18 +208,31 @@ public class AgentRunReplayService {
                 });
     }
 
+    /**
+     * [adapt] 多应用运行 500 二轮根修:重放/活尾按全局唯一 run_id 读行,
+     * 属系统读路径——执行线程可能是丢失 ThreadLocal 上下文的唤醒/轮询线程
+     * (Redis 订阅 netty 线程、Mono.delay 并行线程),环境行级注入会把
+     * 非缺省应用的行过滤成「不存在」。统一以系统模式(租户+应用注入均跳过)
+     * 读取;SSE 的用户归属鉴权已在入口(requireAuthorizedRun)完成。
+     */
     private Mono<ReplaySnapshot> loadSnapshot(String runId) {
-        return Mono.fromCallable(() -> repository.loadReplaySnapshot(runId))
+        return Mono.fromCallable(() ->
+                        com.inneragent.platform.tenant.TenantContext.runAsSystem(() ->
+                                com.inneragent.platform.context.AppContext.runAsSystem(() ->
+                                        repository.loadReplaySnapshot(runId))))
                 .subscribeOn(schedulers.journal());
     }
 
     private Mono<ReplayPage> loadPage(
             String runId, long afterSequence, long throughSequence) {
-        return Mono.fromCallable(() -> repository.loadReplayPage(
-                        runId,
-                        afterSequence,
-                        throughSequence,
-                        REPLAY_PAGE_SIZE))
+        return Mono.fromCallable(() ->
+                        com.inneragent.platform.tenant.TenantContext.runAsSystem(() ->
+                                com.inneragent.platform.context.AppContext.runAsSystem(() ->
+                                        repository.loadReplayPage(
+                                                runId,
+                                                afterSequence,
+                                                throughSequence,
+                                                REPLAY_PAGE_SIZE))))
                 .subscribeOn(schedulers.journal())
                 .map(events -> requirePage(
                         runId, afterSequence, throughSequence, events));

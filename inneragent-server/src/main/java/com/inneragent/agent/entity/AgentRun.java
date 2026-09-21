@@ -32,6 +32,16 @@ public class AgentRun {
 
     /** 所属租户（团队）ID */
     private Long tenantId;
+
+    /**
+     * [adapt] 多应用运行 500 二轮根修:所属应用 ID(ia_app.id)。仅读路径
+     * 映射(SELECT * 反查系统查找结果后按行恢复 AppContext 归属);写入
+     * 仍由 AppIdLineInnerInterceptor 注入(insert/update 策略下 null 不落列,
+     * 与拦截器注入不冲突,IaKbDocument.appId 同款先例)。
+     */
+    @TableField(insertStrategy = FieldStrategy.NEVER, updateStrategy = FieldStrategy.NEVER)
+    private Long appId;
+
     private String agentType;
     private String parentRunId;
     private String parentToolCallId;

@@ -59,7 +59,12 @@ public class AgentMessageProjectionService {
 
     public Mono<Void> projectCommitted(String runId) {
         String safeRunId = requireRunId(runId);
-        return Mono.fromCallable(() -> runMapper.selectByRunId(safeRunId))
+        // [adapt] 多应用运行 500 二轮根修:按全局唯一 run_id 的系统查找
+        // (见 AgentExecutionRuntimeContextRequests.load 注释)
+        return Mono.fromCallable(() ->
+                        com.inneragent.platform.tenant.TenantContext.runAsSystem(() ->
+                                com.inneragent.platform.context.AppContext.runAsSystem(() ->
+                                        runMapper.selectByRunId(safeRunId))))
                 .subscribeOn(schedulers.journal())
                 .flatMap(run -> {
                     if (run == null) {
@@ -89,13 +94,45 @@ public class AgentMessageProjectionService {
     }
 
     private Mono<Void> projectNextChunk(String runId, long throughSequence) {
-        return Mono.fromCallable(() -> requireProgress(
-                        transactionTemplate.execute(ignored ->
-                                projectChunk(runId, throughSequence))))
+        return Mono.fromCallable(() -> {
+                    // [adapt] 多应用运行 500 二轮根修:投影事务按全局 run_id 定位
+                    // 运行行,执行线程(维护/兜底调度)可能无环境上下文 —— 先以
+                    // 系统模式取行,再以行归属(租户+应用)执行锁读与投影写入,
+                    // 使 ia_agent_message 投影落列携带正确 app_id/tenant_id
+                    AgentRun row = com.inneragent.platform.tenant.TenantContext
+                            .runAsSystem(() ->
+                                    com.inneragent.platform.context.AppContext
+                                            .runAsSystem(() ->
+                                                    runMapper.selectByRunId(runId)));
+                    if (row == null) {
+                        throw new IllegalArgumentException(
+                                "Agent run does not exist: " + runId);
+                    }
+                    return requireProgress(
+                            transactionTemplate.execute(ignored ->
+                                    inRowScope(row, () ->
+                                            projectChunk(runId, throughSequence))));
+                })
                 .subscribeOn(schedulers.journal())
                 .flatMap(progress -> progress.cursor() >= throughSequence
                         ? Mono.empty()
                         : projectNextChunk(runId, throughSequence));
+    }
+
+    /**
+     * 以运行行归属执行:租户行随行取(0=无租户照常注入,与会话/消息行同
+     * 口径);租户缺失的历史行走系统模式(跳过租户注入)。
+     */
+    private <T> T inRowScope(AgentRun row, java.util.function.Supplier<T> action) {
+        java.util.function.Supplier<T> scoped =
+                row.getAppId() != null
+                        ? () -> com.inneragent.platform.context.AppContext.runInApp(
+                                row.getAppId(), action)
+                        : action;
+        return row.getTenantId() != null
+                ? com.inneragent.platform.tenant.TenantContext.runInTenant(
+                        row.getTenantId(), scoped)
+                : com.inneragent.platform.tenant.TenantContext.runAsSystem(scoped);
     }
 
     private ProjectionProgress projectChunk(String runId, long throughSequence) {

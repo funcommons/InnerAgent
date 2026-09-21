@@ -121,9 +121,10 @@ test('公钥轮换:指纹变化 + signKeyRotatedAt 回显(时间戳非空)', asy
   const row = tableRow(adminPage, key)
   await row.getByRole('button', { name: '轮换公钥' }).click()
   const dlg = adminPage.locator('.el-dialog:visible')
-  // FIND-P3(文案漂移):服务端 V9 已实现双公钥 72h 宽限期,该告警文案已过时 → 截图存证
-  await expect(dlg.getByText(/宽限期语义未实现/)).toBeVisible()
-  await shot(adminPage, 'L2-06-轮换对话框(过期文案:称宽限期未实现)')
+  // [R3 断言更新] 优化建议 #6 修复(commit 0e518c1):「宽限期语义未实现」过时告警
+  // 已纠正为与 V9 双公钥 72h 宽限同源的文案 → 产品行为正确,旧断言过时,反转为正向断言。
+  await expect(dlg.getByText(/旧公钥保留 72 小时验证宽限/).first()).toBeVisible()
+  await shot(adminPage, 'L2-06-轮换对话框(72h宽限文案:#6修复后)')
   await dlg.locator('textarea').fill(genRsaPublicPem())
   const putResp = adminPage.waitForResponse((r) => r.url().match(/\/admin\/apps\/\d+$/) !== null && r.request().method() === 'PUT')
   await dlg.getByRole('button', { name: '确认轮换' }).click()

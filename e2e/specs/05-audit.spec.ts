@@ -203,23 +203,22 @@ test('DEF-04 回归:撤销后同键重授 → 200;活跃重复授予 → 409', a
   psql(`DELETE FROM ia_tool_registry WHERE id=${(await reg.json()).data.id}`)
 })
 
-test('decision_source 值域:字典含 expired,web 下拉缺失(发现项证据)', async ({ request, adminPage }) => {
+test('decision_source 值域:字典驱动下拉,expired 档齐备(#12 修复后正向断言)', async ({ request, adminPage }) => {
   const dict = await request.get('/ia/api/v1/admin/audit-logs/dictionary')
   const sources = (await dict.json()).data.decisionSources.map((s: { code: string }) => s.code)
   saveJson('L5-05-审计字典.json', await dict.json())
-  const hasExpired = sources.includes('expired')
+  expect(sources.includes('expired'), '服务端字典含 V8 expired 档').toBe(true)
 
   await adminPage.goto('/audit')
   await adminPage.locator('.el-select').filter({ hasText: 'decision_source' }).first().click()
   const dropdownText = await adminPage.locator('.el-select-dropdown:visible').innerText()
-  await shot(adminPage, 'L5-05-decisionSource-UI下拉值域')
+  await shot(adminPage, 'L5-05-decisionSource-UI下拉值域(含expired)')
   await adminPage.keyboard.press('Escape')
 
   saveJson('L5-05-值域对比.json', { server: sources, uiHasExpired: dropdownText.includes('expired') })
-  // 观察项断言(V8 已新增 expired 档;web 脚手架未跟进)——当前实现即期望,差异记录于报告
-  if (hasExpired) {
-    expect(dropdownText.includes('expired')).toBe(false)
-  }
+  // [R3 断言更新] 优化建议 #12 修复(commit 9585a4a):下拉改为字典端点驱动值域,
+  // expired 档补齐 → 产品行为正确,R2 的「下拉缺失」发现项断言过时,反转为正向断言。
+  expect(dropdownText.includes('expired'), 'UI 下拉含 expired 档(字典驱动)').toBe(true)
 })
 
 test('真实写路径审计:granted/revoked 落库且出参可检索', async ({ request }) => {

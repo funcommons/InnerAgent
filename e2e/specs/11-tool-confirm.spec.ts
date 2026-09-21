@@ -195,15 +195,16 @@ test.describe('L10 工具确认 UI 线', () => {
 
       // 确认卡属于写工具
       await expect(page.locator('.assistant-timeline__tool').filter({ hasText: 'update_product_brief' }).filter({ hasText: '等待确认' }).first()).toBeVisible()
-      await shot(page, 'L10-12-第二轮写工具确认卡', testInfo)
+      await shot(page, 'L10-12-第二轮写工具确认卡(含scope chip)', testInfo)
       const scopeChipVisible = await page.getByTestId('assistant-confirm-scope').isVisible().catch(() => false)
       const batchVisible = await page.getByTestId('assistant-batch-approval').isVisible().catch(() => false)
       saveJson('L10-12-scope-chip两轮观察.json', {
         scopeChipVisible,
         batchApprovalBarVisible: batchVisible,
-        note: 'scope 数据随事件下发(SCOPE_RESOLVED detail 可证), 但行内单工具确认卡无 scope 渲染位',
+        note: '[R3 断言更新] 优化建议 #11 修复(commit 6b57c1a):单工具行内确认卡补 scope chip(与批量条同组件复用), 产品行为正确, R2 的「单工具无 chip」断言过时反转为正向',
       })
-      expect(scopeChipVisible, '单工具行内确认场景无 scope chip(仅 ≥2 批量条渲染)').toBe(false)
+      expect(scopeChipVisible, '单工具行内确认卡渲染 scope chip(#11 修复后)').toBe(true)
+      expect(batchVisible, '批量确认条仍只在 ≥2 工具场景渲染(单工具不出现)').toBe(false)
 
       // 批准写工具, 等待收尾
       await page.locator('[data-testid^="assistant-approve-"]').first().click()

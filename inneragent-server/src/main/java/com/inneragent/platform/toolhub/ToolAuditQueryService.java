@@ -104,7 +104,8 @@ public class ToolAuditQueryService {
                 new DictionaryEntry(ToolDecisionSource.LIVE_CONFIRM.code(), "确认流实弹批准"),
                 new DictionaryEntry(ToolDecisionSource.EXPIRED.code(), "确认超时系统裁决(过期=denied)"),
                 new DictionaryEntry(ToolDecisionSource.FULL_ACCESS.code(), "FULL_ACCESS 全开放"),
-                new DictionaryEntry(ToolDecisionSource.ADMIN.code(), "管理面定义变更(提示词编辑/导入导出)"));
+                new DictionaryEntry(ToolDecisionSource.ADMIN.code(), "管理面定义变更(提示词编辑/导入导出)"),
+                new DictionaryEntry(ToolDecisionSource.SAFETY.code(), "内容安全干预(block/redact)"));
     }
 
     /**
@@ -124,6 +125,12 @@ public class ToolAuditQueryService {
                 new DictionaryEntry("schema_breaking", "schema 安全相关差异强确认"),
                 new DictionaryEntry("risk_upgraded", "风险级人工上调"),
                 new DictionaryEntry("tool_disabled", "工具停用"),
+                new DictionaryEntry("tool_deleted", "工具注销"),
+                new DictionaryEntry("tool_revived", "工具重注册复活(R1 DEF-03)"),
+                new DictionaryEntry("schema_revalidated", "BREAKING 暂存确认后生效"),
+                new DictionaryEntry("run-terminated", "管理员强制终止运行"),
+                new DictionaryEntry("blocked", "内容安全拦截"),
+                new DictionaryEntry("redacted", "内容安全脱敏"),
                 new DictionaryEntry("definition-updated", "Agent 定义变更(提示词编辑/覆盖导入)"),
                 new DictionaryEntry("definition-imported", "Agent 定义导入新建"));
     }

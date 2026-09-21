@@ -142,17 +142,18 @@ class AdminAuditApiTests {
     }
 
     @Test
-    @DisplayName("字典端点:decision_source 含 expired(V8)/admin(P2-W5)七值全集;decision 十一值")
+    @DisplayName("字典端点:decision_source 含 expired(V8)/admin(P2-W5)/safety(P2-safety)八值全集;decision 十七值")
     void dictionaryEndpointExposesActualDomains() throws Exception {
         when(auditQueryService.page(any(ToolAuditQueryService.AuditLogFilter.class)))
                 .thenReturn(new PageResult<>(List.of(), 0L, 1, 10));
         mockMvcWithKey.perform(get("/ia/api/v1/admin/audit-logs/dictionary")
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.decisionSources.length()").value(7))
+                .andExpect(jsonPath("$.data.decisionSources.length()").value(8))
                 .andExpect(jsonPath("$.data.decisionSources[4].code").value("expired"))
                 .andExpect(jsonPath("$.data.decisionSources[6].code").value("admin"))
-                .andExpect(jsonPath("$.data.decisions.length()").value(11))
+                .andExpect(jsonPath("$.data.decisionSources[7].code").value("safety"))
+                .andExpect(jsonPath("$.data.decisions.length()").value(17))
                 .andExpect(jsonPath("$.data.decisionSources[0].description").isNotEmpty());
     }
 }

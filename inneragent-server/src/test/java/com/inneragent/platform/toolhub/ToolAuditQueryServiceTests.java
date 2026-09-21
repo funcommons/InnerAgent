@@ -118,14 +118,16 @@ class ToolAuditQueryServiceTests {
                 ToolAuditQueryService.decisionSourceDictionary();
         assertThat(sources).extracting(ToolAuditQueryService.DictionaryEntry::code)
                 .containsExactly("mode-default", "user-grant", "forced-policy",
-                        "live-confirm", "expired", "full-access", "admin");
+                        "live-confirm", "expired", "full-access", "admin", "safety");
 
         List<ToolAuditQueryService.DictionaryEntry> decisions =
                 ToolAuditQueryService.decisionDictionary();
         assertThat(decisions).extracting(ToolAuditQueryService.DictionaryEntry::code)
                 .containsExactly("allowed", "denied", "granted", "revoked",
                         "invalidated", "schema_compatible", "schema_breaking",
-                        "risk_upgraded", "tool_disabled",
+                        "risk_upgraded", "tool_disabled", "tool_deleted",
+                        "tool_revived", "schema_revalidated", "run-terminated",
+                        "blocked", "redacted",
                         "definition-updated", "definition-imported");
         assertThat(decisions).allSatisfy(entry ->
                 assertThat(entry.description()).isNotBlank());

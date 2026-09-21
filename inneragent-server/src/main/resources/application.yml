@@ -150,6 +150,21 @@ inneragent:
       # 落 ia_tool_registry 体检位,列表/详情回显)。批量体检单线程逐个执行,
       # 无并发旋钮(v1 不做并发扫描,避免对宿主桥形成突发压力)。
       probe-timeout: 10s
+  safety:
+    # 内容安全接入点(W6;S7/PRD §6.9——不内置审核引擎,仅接入点):
+    # 默认链 = noop(pass-through,零外呼零行为变更);enabled + callback-url
+    # 就绪后默认链切换为回调过滤器(POST verdict 请求,响应映射
+    # allow/redact/block)。挂点:ingress=用户消息入库前(run 发起输入,
+    # block→400 安全文案);egress=助手内容对外投递前(会话消息读取,
+    # block→固定占位)。block/redact 落 ia_audit_log(decision_source=safety)。
+    enabled: false
+    # 宿主审核回调地址(POST;请求体 {direction,text,context},响应体
+    # {verdict,text?,reason?};redact 必须携带脱敏后 text)
+    callback-url: ""
+    # 单次回调超时(connect/read 同值;挂点在入库/读取路径上,保持短)
+    timeout: 2s
+    # 回调失败策略:fail-open(缺省,放行 + WARN)/ fail-closed(按 block)
+    failure-policy: fail-open
   webhook:
     # 终态 Webhook 投递(任务 #18b;02-技术方案 §7.1「HMAC 签名,5 次指数退避」):
     # 运行终态(PRD 最小事件集 run.finished/failed/cancelled)经

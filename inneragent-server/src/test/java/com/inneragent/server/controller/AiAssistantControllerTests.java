@@ -7,6 +7,7 @@ import com.inneragent.platform.security.SecurityUserDetails;
 import com.inneragent.agent.conversation.AgentConversationService;
 import com.inneragent.agent.conversation.AgentMessageService;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,8 +33,10 @@ class AiAssistantControllerTests {
 
     private final AgentConversationService conversationService = mock(AgentConversationService.class);
     private final AgentMessageService messageService = mock(AgentMessageService.class);
+    private final com.inneragent.platform.safety.ContentSafetyGate safetyGate =
+            mock(com.inneragent.platform.safety.ContentSafetyGate.class);
     private final AiAssistantController controller =
-            new AiAssistantController(conversationService, messageService);
+            new AiAssistantController(conversationService, messageService, safetyGate);
 
     @AfterEach
     void clearSecurityContext() {
@@ -122,5 +125,54 @@ class AiAssistantControllerTests {
 
         assertThat(result.getCode()).isZero();
         verify(messageService).listByConversation("conversation-owned");
+    }
+
+    @Test
+    @DisplayName("[adapt] P2-safety:egress 挂点——仅助手消息过闸,block 替换为固定占位")
+    @SuppressWarnings("unchecked")
+    void listMessagesFiltersAssistantContentThroughSafetyGate() {
+        SecurityUserDetails user = new SecurityUserDetails(42L, "owner", "secret", 1, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+        when(conversationService.getOwnedByConversationId("conversation-owned", 42L))
+                .thenReturn(AgentConversation.builder()
+                        .conversationId("conversation-owned").userId(42L).build());
+        com.inneragent.agent.entity.AgentMessage blocked =
+                com.inneragent.agent.entity.AgentMessage.builder()
+                        .conversationId("conversation-owned").role("assistant")
+                        .content("违规内容").runId("run-1").build();
+        com.inneragent.agent.entity.AgentMessage userLine =
+                com.inneragent.agent.entity.AgentMessage.builder()
+                        .conversationId("conversation-owned").role("user")
+                        .content("用户原话").build();
+        com.inneragent.agent.entity.AgentMessage allowed =
+                com.inneragent.agent.entity.AgentMessage.builder()
+                        .conversationId("conversation-owned").role("assistant")
+                        .content("正常回答").runId("run-1").build();
+        when(messageService.listByConversation("conversation-owned"))
+                .thenReturn((List) List.of(blocked, userLine, allowed));
+        // 门面桩:block → 占位(与真实门面行为一致);allow 回显文本
+        when(safetyGate.filterEgress(
+                org.mockito.ArgumentMatchers.any(
+                        com.inneragent.platform.safety.ContentSafetyFilter.Context.class),
+                org.mockito.ArgumentMatchers.eq("违规内容")))
+                .thenReturn(com.inneragent.platform.safety.ContentSafetyGate.EGRESS_BLOCK_PLACEHOLDER);
+        when(safetyGate.filterEgress(
+                org.mockito.ArgumentMatchers.any(
+                        com.inneragent.platform.safety.ContentSafetyFilter.Context.class),
+                org.mockito.ArgumentMatchers.eq("正常回答")))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+
+        CommonResult<?> result = controller.listMessages("conversation-owned");
+
+        List<com.inneragent.agent.entity.AgentMessage> data =
+                (List<com.inneragent.agent.entity.AgentMessage>) result.getData();
+        assertThat(data).hasSize(3);
+        assertThat(data.get(0).getContent())
+                .isEqualTo(com.inneragent.platform.safety.ContentSafetyGate.EGRESS_BLOCK_PLACEHOLDER);
+        assertThat(data.get(1).getContent())
+                .as("用户消息不过 egress 闸")
+                .isEqualTo("用户原话");
+        assertThat(data.get(2).getContent()).isEqualTo("正常回答");
     }
 }

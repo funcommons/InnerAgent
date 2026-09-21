@@ -30,7 +30,15 @@ public enum ToolDecisionSource {
     EXPIRED("expired"),
 
     /** FULL_ACCESS 全开放(平台管理员开启,审计一次性确认)。 */
-    FULL_ACCESS("full-access");
+    FULL_ACCESS("full-access"),
+
+    /**
+     * 内容安全接入点干预(P2-safety W6;S7/PRD §6.9):过滤链对用户输入
+     * (ingress)或助手内容投递(egress)作出 block/redact 干预,
+     * decision=blocked/redacted。工具治理语义复用 ia_audit_log 单表
+     * (V12 列宽兼容:decision 8 字符、decision_source 6 字符)。
+     */
+    SAFETY("safety");
 
     private final String code;
 

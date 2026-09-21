@@ -143,6 +143,25 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             """)
     List<AgentRun> selectActiveChildren(@Param("parentRunId") String parentRunId);
 
+    /**
+     * [adapt] 应用内全部活跃(非终态)运行(紧急停用批量取消在途运行,P2 缺口收口)。
+     * 显式携带 app_id 条件(行级拦截器重复注入同值条件语义无害,ia_kb_document 先例);
+     * 已处于 CANCEL_REQUESTED 的运行一并返回——重请求幂等(仓库层幂等收敛),
+     * 取消重试广播由既有兜底扫描接续。
+     */
+    @Select("""
+            SELECT *
+            FROM ia_agent_run
+            WHERE app_id = #{appId}
+              AND status IN (
+                  'RUNNING',
+                  'WAITING_CONFIRMATION',
+                  'WAITING_EXTERNAL',
+                  'CANCEL_REQUESTED')
+            ORDER BY id
+            """)
+    List<AgentRun> selectActiveRunsByApp(@Param("appId") long appId);
+
     @Update("""
             UPDATE ia_agent_run
             SET next_sequence = #{nextSequence},

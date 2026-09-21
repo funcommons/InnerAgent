@@ -20,6 +20,7 @@ import com.inneragent.platform.toolhub.ToolAuditService;
 import com.inneragent.server.admin.AppRegistration;
 import com.inneragent.server.admin.CircuitBreakerAdminService;
 import com.inneragent.server.admin.CircuitBreakerAdminService.CircuitEventView;
+import com.inneragent.server.admin.CircuitBreakerAdminService.EmergencyStopView;
 import com.inneragent.server.admin.CircuitBreakerAdminService.StateView;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.AfterEach;
@@ -45,8 +46,8 @@ import static org.mockito.Mockito.when;
 /**
  * 熔断 admin 服务测试(优化建议 #2 服务端半):状态视图(mock 契约
  * CircuitBreakerState 形 + activeRuns)、limits 合并/校验/落库、紧急停用与
- * 恢复(总开关翻转 + 事件流水)、run 发起守卫 403、terminate-run 复用取消
- * 基建 + forced-policy 审计。mapper/协调器 mock,MockMvc 无关。
+ * 恢复(总开关翻转 + 事件流水 + 在途运行批量取消 counts)、run 发起守卫 403、
+ * terminate-run 复用取消基建 + forced-policy 审计。mapper/协调器 mock,MockMvc 无关。
  */
 class CircuitBreakerAdminServiceTests {
 
@@ -178,9 +179,10 @@ class CircuitBreakerAdminServiceTests {
     }
 
     @Test
-    @DisplayName("紧急停用:reason 缺失 400;成功翻转总开关 + 落事件(mock 契约形)")
+    @DisplayName("紧急停用:reason 缺失 400;成功翻转总开关 + 落事件 + counts(mock 契约形 + counts 扩展)")
     void emergencyStopFlipsSwitchAndRecordsEvent() {
         when(appMapper.selectById(1L)).thenReturn(app(false));
+        when(runMapper.selectActiveRunsByApp(1L)).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.emergencyStop(1L, "  "))
                 .isInstanceOfSatisfying(BusinessException.class, e -> {
@@ -188,12 +190,13 @@ class CircuitBreakerAdminServiceTests {
                     assertThat(e.getMessage()).isEqualTo("reason 不能为空");
                 });
 
-        CircuitEventView view = service.emergencyStop(1L, " 成本异常 ");
+        EmergencyStopView view = service.emergencyStop(1L, " 成本异常 ");
 
         assertThat(view.type()).isEqualTo("emergency-stop");
         assertThat(view.runId()).isNull();
         assertThat(view.reason()).isEqualTo("成本异常");
         assertThat(view.operator()).isEqualTo("admin");
+        assertThat(view.counts().cancelInitiated()).isZero();
         ArgumentCaptor<AppRegistration> appCaptor = ArgumentCaptor.forClass(AppRegistration.class);
         verify(appMapper).updateById(appCaptor.capture());
         assertThat(appCaptor.getValue().getCircuitStopped()).isTrue();
@@ -203,6 +206,62 @@ class CircuitBreakerAdminServiceTests {
         verify(circuitEventMapper).insert(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getType()).isEqualTo("emergency-stop");
         assertThat(eventCaptor.getValue().getAppId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("紧急停用批量取消:对应用内全部活跃运行发起取消(复用取消基建),counts 报数 + 逐 run 审计沿用既有码值")
+    void emergencyStopCancelsActiveRunsOfTheApp() {
+        when(appMapper.selectById(1L)).thenReturn(app(false));
+        AgentRun running = runningRun("run-batch-1", AgentRunStatus.RUNNING);
+        AgentRun waiting = runningRun("run-batch-2", AgentRunStatus.WAITING_EXTERNAL);
+        when(runMapper.selectActiveRunsByApp(1L)).thenReturn(List.of(running, waiting));
+        when(cancellations.request(anyString()))
+                .thenReturn(reactor.core.publisher.Mono.empty());
+
+        EmergencyStopView view = service.emergencyStop(1L, " 成本异常 ");
+
+        assertThat(view.type()).isEqualTo("emergency-stop");
+        assertThat(view.counts().cancelInitiated()).isEqualTo(2);
+        verify(cancellations, org.mockito.Mockito.timeout(2000)).request("run-batch-1");
+        verify(cancellations, org.mockito.Mockito.timeout(2000)).request("run-batch-2");
+        // 审计沿用 terminate-run 既有码值(decision=run-terminated / source=forced-policy),不私加新码
+        ArgumentCaptor<ToolAuditService.ToolAuditEntry> auditCaptor =
+                ArgumentCaptor.forClass(ToolAuditService.ToolAuditEntry.class);
+        verify(auditService, org.mockito.Mockito.timeout(2000).times(2)).append(auditCaptor.capture());
+        assertThat(auditCaptor.getAllValues())
+                .extracting(ToolAuditService.ToolAuditEntry::decision)
+                .containsOnly("run-terminated");
+        assertThat(auditCaptor.getAllValues())
+                .extracting(ToolAuditService.ToolAuditEntry::decisionSource)
+                .containsOnly("forced-policy");
+        assertThat(auditCaptor.getAllValues())
+                .extracting(ToolAuditService.ToolAuditEntry::runId)
+                .containsExactlyInAnyOrder("run-batch-1", "run-batch-2");
+        assertThat(auditCaptor.getAllValues())
+                .extracting(ToolAuditService.ToolAuditEntry::resultSummary)
+                .allSatisfy(summary -> assertThat(summary).contains("紧急停用批量终止").contains("成本异常"));
+    }
+
+    @Test
+    @DisplayName("批量取消异步尽力而为:单 run 取消失败不连坐停用响应(计数照报,兜底扫描收敛)")
+    void emergencyStopToleratesPerRunCancellationFailure() {
+        when(appMapper.selectById(1L)).thenReturn(app(false));
+        when(runMapper.selectActiveRunsByApp(1L)).thenReturn(List.of(
+                runningRun("run-good", AgentRunStatus.RUNNING),
+                runningRun("run-gone", AgentRunStatus.WAITING_CONFIRMATION)));
+        when(cancellations.request("run-good"))
+                .thenReturn(reactor.core.publisher.Mono.empty());
+        when(cancellations.request("run-gone"))
+                .thenReturn(reactor.core.publisher.Mono.error(
+                        new BusinessException(404, "Agent 运行不存在")));
+
+        EmergencyStopView view = service.emergencyStop(1L, "演练");
+
+        assertThat(view.type()).isEqualTo("emergency-stop");
+        assertThat(view.counts().cancelInitiated()).isEqualTo(2);
+        verify(circuitEventMapper).insert(any(CircuitEvent.class));
+        verify(cancellations, org.mockito.Mockito.timeout(2000)).request("run-good");
+        verify(cancellations, org.mockito.Mockito.timeout(2000)).request("run-gone");
     }
 
     @Test
@@ -310,15 +369,16 @@ class CircuitBreakerAdminServiceTests {
     @DisplayName("操作者:管理会话通道取用户名,无 SecurityContext 缺省 admin")
     void operatorFallsBackToAdminForBootstrapChannel() {
         when(appMapper.selectById(1L)).thenReturn(app(false));
+        when(runMapper.selectActiveRunsByApp(1L)).thenReturn(List.of());
 
-        CircuitEventView view = service.emergencyStop(1L, "演练");
+        EmergencyStopView view = service.emergencyStop(1L, "演练");
         assertThat(view.operator()).isEqualTo("admin");
 
         org.springframework.security.core.context.SecurityContextHolder.getContext()
                 .setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                         "ops-admin", null, java.util.List.of()));
         try {
-            CircuitEventView sessionView = service.emergencyStop(1L, "演练");
+            EmergencyStopView sessionView = service.emergencyStop(1L, "演练");
             assertThat(sessionView.operator()).isEqualTo("ops-admin");
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();

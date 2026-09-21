@@ -138,7 +138,7 @@ class AdminCircuitBreakerApiTests {
     }
 
     @Test
-    @DisplayName("POST emergency-stop:reason 缺失 400(mock 契约);成功返回事件形")
+    @DisplayName("POST emergency-stop:reason 缺失 400(mock 契约);成功返回事件形 + counts 扩展")
     void emergencyStopContract() throws Exception {
         when(circuitService.emergencyStop(eq(1L), any()))
                 .thenThrow(new com.inneragent.platform.common.BusinessException(400, "reason 不能为空"));
@@ -150,8 +150,10 @@ class AdminCircuitBreakerApiTests {
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.msg").value("reason 不能为空"));
 
-        when(circuitService.emergencyStop(eq(1L), any())).thenReturn(new CircuitEventView(
-                8L, "emergency-stop", null, "演练", "admin", "2026-09-20T12:30:00Z"));
+        when(circuitService.emergencyStop(eq(1L), any())).thenReturn(
+                new CircuitBreakerAdminService.EmergencyStopView(
+                        8L, "emergency-stop", null, "演练", "admin", "2026-09-20T12:30:00Z",
+                        new CircuitBreakerAdminService.EmergencyStopView.Counts(3)));
         mockMvcWithKey.perform(post("/ia/api/v1/admin/circuit-breaker/emergency-stop")
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -162,7 +164,8 @@ class AdminCircuitBreakerApiTests {
                 .andExpect(jsonPath("$.data.runId").doesNotExist())
                 .andExpect(jsonPath("$.data.reason").value("演练"))
                 .andExpect(jsonPath("$.data.operator").value("admin"))
-                .andExpect(jsonPath("$.data.occurredAt").isNotEmpty());
+                .andExpect(jsonPath("$.data.occurredAt").isNotEmpty())
+                .andExpect(jsonPath("$.data.counts.cancelInitiated").value(3));
     }
 
     @Test

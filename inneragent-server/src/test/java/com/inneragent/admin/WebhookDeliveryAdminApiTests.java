@@ -1,5 +1,7 @@
 package com.inneragent.admin;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.inneragent.platform.webhook.WebhookDelivery;
 import com.inneragent.platform.mapper.WebhookDeliveryMapper;
 import com.inneragent.platform.webhook.WebhookDeliveryService;
@@ -7,6 +9,8 @@ import com.inneragent.server.admin.AdminTokenFilter;
 import com.inneragent.server.admin.WebhookDeliveryAdminController;
 import com.inneragent.server.admin.WebhookDeliveryAdminService;
 import com.inneragent.server.admin.WebhookDeliveryAdminService.DeliveryView;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +43,14 @@ class WebhookDeliveryAdminApiTests {
     private WebhookDeliveryService deliveryService;
     private MockMvc mockMvcWithKey;
     private MockMvc mockMvcWithoutKey;
+
+    @BeforeAll
+    static void initLambdaColumnCache() {
+        // 查询条件片段断言需 MP 列缓存(Spring 装配下由 mapper 初始化,
+        // 切片测试手动补 TableInfo,口径同 CircuitBreakerAdminServiceTests)
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), ""), WebhookDelivery.class);
+    }
 
     @BeforeEach
     void setUp() {
@@ -172,6 +184,104 @@ class WebhookDeliveryAdminApiTests {
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY)
                         .param("status", "WHATEVER"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("DEF-09:不带 status(UI 首载形态)→ 200 不过滤,不再 NPE 500")
+    void pageWithoutStatusReturnsAllInsteadOf500() throws Exception {
+        when(deliveryMapper.selectPage(any(), any())).thenAnswer(invocation -> {
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<WebhookDelivery>
+                    page = new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(
+                    1, 10, 2);
+            page.setRecords(List.of(
+                    delivery(11L, WebhookDelivery.STATUS_SUCCESS),
+                    delivery(12L, WebhookDelivery.STATUS_FAILED)));
+            return page;
+        });
+
+        mockMvcWithKey.perform(get("/ia/api/v1/admin/webhook-deliveries")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("appId", "1")
+                        .param("pageNo", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.list.length()").value(2));
+
+        // 查询条件不含 status(appId 过滤仍生效)
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WebhookDelivery>
+                wrapper = captorOfSingleSelectPage();
+        org.assertj.core.api.Assertions.assertThat(wrapper.getSqlSegment())
+                .contains("app_id =")
+                .doesNotContain("status =");
+    }
+
+    @Test
+    @DisplayName("DEF-09:status 空白等价缺省 → 200 不过滤")
+    void pageWithBlankStatusTreatedAsUnfiltered() throws Exception {
+        when(deliveryMapper.selectPage(any(), any())).thenAnswer(invocation -> {
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<WebhookDelivery>
+                    page = new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(
+                    1, 10, 0);
+            page.setRecords(List.of());
+            return page;
+        });
+
+        mockMvcWithKey.perform(get("/ia/api/v1/admin/webhook-deliveries")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("appId", "1")
+                        .param("status", "   "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WebhookDelivery>
+                wrapper = captorOfSingleSelectPage();
+        org.assertj.core.api.Assertions.assertThat(wrapper.getSqlSegment())
+                .contains("app_id =")
+                .doesNotContain("status =");
+    }
+
+    @Test
+    @DisplayName("status 非缺省时过滤条件生效(值入查询参数表)")
+    void pageWithStatusAppliesFilterCondition() throws Exception {
+        when(deliveryMapper.selectPage(any(), any())).thenAnswer(invocation -> {
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<WebhookDelivery>
+                    page = new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(
+                    1, 10, 1);
+            page.setRecords(List.of(delivery(11L, WebhookDelivery.STATUS_SUCCESS)));
+            return page;
+        });
+
+        mockMvcWithKey.perform(get("/ia/api/v1/admin/webhook-deliveries")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("appId", "1")
+                        .param("status", "success")
+                        .param("pageNo", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isOk());
+
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WebhookDelivery>
+                wrapper = captorOfSingleSelectPage();
+        org.assertj.core.api.Assertions.assertThat(wrapper.getSqlSegment())
+                .contains("app_id =")
+                .contains("status =");
+    }
+
+    /**
+     * 捕获唯一一次 selectPage 的查询条件(测试内 stub 均只触发一次查询)。
+     * MP 的 eq 参数为惰性注册(mapper mock 不渲染 SQL),先 getSqlSegment()
+     * 强制物化,再对渲染出的条件片段断言。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WebhookDelivery>
+            captorOfSingleSelectPage() {
+        org.mockito.ArgumentCaptor<
+                com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WebhookDelivery>> captor =
+                org.mockito.ArgumentCaptor.forClass(
+                        (Class) com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class);
+        verify(deliveryMapper).selectPage(any(), captor.capture());
+        return captor.getValue();
     }
 
     @Test

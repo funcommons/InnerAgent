@@ -32,10 +32,13 @@ public class WebhookDeliveryAdminService {
 
     public PageResult<DeliveryView> page(
             Long appId, String status, String event, int pageNo, int pageSize) {
+        // status 缺省/空白 = 不过滤(DEF-09:此前 eq 条件短路但 normalizeStatus
+        // 参数仍无条件求值,null.trim() NPE → 500,UI「全部投递记录」首载即命中);
+        // 非空白才走值域校验(非法值 400)
+        String statusFilter = status == null || status.isBlank() ? null : normalizeStatus(status);
         LambdaQueryWrapper<WebhookDelivery> query = new LambdaQueryWrapper<WebhookDelivery>()
                 .eq(appId != null, WebhookDelivery::getAppId, appId)
-                .eq(status != null && !status.isBlank(),
-                        WebhookDelivery::getStatus, normalizeStatus(status))
+                .eq(statusFilter != null, WebhookDelivery::getStatus, statusFilter)
                 .eq(event != null && !event.isBlank(),
                         WebhookDelivery::getEventType, event)
                 .orderByDesc(WebhookDelivery::getId);

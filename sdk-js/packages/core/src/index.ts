@@ -16,7 +16,6 @@ export {
   getSdkConfig,
   getBaseURL,
   applyTheme,
-  IframeModeNotImplementedError,
   IA_THEME_TOKENS,
   type SdkInitOptions,
   type SdkRuntimeConfig,
@@ -80,6 +79,13 @@ export {
 export { aiModelApi, meApi, type AiModel, type MultimodalInputType, type MultimodalInputTransport, type MultimodalInputTransports } from './me'
 export { uploadAttachment, type AttachmentTransport } from './attachments'
 export { resolveMediaUrl } from './mediaUrl'
+
+// ---- 用户级三方 MCP (P4/W15 SDK 配置视图; 契约 McpUserServerController) ----
+export {
+  mcpUserServersApi,
+  type McpUserServer,
+  type McpUserServerSaveReq,
+} from './mcpServers'
 
 // ---- 页面上下文 ----
 export {

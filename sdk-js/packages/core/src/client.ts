@@ -14,6 +14,7 @@
 
 import { getBaseURL, getSdkConfig } from './config'
 import { ApiError, HTTP_STATUS, type ApiFieldError } from './errorCodes'
+import { assistantEventHooks } from './store/assistantEvents'
 
 const TRACE_ID_STORAGE_KEY = 'inneragent:trace-id'
 
@@ -180,12 +181,16 @@ async function doRequest<T = unknown>(fullUrl: string, config: RequestConfig): P
     throw new ApiError(0, '网络错误，请稍后重试', { silent: config.silent })
   }
 
-  // 401 → 再次调用 tokenGetter (过期懒换, 单飞) → 用新 token 重试一次。
+  // 401 → 先通知钩子 (iframe 桥借此失效 child 端 token 缓存, P4/W15) →
+  // 再次调用 tokenGetter (过期懒换, 单飞) → 用新 token 重试一次。
   // 宿主 tokenGetter 返回 null 表示给不出 token → 不重试, 按 401 抛错。
-  if (response.status === HTTP_STATUS.UNAUTHORIZED && !config.__retried) {
-    const freshToken = await refreshTokenSingleFlight().catch(() => null)
-    if (freshToken) {
-      return doRequest<T>(fullUrl, { ...config, __retried: true, __overrideToken: freshToken })
+  if (response.status === HTTP_STATUS.UNAUTHORIZED) {
+    assistantEventHooks.onUnauthorized()
+    if (!config.__retried) {
+      const freshToken = await refreshTokenSingleFlight().catch(() => null)
+      if (freshToken) {
+        return doRequest<T>(fullUrl, { ...config, __retried: true, __overrideToken: freshToken })
+      }
     }
   }
 

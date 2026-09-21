@@ -2,7 +2,12 @@
  * [new] SDK 运行时配置 — 契约入口 `init({ appKey, tokenGetter, theme?, mode? })`。
  *
  * 依据 02-技术方案 §8.1 / 任务 P1-T3a 契约:
- * - mode: 'wc' | 'iframe', 默认 'wc'; iframe 模式本任务仅占位 (P4/W15 postMessage 协议)。
+ * - mode: 'wc' (默认, 本页直接挂 WC) | 'iframe' (P4/W15 起)。
+ *   mode 'iframe' 是**宿主侧声明** (API 调用发生在被嵌 iframe 内的 WC,
+ *   token 经 postMessage 桥传入, 不落 URL); 实际桥接由 @inneragent/sdk-iframe
+ *   的 `createIframeEmbed({ src, tokenGetter, ... })` 承载 —— 该处的 tokenGetter
+ *   选项是桥的 token 通道唯一来源, init 的 tokenGetter 在 iframe 模式下仅为
+ *   契约完整性保留 (普通 'wc' 模式仍是 API 层 token 来源)。
  * - tokenGetter: 宿主回调, 返回 Promise<string|null> (embed token);
  *   SDK 注入 `Authorization: Bearer <token>`, 收到 401 时**再次调用** tokenGetter
  *   (过期懒换, 单飞并发合并) 并重试一次。
@@ -64,20 +69,8 @@ const DEFAULT_STORAGE_PREFIX = 'inneragent-assistant'
 
 let runtime: SdkRuntimeConfig | null = null
 
-/** iframe 模式占位错误 (P4/W15 实现 postMessage 桥后替换)。 */
-export class IframeModeNotImplementedError extends Error {
-  constructor() {
-    super('iframe mode is not implemented yet (scheduled for P4/W15); use mode: "wc"')
-    this.name = 'IframeModeNotImplementedError'
-  }
-}
-
 /** 写入运行时配置; 重复 init 覆盖前值 (宿主热更新语义)。 */
 export function init(options: SdkInitOptions): SdkRuntimeConfig {
-  if (options.mode === 'iframe') {
-    // 契约: iframe 模式本任务只做占位。
-    throw new IframeModeNotImplementedError()
-  }
   if (!options.appKey || !options.appKey.trim()) {
     throw new Error('@inneragent/sdk init: appKey is required')
   }
@@ -87,7 +80,7 @@ export function init(options: SdkInitOptions): SdkRuntimeConfig {
   runtime = {
     appKey: options.appKey,
     baseURL: (options.baseURL ?? DEFAULT_BASE_URL).replace(/\/+$/, ''),
-    mode: 'wc',
+    mode: options.mode ?? 'wc',
     agentType: options.agentType ?? DEFAULT_AGENT_TYPE,
     storagePrefix: options.storagePrefix ?? DEFAULT_STORAGE_PREFIX,
     tokenGetter: options.tokenGetter,

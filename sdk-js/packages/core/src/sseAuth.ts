@@ -9,6 +9,7 @@
  */
 
 import { refreshTokenSingleFlight, resolveToken } from './client'
+import { assistantEventHooks } from './store/assistantEvents'
 
 export async function authenticatedFetch(input: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers)
@@ -20,7 +21,9 @@ export async function authenticatedFetch(input: string, init?: RequestInit): Pro
   const response = await fetch(input, { ...init, headers })
 
   if (response.status === 401) {
-    // 过期懒换: 再次调用 tokenGetter (与 http 层共享单飞窗口)
+    // 先通知钩子 (iframe 桥借此失效 child 端 token 缓存, P4/W15), 再懒换:
+    // 再次调用 tokenGetter (与 http 层共享单飞窗口)
+    assistantEventHooks.onUnauthorized()
     const freshToken = await refreshTokenSingleFlight().catch(() => null)
     if (freshToken) {
       headers.set('Authorization', `Bearer ${freshToken}`)

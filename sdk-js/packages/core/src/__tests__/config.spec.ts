@@ -2,7 +2,9 @@
  * [new] init 契约测试 (02-技术方案 §8.1 / 任务 P1-T3a 契约)。
  * - 默认值: baseURL '/ia/api/v1'、mode 'wc'、agentType 'ai_media'
  * - appKey/tokenGetter 必填
- * - iframe 模式占位: 抛 IframeModeNotImplementedError (P4/W15)
+ * - mode 'iframe' (P4/W15 起): 接受并存入 runtime —— 宿主侧声明 iframe 接入;
+ *   实际桥接由 @inneragent/sdk-iframe 的 createIframeEmbed 承载 (token 走
+ *   postMessage, 不入 URL)。
  * - theme 令牌写入 document root
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -12,7 +14,6 @@ import {
   getSdkConfig,
   getBaseURL,
   applyTheme,
-  IframeModeNotImplementedError,
   IA_THEME_TOKENS,
 } from '../config'
 
@@ -48,15 +49,9 @@ describe('sdk-core config (init 契约)', () => {
     expect(getSdkConfig().baseURL).toBe('https://host.example/ia/api/v1')
   })
 
-  it('iframe 模式占位: 抛 IframeModeNotImplementedError (P4/W15)', () => {
-    expect(() => init({ appKey: 'demo', tokenGetter: async () => 't', mode: 'iframe' }))
-      .toThrow(IframeModeNotImplementedError)
-    // 占位错误可按名识别, 供宿主降级提示
-    try {
-      init({ appKey: 'demo', tokenGetter: async () => 't', mode: 'iframe' })
-    } catch (error) {
-      expect((error as Error).name).toBe('IframeModeNotImplementedError')
-    }
+  it('mode iframe (P4/W15): 接受并存入 runtime (宿主侧声明; 桥接在 sdk-iframe 包)', () => {
+    const runtime = init({ appKey: 'demo', tokenGetter: async () => 't', mode: 'iframe' })
+    expect(runtime.mode).toBe('iframe')
   })
 
   it('未 init 时 getSdkConfig 抛错 (防静默裸奔)', () => {

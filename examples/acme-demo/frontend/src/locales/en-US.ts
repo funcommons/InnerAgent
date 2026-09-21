@@ -278,6 +278,23 @@ export default {
       THIRD_PARTY_ERROR: 'Third-party service error',
     },
   },
+  docs: {
+    'nav-title': 'Integration docs',
+    'nav-aria': 'Docs section navigation',
+    'open-nav': 'Section contents',
+    'close-nav': 'Close contents',
+    'overview-title': 'InnerAgent integration docs',
+    'overview-subtitle': 'From quick start to the endpoints cheat sheet — follow along, and the "next step" links chain every chapter into a learning path.',
+    'start-reading': 'Start with Quick Start',
+    'step-label': 'Chapter {n}',
+    prev: 'Previous',
+    next: 'Next step',
+    'playground-cta-title': 'Try it hands-on',
+    'playground-cta-desc': 'Enter any username in the playground and run the full login → issue → claims-decode flow yourself.',
+    'playground-cta': 'Open the API playground',
+    copy: 'Copy code',
+    copied: 'Copied',
+  },
   // ===== Public site (product home / docs / API playground) =====
   site: {
     name: 'InnerAgent',

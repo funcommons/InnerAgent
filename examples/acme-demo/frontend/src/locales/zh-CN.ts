@@ -278,6 +278,23 @@ export default {
       THIRD_PARTY_ERROR: '第三方服务异常',
     },
   },
+  docs: {
+    'nav-title': '接入文档',
+    'nav-aria': '文档章节导航',
+    'open-nav': '章节目录',
+    'close-nav': '关闭目录',
+    'overview-title': 'InnerAgent 接入文档',
+    'overview-subtitle': '从快速开始到端点速查,照做即通。每章末尾的「下一步」串成完整学习路径。',
+    'start-reading': '从快速开始起步',
+    'step-label': '第 {n} 章',
+    prev: '上一篇',
+    next: '下一步',
+    'playground-cta-title': '动手试试',
+    'playground-cta-desc': '在体验台输入任意用户名,亲手完成「登录 → 签发 → claims 解码」全流程。',
+    'playground-cta': '打开 API 体验台',
+    copy: '复制代码',
+    copied: '已复制',
+  },
   // ===== 官网公开区(产品首页 / 文档中心 / API 体验台)=====
   site: {
     name: 'InnerAgent',

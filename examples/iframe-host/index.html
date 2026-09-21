@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!--
+    [new] 严格 CSP 宿主页 (03-开发计划 §7.3 验收 5)。
+    - script-src 'self': 无内联脚本 / 无 eval —— 页面逻辑全部在外部模块文件;
+    - style-src 'unsafe-inline': WC 运行时向 shadow root 注入 <style> 所需
+      (动态样式无法预计算 hash; script 面仍然严格);
+    - frame-src 'self': 仅允许同源被嵌页;
+    - connect-src 'self': API 经同源 /ia 反代, 不直连第三方。
+    生产部署时把该 meta 换成等价响应头 (CSP meta 与 header 能力一致)。
+  -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'" />
+  <title>InnerAgent SDK · iframe 宿主演示</title>
+  <script type="module" src="./host.js"></script>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7f9; color: #303133; }
+    .page { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+    .card { border: 1px solid #e4e7ed; border-radius: 10px; padding: 14px 16px; margin: 14px 0; background: #fff; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    button { padding: 6px 12px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; cursor: pointer; }
+    button:hover { border-color: #409eff; color: #409eff; }
+    iframe#ia-frame { display: block; width: 100%; height: 560px; border: 2px solid #409eff; border-radius: 14px; background: #fff; }
+    code { background: #f5f5f7; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+    #log { max-height: 140px; overflow: auto; font-size: 12px; color: #606266; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>InnerAgent SDK · iframe 模式宿主</h1>
+
+    <div class="card">
+      <p>
+        本页以 <code>createIframeEmbed</code> 嵌入 <code>frame.html</code>:
+        宿主与 iframe 仅通过 <strong>postMessage 协议桥</strong>通信
+        (origin allowlist + nonce/ack);embed token 由宿主
+        <code>tokenGetter</code> 经消息桥下发 —— <strong>token 不入 URL</strong>。
+        页面已启用严格 CSP (<code>script-src 'self'</code>, 无 eval/内联脚本)。
+      </p>
+      <div class="row">
+        <button id="set-page" type="button">setPage(首页)</button>
+        <button id="set-object" type="button">setObject(剧本#7)</button>
+        <button id="clear-context" type="button">clearContext</button>
+        <button id="refresh-token" type="button">refreshToken</button>
+        <span id="handshake">握手: 未完成</span>
+      </div>
+    </div>
+
+    <iframe id="ia-frame" title="InnerAgent 助手"></iframe>
+
+    <div class="card">
+      <strong>事件日志 (onEvent)</strong>
+      <div id="log"></div>
+    </div>
+  </div>
+</body>
+</html>

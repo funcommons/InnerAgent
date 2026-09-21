@@ -25,20 +25,27 @@ sdk-js/
 │     ├─ inneragent-chat.ts   [new]  defineCustomElement 注册入口
 │     ├─ InnerAgentChat.ce.vue [new] WC 根 (:host --ia-* 主题令牌 + Shadow DOM)
 │     ├─ assistant/           [port/adapt] 13 组件移植 (去业务依赖)
+│     ├─ config/              [new]  AgentConfigPanel (P4/W15 view="config" 配置视图)
 │     ├─ ui/                  [new/adapt] IaButton/IaSelect/IaTag/IaEmpty/IaDialog/SafeImage
 │     │                              (替代 element-plus 封装, Shadow DOM 安全)
 │     ├─ i18n/                [new]  轻量 i18n (替代 vue-i18n, 内置 zh-CN/en-US)
 │     └─ styles/              [new]  remixicon woff2-only 生成子集 (Shadow DOM 内图标)
-└─ (见 ../examples/demo-host)        宿主接入演示页
+├─ packages/iframe/                  @inneragent/sdk-iframe — iframe 模式壳 (P4/W15)
+│  └─ src/
+│     ├─ protocol.ts  [new] postMessage 信封/消息类型/nonce (协议表见下)
+│     ├─ transport.ts [new] windowTransport + 内存传输对 (测试)
+│     ├─ host.ts      [new] createIframeEmbed (宿主侧)
+│     └─ child.ts     [new] mountIframeAgent (被嵌页引导)
+└─ (见 ../examples/demo-host、../examples/iframe-host)  宿主接入演示页
 ```
 
 ## 命令
 
 ```bash
 pnpm install        # 安装
-pnpm test           # vitest 全量 (core + components)
-pnpm typecheck      # vue-tsc 两包
-pnpm build          # core library + components WC 单产物 dist/inneragent-chat.js
+pnpm test           # vitest 全量 (core + components + iframe)
+pnpm typecheck      # vue-tsc 三包
+pnpm build          # core library + components WC + iframe host/child 产物
 ```
 
 ## 宿主集成(快速开始)
@@ -111,8 +118,53 @@ pnpm build          # core library + components WC 单产物 dist/inneragent-cha
 
 - API 重映射: `POST /ia/api/v1/runs`(SSE)、`/runs/{runId}/continue|cancel|confirm|
   confirm/expire`、`GET /runs/{runId}`、`/runs/{runId}/events`(Last-Event-ID)、
-  `/runs/running`、`/conversations*`、`/me/*`、`POST /attachments`。
+  `/runs/running`、`/conversations*`、`/me/*`、`/mcp-servers`、`POST /attachments`。
 - SSE 事件协议 (runId:seq、outputType 全集、根终态必需) 与融光 1:1 不变。
 - `tokenGetter` 过期懒换: 401 → 再次调用 tokenGetter (单飞) → 新 token 重试一次。
-- `mode: 'iframe'` 为 P4/W15 占位 (`IframeModeNotImplementedError`)。
+- `mode: 'iframe'`(P4/W15 起): 宿主侧声明, 桥接经 `@inneragent/sdk-iframe`
+  (见下节); 不再抛占位错误。
+- 配置视图: `<inneragent-chat view="config">` — Skill 只读列表 + 用户级三方
+  MCP 启停; headless 走导出的 `mcpUserServersApi` / `meApi` /
+  `getAssistantReferenceOptions`。
 - 偏差清单见任务 P1-T3a 报告。
+
+## iframe 模式 (P4/W15)
+
+`@inneragent/sdk-iframe` — 同源策略受限宿主把 `<inneragent-chat>` 运行在
+iframe 内, 宿主页与 iframe 仅以 postMessage 协议桥通信。协议与安全决策:
+
+- **token 不入 URL**: `createIframeEmbed` 对 src 中 token 形 query 参数直接
+  抛错; embed token 的唯一合法通道是握手后的 `token` postMessage 消息
+  (显式 targetOrigin, origin allowlist 内)。
+- **origin allowlist**: 宿主 `allowedOrigins`(缺省 `new URL(src).origin`),
+  被嵌页 `allowedParentOrigins`(缺省同源); 来源不符的消息一律丢弃。
+- **nonce + ack**: 每条消息带唯一 nonce, 应答以 `ack` 回指; `ready.ack`
+  必须等于 child 最近一次 `hello.nonce`(防旧消息冒充/串线)。
+- **401 懒换跨桥**: child API 层 401 → `onUnauthorized` 钩子失效本地 token
+  缓存 → 向宿主以 `reason:'refresh'` 重取; 宿主亦可 `embed.refreshToken()`
+  主动推送。
+- **严格 CSP 可用**: 产物无 `eval` / `new Function` / `document.write`
+  (csp.spec.ts 恒查源码 + dist), `dist/iframe-child.js` 自包含
+  (vue/pinia runtime 内联, 被嵌页无需 import map)。
+
+```js
+// 宿主页 (还可选 onEvent 收状态/错误/运行终态、setTheme 同步主题)
+import { createIframeEmbed } from '@inneragent/sdk-iframe'
+const embed = createIframeEmbed({
+  src: 'https://frame.example/inneragent/frame.html', // token 不入 URL
+  appKey: 'your-app',
+  tokenGetter: async () => '...', // token 通道唯一来源
+  onEvent: (event) => { /* status/error/run-terminal/tool-finished */ },
+})
+await embed.ready
+embed.setPage({ name: 'home' })   // 上下文同步 (对应 setRunContext)
+embed.setObject({ type: 'script', id: 7 })
+await embed.refreshToken()        // 宿主主动续签推送
+embed.destroy()
+
+// 被嵌页 (自包含产物场景: <script type="module" src="iframe-child.js">)
+import { mountIframeAgent } from '@inneragent/sdk-iframe'
+mountIframeAgent({ allowedParentOrigins: ['https://host.example'] })
+```
+
+完整消息类型表与可运行 demo 见 `examples/iframe-host/README.md`。

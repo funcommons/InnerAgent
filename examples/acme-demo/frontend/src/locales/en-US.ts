@@ -511,6 +511,8 @@ export default {
       subtitle: 'WC mount (tokenGetter points at the host endpoint, cached + refreshed near expiry); or iframe postMessage mode (token never in URL)',
       server: 'InnerAgent server',
       mode: 'Mode',
+      'agent-type': 'Demo scenario (agent)',
+      'agent-type-default': 'Backend default ({type})',
       mount: 'Mount',
       destroy: 'Destroy',
       'mode-wc': 'WC mount (recommended)',

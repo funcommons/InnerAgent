@@ -18,6 +18,8 @@ import { fetchIaEmbedToken } from '@/api/ia'
 import { createEmbedTokenGetter, resolveInnerAgentAppKey } from '@/ia/innerAgentBridge'
 import { buildIframeEmbedOptions, describeEmbedEvent, resolveFrameSrc } from '@/ia/iframeEmbed'
 import { loadIframeEmbed, loadInnerAgentSdk, type IFrameEmbedHandle } from '@/ia/sdkLoader'
+import { useLocalStorage } from '@/composables/useLocalStorage'
+import { DEMO_AGENTS, IA_EMBED_AGENT_TYPE_KEY, isDemoAgentType } from '@/ia/demoAgents'
 
 defineOptions({ name: 'IaEmbedChat' })
 
@@ -28,6 +30,30 @@ const mode = ref<'wc' | 'iframe'>('wc')
 const mounted = ref(false)
 const loading = ref(false)
 const handshake = ref('')
+
+/**
+ * 演示场景选择('' = 跟随后端默认 agentType):
+ * - localStorage 持久化(useLocalStorage,JSON 字符串);
+ * - 画廊「开始对话」深链 ?agentType=… 优先(只认 5 场景白名单)并落持久化。
+ * 注:此处直接读 window.location.search 而非 useRoute——本页不依赖路由响应式,
+ * 且组件可脱离 router 上下文挂载(测试零改造)。
+ */
+const selectedAgentType = useLocalStorage<string>(IA_EMBED_AGENT_TYPE_KEY, '')
+const deepLinkAgentType = new URLSearchParams(window.location.search).get('agentType')
+const hasDeepLinkAgent = isDemoAgentType(deepLinkAgentType)
+if (hasDeepLinkAgent) selectedAgentType.value = deepLinkAgentType
+
+/** 实际生效的 agentType:选中的演示场景优先,否则用后端公开配置的默认值 */
+const effectiveAgentType = computed(() => {
+  if (isDemoAgentType(selectedAgentType.value)) return selectedAgentType.value
+  return config.value?.agentType ?? ''
+})
+
+/** 选择器选项:后端默认 + 5 场景(名称走 ia.demo.agents.<agentType>.name) */
+const agentTypeOptions = computed<SelectOption[]>(() => [
+  { label: t('ia.embed.agent-type-default', { type: config.value?.agentType ?? '—' }), value: '' },
+  ...DEMO_AGENTS.map((a) => ({ label: t(`ia.demo.agents.${a.agentType}.name`), value: a.agentType })),
+])
 
 type BootStatus = 'idle' | 'loading' | 'ready' | 'error'
 const status = ref<BootStatus>('idle')
@@ -81,16 +107,17 @@ async function onMount(): Promise<void> {
         appKey: resolveInnerAgentAppKey(config.value.appKey),
         tokenGetter: createEmbedTokenGetter(fetchIaEmbedToken),
         baseURL: baseURL.value,
-        agentType: config.value.agentType,
+        agentType: effectiveAgentType.value,
       })
       sdk.registerInnerAgentChat()
       handshake.value = t('ia.embed.wc-ready')
     } else {
       // 4. iframe 模式:src 只给页面地址,token 经 postMessage 消息桥下发
+      //    agentType 进 createIframeEmbed options → 握手 ready 载荷 → child init
       const host = await loadIframeEmbed()
       embed = host.createIframeEmbed(buildIframeEmbedOptions({
         appKey: resolveInnerAgentAppKey(config.value.appKey),
-        agentType: config.value.agentType,
+        agentType: effectiveAgentType.value,
         tokenGetter: createEmbedTokenGetter(fetchIaEmbedToken),
         container: containerRef.value,
         onEvent: (event) => addLog('IA_EVENT', describeEmbedEvent(event)),
@@ -133,6 +160,11 @@ function retry(): void {
   void onMount()
 }
 
+/** 切换演示场景:已处于挂载态(挂载中/已就绪)则销毁并以新 agentType 重建 */
+function onSelectAgentType(): void {
+  if (status.value === 'ready' || status.value === 'loading') void onMount()
+}
+
 /** 测试挂载点:暴露当前接入模式(组件内其余状态经 DOM 断言) */
 defineExpose({ mode })
 
@@ -142,7 +174,10 @@ onMounted(async () => {
   } catch {
     errorDetail.value = t('ia.embed.config-missing')
     status.value = 'error'
+    return
   }
+  // 画廊「开始对话」深链(?agentType=…):自动挂载直达对话;普通进入仍由用户点「挂载」
+  if (hasDeepLinkAgent) void onMount()
 })
 
 onBeforeUnmount(() => {
@@ -166,7 +201,17 @@ onBeforeUnmount(() => {
         </div>
         <div class="field">
           <span class="label">agentType</span>
-          <code>{{ config?.agentType || '—' }}</code>
+          <code data-testid="embed-agent-type-current">{{ effectiveAgentType || '—' }}</code>
+        </div>
+        <div class="field">
+          <span class="label">{{ t('ia.embed.agent-type') }}</span>
+          <FcSelect
+            v-model="selectedAgentType"
+            :options="agentTypeOptions"
+            style="width: 240px"
+            data-testid="embed-agent-type"
+            @change="onSelectAgentType"
+          />
         </div>
         <div class="field">
           <span class="label">{{ t('ia.embed.mode') }}</span>

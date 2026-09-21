@@ -511,6 +511,8 @@ export default {
       subtitle: 'WC 直挂(tokenGetter 指向宿主端点,缓存 + 临期重签);或 iframe postMessage 模式(token 不入 URL,仅消息桥下发)',
       server: 'InnerAgent 服务',
       mode: '接入模式',
+      'agent-type': '演示场景(Agent)',
+      'agent-type-default': '后端默认({type})',
       mount: '挂载',
       destroy: '销毁',
       'mode-wc': 'WC 直挂(推荐)',

@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * 全局异常 → {code,msg,data} 信封(《05-微剧场微中台接入指南》§8.2 错误码语义)。
+ * 全局异常 → {code,msg,data} 信封(错误码语义对齐 InnerAgent 接入指南 §6.5)。
  *
  * 映射规则:BizException → HTTP 状态 = code;参数校验失败 → 400;其余兜底 → 500。
- * 日志红线(§6-1/§3.5):任何密钥类字段(tenantSecret/webhookSecret)不进日志。
+ * 日志红线:任何密钥类字段(签名私钥/webhookSecret/adminKey)不进日志。
  */
 @Slf4j
 @RestControllerAdvice

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * ACME 宿主业务工具 —— 经 starter @IaTool 暴露给 InnerAgent 的演示能力
- * (接入指南步骤②;取代微剧场 DEMO 的「产片提交/轮询」演示位)。
+ * (接入指南步骤②;宿主以注解声明业务能力,运行内核按风险级决定确认策略)。
  *
  * <p>InnerAgent 按 (appId, endpoint_url) 连到本进程的 /ia-mcp,每次
  * tools/call 附 60s X-IA-Act;starter 验签后把身份重建为 {@link IaActClaims},

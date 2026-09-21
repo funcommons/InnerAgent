@@ -3,8 +3,8 @@ package fun.commons.acmedemo.common;
 import lombok.Getter;
 
 /**
- * 业务异常:code 语义对齐《05-微剧场微中台接入指南》§8.2 错误码速查
- * (400 参数 / 401 认证 / 403 越权 / 404 不存在 / 429 限流锁定配额 / 500 / 503)。
+ * 业务异常:code 语义对齐接入指南 §6.5 错误语义表
+ * (400 参数 / 401 认证 / 403 越权 / 404 不存在 / 409 冲突 / 500 / 502 / 503)。
  * GlobalExceptionHandler 会把 code 映射为 HTTP 状态码。
  */
 @Getter

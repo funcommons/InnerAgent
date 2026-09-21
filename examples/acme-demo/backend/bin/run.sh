@@ -1,12 +1,18 @@
 #!/bin/bash
-# ACME DEMO 宿主后端启动脚本 (含 JVM 调优)
-# 用法: AFV_BASE=... AFV_OPENID=... AFV_TENANT_SECRET=... ./bin/run.sh
+# ACME InnerAgent 接入 DEMO 宿主后端启动脚本 (含 JVM 调优)
+# 用法: IA_SERVER_BASE=... IA_SIGN_PRIVATE_KEY="$(cat host.key)" IA_WEBHOOK_SECRET=... ./bin/run.sh
 #       或   JAVA_OPTS="-Xms4g -Xmx4g" ./bin/run.sh
+#
+# 必要环境变量见 README「运行」一节:
+#   IA_SERVER_BASE      InnerAgent 主服务(默认 http://localhost:18090)
+#   IA_SIGN_PRIVATE_KEY 宿主 RSA 私钥 PEM(与管理面登记公钥配对)
+#   IA_WEBHOOK_SECRET   Webhook 验签密钥(可选)
+#   IA_ADMIN_KEY        管理面密钥(仅一次性开通/自检,可选)
 #
 # JVM 调优说明:
 #   -Xms=-Xmx           避免堆扩张停顿
 #   G1GC + 100ms 暂停    低延迟取向
-#   UseStringDeduplication  去重 (令牌/单号字符串多)
+#   UseStringDeduplication  去重 (token/工单号字符串多)
 
 JAVA_OPTS="${JAVA_OPTS:--Xms512m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:+UseStringDeduplication}"
 

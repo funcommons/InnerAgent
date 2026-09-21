@@ -3,10 +3,9 @@ package fun.commons.acmedemo.common;
 import lombok.Data;
 
 /**
- * 统一响应封装 {code, msg, data}。
+ * 统一响应封装 {code, msg, data}(与 InnerAgent CommonResult 同形)。
  *
- * 对齐《05-微剧场微中台接入指南》§8.2:判定成功一律看 code===0,
- * 不要只看 HTTP 状态(平台侧存在 HTTP 200 + body.code=403/429 的形态)。
+ * 判定成功一律看 code===0,不要只看 HTTP 状态(存在 HTTP 200 + body.code=4xx 的形态)。
  */
 @Data
 public class R<T> {

@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 工具调用演示(宿主 REST 面;取代微剧场 DEMO 的「产片提交/轮询」)。
+ * 工具调用演示(宿主 REST 面)。
  *
  * 与 {@code AcmeTicketTools} 共用同一内存存储:本控制器是「宿主表单直建」
  * 通道(channel=direct);经 InnerAgent 会话触发的 create_ticket 走

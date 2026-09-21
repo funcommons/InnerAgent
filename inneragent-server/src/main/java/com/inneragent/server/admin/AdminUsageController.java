@@ -53,4 +53,27 @@ public class AdminUsageController {
         return success(usageQueryService.page(new UsageQueryService.UsageSummaryFilter(
                 appId, userId, from, to, granularity, pageNo, pageSize)));
     }
+
+    /**
+     * 北极星出数(W15;03-开发计划 §7.3 验收 6,口径登记于
+     * docs/灰度与指标大盘.md B4 行):
+     * <ul>
+     *   <li>好评率 = 👍 ÷ (👍+👎),窗口内全部反馈;</li>
+     *   <li>带反馈完成率代理 = COMPLETED ÷ (COMPLETED+FAILED)(CANCELLED
+     *       单列观察)——仅带反馈的根运行(run 级反馈按 run_id,消息级经
+     *       conversation 连根运行),B4 任务完成率的反馈质量佐证。</li>
+     * </ul>
+     * 比率为 [0,1];窗口无样本时 null(不出数,不虚报)。
+     */
+    @GetMapping("/north-star")
+    @Operation(summary = "北极星摘要(反馈好评率 + 带反馈完成率代理;时间按反馈 create_time)")
+    public CommonResult<UsageQueryService.NorthStarSummary> northStar(
+            @RequestParam(required = false) Long appId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime to) {
+        return success(usageQueryService.northStar(
+                new UsageQueryService.NorthStarFilter(appId, from, to)));
+    }
 }

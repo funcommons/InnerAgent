@@ -24,16 +24,16 @@ import java.util.regex.Pattern;
  *       加密存储可延后。</li>
  * </ul>
  */
-final class McpThirdPartyServerSupport {
+public final class McpThirdPartyServerSupport {
 
     /** 鉴权策略:静态头(P4-W13 唯一可用形态)。 */
-    static final String AUTH_STATIC_HEADER = "STATIC_HEADER";
+    public static final String AUTH_STATIC_HEADER = "STATIC_HEADER";
 
     /** 鉴权策略:OAuth(CIMD/DCR + RFC 8707;P4-W13 枚举位,配置即 501)。 */
-    static final String AUTH_OAUTH = "OAUTH";
+    public static final String AUTH_OAUTH = "OAUTH";
 
     /** 传输方式(P4-W13 仅 Streamable HTTP;SSE 待后续批次按需放开)。 */
-    static final String TRANSPORT = "streamable-http";
+    public static final String TRANSPORT = "streamable-http";
 
     /** serverKey 字符集:与 ToolRegistryService 同口径(字母/数字/连字符,避用下划线)。 */
     private static final Pattern SERVER_KEY = Pattern.compile("[A-Za-z0-9-]{1,64}");
@@ -45,7 +45,7 @@ final class McpThirdPartyServerSupport {
     }
 
     /** 注册/更新请求体(应用级与用户级同形)。 */
-    record Upsert(
+    public record Upsert(
             String serverKey,
             String name,
             String endpointUrl,
@@ -71,7 +71,7 @@ final class McpThirdPartyServerSupport {
     }
 
     /** 字段级校验 + 归一化(userFacing=true 时附加内网/本机地址拒绝——用户自接防 SSRF)。 */
-    static Normalized normalize(Upsert request, boolean userFacing) {
+    public static Normalized normalize(Upsert request, boolean userFacing) {
         String serverKey = requireText(request.serverKey(), "serverKey");
         if (!SERVER_KEY.matcher(serverKey).matches()) {
             throw new BusinessException(400,

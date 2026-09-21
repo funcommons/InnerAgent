@@ -90,7 +90,15 @@ pnpm install
 pnpm dev        # http://localhost:9203,/api 代理到 :9300,/ia 代理到 :18090
 ```
 
-页面(登录:任意用户名即进,演示轻登录;后端分配稳定数字用户 ID 作为 embed token 的 sub):
+页面:
+
+**公开官网区(无需登录)**
+
+- `/` 产品首页(hero / 8 能力卡 / 架构一图流 / 接入三步曲 / 与 demo-host 定位比对)
+- `/docs` 文档中心(章节树 + 正文;内容内化自《docs/接入指南.md》,代码块可复制;每章末「下一步」串成学习路径)
+- `/playground` API 体验台(演示登录 → 签发 embed token → jwt.io 式 claims 可视化 → 过期倒计时;未配置 `IA_SIGN_PRIVATE_KEY` 时给出 503 配置指引)
+
+**控制台(演示轻登录:任意用户名即进;后端分配稳定数字用户 ID 作为 embed token 的 sub)**
 
 - `/ia/overview` 接入流程总览(五步 + 管理面开通状态自检 + 「指南章节↔代码位置」映射表)
 - `/ia/embed` InnerAgent 嵌入演示(WC 直挂 + iframe postMessage 两种模式切换 + 握手日志)

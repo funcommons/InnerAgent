@@ -118,7 +118,12 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
                     event.functionCallArgumentsDone().ifPresent(toolCallDone -> {
                         ResponseFunctionToolCall functionCall = functionCallsByItemId.get(toolCallDone.itemId());
                         String toolCallId = functionCall != null ? functionCall.callId() : toolCallDone.itemId();
-                        String toolName = functionCall != null ? functionCall.name() : toolCallDone.name();
+                        // openai-java 4.6x 起 arguments.done 事件移除 name 字段:
+                        // 正常路径由 output_item.added 建立的 itemId 映射取回;
+                        // 兜底读原始 JSON 的 name,再缺省 unknown(仅防御路径)
+                        String toolName = functionCall != null
+                                ? functionCall.name()
+                                : toolCallNameFallback(toolCallDone);
                         String arguments = functionCall != null ? functionCall.arguments() : toolCallDone.arguments();
                         sawToolCall[0] = true;
                         sink.next(buildChunk(
@@ -632,5 +637,16 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
     private boolean endsWithIgnoreCase(String text, String suffix) {
         return text != null && suffix != null && text.toLowerCase(Locale.ROOT)
                 .endsWith(suffix.toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * arguments.done 事件缺 functionCall 映射时的工具名兜底:优先读原始 JSON
+     * 兼容旧端点仍下发的 name 字段;新端点无该字段时按 unknown(调用方按
+     * 未知工具拒绝,不致 NPE)。
+     */
+    private String toolCallNameFallback(
+            com.openai.models.responses.ResponseFunctionCallArgumentsDoneEvent event) {
+        com.openai.core.JsonValue rawName = event._additionalProperties().get("name");
+        return rawName == null ? "unknown" : rawName.convert(String.class);
     }
 }

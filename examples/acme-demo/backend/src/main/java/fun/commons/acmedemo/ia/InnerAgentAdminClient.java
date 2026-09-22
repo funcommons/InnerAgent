@@ -1,6 +1,7 @@
 package fun.commons.acmedemo.ia;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import fun.commons.acmedemo.common.BizException;
 import fun.commons.acmedemo.config.IaProperties;
 import java.time.Duration;
@@ -97,6 +98,40 @@ public class InnerAgentAdminClient {
                 });
         requireOk(resp);
         return resp.data();
+    }
+
+    // ---------- Agent 定义管理代理(DEMO「Agent 管理」页) ----------
+
+    /** GET 管理面 JSON 端点,返回完整信封 {code,msg,data}(调用方按需取 data)。 */
+    public JsonNode getEnvelope(String uri) {
+        try {
+            return rest.get().uri(uri).retrieve().body(JsonNode.class);
+        } catch (RestClientResponseException e) {
+            throw toBiz(e);
+        }
+    }
+
+    /** GET 用户面端点(带宿主自签的内部 embed token;admin 头并存,服务端互不干扰)。 */
+    public JsonNode getEnvelopeAsUser(String uri, String embedToken) {
+        try {
+            return rest.get().uri(uri)
+                    .header("Authorization", "Bearer " + embedToken)
+                    .retrieve().body(JsonNode.class);
+        } catch (RestClientResponseException e) {
+            throw toBiz(e);
+        }
+    }
+
+    /** POST 管理面 JSON 端点(body 序列化为 JSON),返回完整信封。 */
+    public JsonNode postEnvelope(String uri, Object body) {
+        try {
+            return rest.post().uri(uri)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve().body(JsonNode.class);
+        } catch (RestClientResponseException e) {
+            throw toBiz(e);
+        }
     }
 
     // ---------- 状态自检(DEMO 总览页实时拉取) ----------

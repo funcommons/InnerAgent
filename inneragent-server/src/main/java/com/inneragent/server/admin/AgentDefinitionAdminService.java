@@ -11,6 +11,7 @@ import com.inneragent.agent.entity.AgentDefinition;
 import com.inneragent.agent.mapper.AgentDefinitionMapper;
 import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.common.PageResult;
+import com.inneragent.platform.context.AppContext;
 import com.inneragent.platform.toolhub.ToolAuditService;
 import com.inneragent.platform.toolhub.ToolDecisionSource;
 import lombok.RequiredArgsConstructor;
@@ -90,6 +91,13 @@ public class AgentDefinitionAdminService {
      */
     public PageResult<DefinitionView> page(
             long appId, int pageNo, int pageSize, String kind) {
+        // 管理面以系统模式执行:范围由显式 appId 条件提供,避免「无 AppContext
+        // 线程」被 AppIdLineHandler 按缺省 app 1 做 willDoQuery 行后过滤而丢行
+        // (MP 3.5.17 实测:total 正确、records 全空;文档模式=管理端显式 appId)。
+        return AppContext.runAsSystem(() -> doPage(appId, pageNo, pageSize, kind));
+    }
+
+    private PageResult<DefinitionView> doPage(long appId, int pageNo, int pageSize, String kind) {
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.min(Math.max(pageSize, 1), 100);
         LambdaQueryWrapper<AgentDefinition> query = new LambdaQueryWrapper<AgentDefinition>()
@@ -111,7 +119,7 @@ public class AgentDefinitionAdminService {
 
     /** 详情(404 兜底)。 */
     public DefinitionView get(long id) {
-        return toView(requireRow(id));
+        return AppContext.runAsSystem(() -> toView(requireRow(id)));
     }
 
     // ------------------------------------------------------------------
@@ -126,6 +134,10 @@ public class AgentDefinitionAdminService {
      */
     @Transactional
     public DefinitionView updatePrompt(long id, String slot, String content) {
+        return AppContext.runAsSystem(() -> doUpdatePrompt(id, slot, content));
+    }
+
+    private DefinitionView doUpdatePrompt(long id, String slot, String content) {
         String normalizedSlot = normalizeSlot(slot);
         if (content == null) {
             throw new BusinessException(400, "content 不能为空(清空槽位传空字符串)");
@@ -167,6 +179,10 @@ public class AgentDefinitionAdminService {
      * ids 缺省=该 app 全量;ids 指定=按主键过滤(未知 id 静默忽略,幂等)。
      */
     public AgentDefinitionBundle.Bundle export(long appId, List<Long> ids) {
+        return AppContext.runAsSystem(() -> doExport(appId, ids));
+    }
+
+    private AgentDefinitionBundle.Bundle doExport(long appId, List<Long> ids) {
         LambdaQueryWrapper<AgentDefinition> query = new LambdaQueryWrapper<AgentDefinition>()
                 .orderByAsc(AgentDefinition::getAgentKey);
         if (ids != null && !ids.isEmpty()) {
@@ -197,6 +213,12 @@ public class AgentDefinitionAdminService {
      */
     @Transactional
     public AgentDefinitionBundle.ImportResult importBundle(
+            long appId, JsonNode rawBundle, String conflictPolicy, boolean dryRun) {
+        return AppContext.runAsSystem(
+                () -> doImportBundle(appId, rawBundle, conflictPolicy, dryRun));
+    }
+
+    private AgentDefinitionBundle.ImportResult doImportBundle(
             long appId, JsonNode rawBundle, String conflictPolicy, boolean dryRun) {
         String policy = normalizePolicy(conflictPolicy);
         validateBundleShape(rawBundle);

@@ -6,7 +6,7 @@
 import { computed, type ComputedRef } from 'vue'
 import type { Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Compass, Film, Grid, House, Tools, VideoPlay } from '@element-plus/icons-vue'
+import { Compass, Film, Grid, House, Setting, Tools, VideoPlay } from '@element-plus/icons-vue'
 import type { NavItem } from '@/components/sdk'
 
 /** 默认展开的 sub-menu id 列表 (无 sub-menu 时为空数组) */
@@ -24,6 +24,11 @@ export function useSidebarNavItems(): ComputedRef<NavItem[]> {
       index: '/ia/agents',
       label: t('router.ia-agents'),
       icon: Grid as unknown as Component,
+    },
+    {
+      index: '/ia/agent-admin',
+      label: t('router.ia-agent-admin'),
+      icon: Setting as unknown as Component,
     },
     {
       index: '/ia/embed',

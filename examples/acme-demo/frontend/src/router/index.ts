@@ -74,6 +74,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'router.ia-embed', icon: 'VideoPlay' }
       },
       {
+        path: 'agent-admin',
+        name: 'IaAgentAdmin',
+        component: () => import('@/views/ia/AgentAdmin.vue'),
+        meta: { title: 'router.ia-agent-admin', icon: 'Setting' }
+      },
+      {
         path: 'tools',
         name: 'IaTools',
         component: () => import('@/views/ia/ToolsBoard.vue'),

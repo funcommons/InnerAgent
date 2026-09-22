@@ -40,10 +40,10 @@ describe('useSidebarNavItems(控制台侧栏 nav)', () => {
     expect(NAV_DEFAULT_OPENEDS).toEqual([])
   })
 
-  it('包含 /ia 四入口、/dev 与 / 返回官网', () => {
+  it('包含 /ia 五入口(总览/画廊/Agent 管理/嵌入/工具)、/dev 与 / 返回官网', () => {
     const { wrapper } = mountProbe()
     expect(items().map((i) => i.index)).toEqual([
-      '/ia/overview', '/ia/agents', '/ia/embed', '/ia/tools', '/dev', '/',
+      '/ia/overview', '/ia/agents', '/ia/agent-admin', '/ia/embed', '/ia/tools', '/dev', '/',
     ])
     const back = items()[items().length - 1]!
     expect(back.index).toBe('/')

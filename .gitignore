@@ -15,3 +15,6 @@ data/
 
 # InnerAgent 运行期产物
 inneragent-server/.agentscope/
+
+# Playwright 瞬时输出(根目录兜底;e2e/ 内已有同名忽略)
+/test-results/

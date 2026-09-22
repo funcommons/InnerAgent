@@ -1,0 +1,11 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "configId": 16,
+    "ok": false,
+    "responseText": "连接失败: 获取模型列表失败: Failed to connect to localhost/[0:0:0:0:0:0:0:1]:9",
+    "durationMs": 60,
+    "testedAt": "2026-09-21T09:55:03.540306Z"
+  }
+}

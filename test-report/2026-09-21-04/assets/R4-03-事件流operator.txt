@@ -1,4 +1,4 @@
 resume:admin
 emergency-stop:admin
+run-terminated:admin
 resume:admin
-emergency-stop:admin

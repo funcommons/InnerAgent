@@ -1,0 +1,17 @@
+{
+  "id": 248,
+  "appId": 1,
+  "tenantId": 0,
+  "userId": 8701,
+  "conversationId": null,
+  "runId": null,
+  "toolFqn": "mcp__e2eaudit__e2e_audit_tool",
+  "decision": "granted",
+  "decisionSource": "user-grant",
+  "riskLevel": "medium",
+  "paramsMaskedJson": null,
+  "resultSummary": "scope=permanent; note=e2e audit",
+  "errorText": null,
+  "durationMs": null,
+  "createTime": "2026-09-21T17:54:59.986452"
+}

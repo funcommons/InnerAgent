@@ -1,0 +1,15 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "toolId": 92,
+    "fqn": "mcp__e2e13histb2kjx9__hist_probe",
+    "verdict": "unchanged",
+    "reasons": [
+      "schema_fingerprint_unchanged"
+    ],
+    "revalidateRequired": false,
+    "effectiveSchemaSha256": "555319d76d207a046586b3e58ef9a9af42c8f2bb312ef4445a01fe0de47e98e5",
+    "pendingSchemaSha256": null
+  }
+}

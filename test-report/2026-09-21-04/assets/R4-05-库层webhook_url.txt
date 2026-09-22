@@ -1,1 +1,1 @@
-ia_app.webhook_url = https://e2e-r4-muanw4vl.example.com/hook
+ia_app.webhook_url = https://e2e-r4-mub2ku4e.example.com/hook

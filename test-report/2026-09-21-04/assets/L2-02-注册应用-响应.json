@@ -2,17 +2,17 @@
   "code": 0,
   "msg": "success",
   "data": {
-    "id": 29,
+    "id": 31,
     "appKey": "e2e-app-rc1",
     "name": "E2E 测试应用",
-    "signPublicKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr3j3UHj71ZMTZa9lo+9J\n/h2CMu98eghF6GJQg2hhgbJxEgaaVnLV2/5esYbYhNnhhbS4DK1sZLpZc4TBJalX\nc8h5hh4fpvCp6R6o0HrL1VAyEe55qQeOzbXI5vz2GT+bEzXOMloyzEzrAc0KBYJr\nicR9+n19GeTnlGJz+BnHzfGLVLxvT1+2eDAROZGa2chrUFPFXP5KsYT8X6HQVn11\nvyXxxMiRkuIXbUwNMquvjCDFR255comZYufAeWfnHEmrN54BSzh6skNyBKUSaic2\nwwQ/NSk5pCpHIfsCOfZdHvi4jft2QUZHjXeSQfsL4y4spxXFmz8CcGxPzLnb8Ze+\nKQIDAQAB\n-----END PUBLIC KEY-----",
-    "signKeyFingerprint": "ba4c10471f14a6a3",
+    "signPublicKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkhpWFnTt2wrd0PfTr9O9\nU0Aw3CoEed4gjSglenb+TAMPPKxuOxkQbEkBHwlLBhLyjEQrkmpkn/vlEafSYo8K\nA2uvwnPDkaZIJR1tH1Z6aBKLp88fcrr9bNzd3mzL5qTxp1hHRidAK7a/W18GC7aW\nphIkDjqPPRRdmo969lwHSzhGqU6/KQvBuC6pnRSmf0Y0MhX0dNU5IoR172fFJ7ag\nzrcH84B5YwzXvA0BqRejRCEnUQA0ACe4uDJ1ieHK6BG+b8Oak56jxj5xtqsqkUPr\nMM52X3FSwySG5GZbmDgk42Mxbq1BHc7b9o2WvFhIw55QZYck8/3r5iOIGx7skIE3\nAQIDAQAB\n-----END PUBLIC KEY-----",
+    "signKeyFingerprint": "eb993b1bc8959faa",
     "signKeyRotatedAt": null,
     "webhookUrl": "https://e2e.example.com/hook",
     "webhookSecretMasked": "",
     "conversationRetentionDays": 180,
     "status": 1,
-    "createTime": "2026-09-21T11:05:05.872028Z",
-    "updateTime": "2026-09-21T11:05:05.872044Z"
+    "createTime": "2026-09-21T17:54:25.349821Z",
+    "updateTime": "2026-09-21T17:54:25.349856Z"
   }
 }

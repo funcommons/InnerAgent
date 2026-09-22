@@ -5,7 +5,9 @@
     "forced-policy",
     "live-confirm",
     "expired",
-    "full-access"
+    "full-access",
+    "admin",
+    "safety"
   ],
   "uiHasExpired": true
 }

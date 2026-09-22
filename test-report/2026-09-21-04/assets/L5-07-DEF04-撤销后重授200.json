@@ -1,0 +1,25 @@
+{
+  "revoke": 200,
+  "reGrant": {
+    "code": 0,
+    "msg": "success",
+    "data": {
+      "createTime": "2026-09-21T17:54:58.940924",
+      "updateTime": "2026-09-21T17:54:58.940944",
+      "deleted": null,
+      "tenantId": null,
+      "id": 70,
+      "appId": 1,
+      "userId": 8702,
+      "toolFqn": "mcp__e2eaudit__e2e_audit_tool",
+      "scope": "permanent",
+      "conversationId": null,
+      "riskAtGrant": "medium",
+      "schemaSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "admin",
+      "invalidated": false,
+      "invalidatedReason": null,
+      "decisionNote": "d2"
+    }
+  }
+}

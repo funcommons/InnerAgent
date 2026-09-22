@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "body": {
+    "code": 0,
+    "msg": "success",
+    "data": {
+      "configId": 1,
+      "ok": true,
+      "responseText": "连接正常,发现 0 个远程模型",
+      "durationMs": 1,
+      "testedAt": "2026-09-21T09:55:03.644437Z"
+    }
+  }
+}

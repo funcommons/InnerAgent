@@ -1,0 +1,21 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 16,
+    "name": "e2e-model-rc1",
+    "platform": "openai_compatible",
+    "textProtocol": null,
+    "apiUrl": "http://localhost:9",
+    "autoAppendV1Path": true,
+    "proxyType": null,
+    "proxyHost": null,
+    "proxyPort": null,
+    "proxyUsername": null,
+    "apiKeyMasked": "sk-e••••abcd",
+    "status": 1,
+    "remark": "e2e 创建",
+    "createTime": "2026-09-21T17:55:01.051038Z",
+    "updateTime": "2026-09-21T17:55:01.051058Z"
+  }
+}

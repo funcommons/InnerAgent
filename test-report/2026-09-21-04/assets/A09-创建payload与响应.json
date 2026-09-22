@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "body": {
+    "code": 0,
+    "msg": "success",
+    "data": {
+      "id": 18,
+      "name": "e2e13-textproto-mub2kljn40e",
+      "platform": "openai_compatible",
+      "textProtocol": "mock",
+      "apiUrl": null,
+      "autoAppendV1Path": true,
+      "proxyType": null,
+      "proxyHost": null,
+      "proxyPort": null,
+      "proxyUsername": null,
+      "apiKeyMasked": "",
+      "status": 1,
+      "remark": "",
+      "createTime": "2026-09-21T17:55:29.454941Z",
+      "updateTime": "2026-09-21T17:55:29.454958Z"
+    }
+  }
+}

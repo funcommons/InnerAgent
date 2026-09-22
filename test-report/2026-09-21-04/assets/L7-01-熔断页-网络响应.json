@@ -17,7 +17,7 @@
         "mcpQps": 20,
         "confirmTimeoutHours": 24
       },
-      "activeRuns": 0,
+      "activeRuns": 1,
       "recentEvents": [
         {
           "id": 9,

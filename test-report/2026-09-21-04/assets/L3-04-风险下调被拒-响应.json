@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "code": 400,
+  "msg": "删除/资金/凭据类工具强制高危,不可下调: e2e_delete_tool",
+  "data": null
+}

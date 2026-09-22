@@ -11,8 +11,32 @@
     "mcpQps": 33,
     "confirmTimeoutHours": 24
   },
-  "activeRuns": 0,
+  "activeRuns": 1,
   "recentEvents": [
+    {
+      "id": 11,
+      "type": "resume",
+      "runId": null,
+      "reason": "人工恢复",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T17:55:37.723Z"
+    },
+    {
+      "id": 10,
+      "type": "emergency-stop",
+      "runId": null,
+      "reason": "R4 复测:停用守卫取证",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T17:55:37.277Z"
+    },
+    {
+      "id": 9,
+      "type": "run-terminated",
+      "runId": "758501d81b2f41d3a1bafa820e988b57",
+      "reason": "R4 复测:管理员强制终止",
+      "operator": "admin",
+      "occurredAt": "2026-09-21T11:04:32.104Z"
+    },
     {
       "id": 8,
       "type": "resume",

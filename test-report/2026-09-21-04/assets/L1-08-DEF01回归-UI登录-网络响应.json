@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": {
+    "code": 0,
+    "msg": "success",
+    "data": {
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJpbm5lcmFnZW50LWFkbWluIiwic3ViIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3ODk5OTg4NjMsImlhdCI6MTc4OTk4NDQ2MywianRpIjoiMDkyNjI5MzItYThjOS00MmZiLTgyZGMtMDhlZWViMDZhZmUwIn0.VjyA0vFPEQMhhBl0LYBUCiebbgj-V8KplMmkwtf2oZw",
+      "tokenType": "Bearer",
+      "expiresInSeconds": 14400,
+      "username": "admin"
+    }
+  }
+}

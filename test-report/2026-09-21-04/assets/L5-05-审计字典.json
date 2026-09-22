@@ -26,6 +26,14 @@
       {
         "code": "full-access",
         "description": "FULL_ACCESS 全开放"
+      },
+      {
+        "code": "admin",
+        "description": "管理面定义变更(提示词编辑/导入导出)"
+      },
+      {
+        "code": "safety",
+        "description": "内容安全干预(block/redact)"
       }
     ],
     "decisions": [
@@ -64,6 +72,38 @@
       {
         "code": "tool_disabled",
         "description": "工具停用"
+      },
+      {
+        "code": "tool_deleted",
+        "description": "工具注销"
+      },
+      {
+        "code": "tool_revived",
+        "description": "工具重注册复活(R1 DEF-03)"
+      },
+      {
+        "code": "schema_revalidated",
+        "description": "BREAKING 暂存确认后生效"
+      },
+      {
+        "code": "run-terminated",
+        "description": "管理员强制终止运行"
+      },
+      {
+        "code": "blocked",
+        "description": "内容安全拦截"
+      },
+      {
+        "code": "redacted",
+        "description": "内容安全脱敏"
+      },
+      {
+        "code": "definition-updated",
+        "description": "Agent 定义变更(提示词编辑/覆盖导入)"
+      },
+      {
+        "code": "definition-imported",
+        "description": "Agent 定义导入新建"
       }
     ]
   }

@@ -1,0 +1,40 @@
+[
+  {
+    "case": "permanent 携带会话 ID",
+    "http": 400,
+    "code": 400,
+    "msg": "permanent 授权不携带会话 ID"
+  },
+  {
+    "case": "conversation 缺会话 ID",
+    "http": 400,
+    "code": 400,
+    "msg": "conversation 授权必须携带会话 ID"
+  },
+  {
+    "case": "未知 scope",
+    "http": 400,
+    "code": 400,
+    "msg": "scope 仅支持 conversation/permanent: session"
+  },
+  {
+    "case": "未注册工具",
+    "http": 404,
+    "code": 404,
+    "msg": "工具未注册: e2e_no_such_tool"
+  },
+  {
+    "case": "停用工具授予",
+    "http": 400,
+    "code": 400,
+    "msg": "工具已停用,不能授予: e2e_disabled_tool"
+  },
+  {
+    "case": "重复同作用域有效授权",
+    "http": 409
+  },
+  {
+    "case": "撤销不存在授权",
+    "http": 404
+  }
+]

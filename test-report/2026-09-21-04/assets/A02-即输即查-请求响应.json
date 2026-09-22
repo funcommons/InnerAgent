@@ -1,0 +1,4 @@
+{
+  "url": "http://localhost:18081/ia/api/v1/admin/audit-logs?from=2026-09-21T00%3A00%3A00&pageNo=1&pageSize=10",
+  "status": 200
+}

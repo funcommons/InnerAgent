@@ -15,27 +15,27 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
-    "axios": "^1.13.6",
-    "element-plus": "^2.13.3",
+    "axios": "^1.20.0",
+    "element-plus": "^2.14.6",
     "pinia": "^3.0.4",
-    "uuid": "^14.0.1",
-    "vue": "^3.5.25",
-    "vue-router": "^5.0.3"
+    "uuid": "^14.0.2",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.13.6",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/parser": "^8.70.0",
-    "@vitejs/plugin-vue": "^6.0.2",
-    "@vue/test-utils": "^2.4.11",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "@vue/test-utils": "^2.5.1",
     "@vue/tsconfig": "^0.8.1",
     "eslint": "^10.11.0",
     "jsdom": "^29.1.1",
-    "msw": "^2.13.1",
+    "msw": "^2.15.0",
     "typescript": "~5.9.3",
-    "vite": "^7.3.1",
-    "vitest": "^4.1.10",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11",
     "vue-eslint-parser": "^10.4.1",
-    "vue-tsc": "^3.1.5"
+    "vue-tsc": "^3.3.11"
   }
 }

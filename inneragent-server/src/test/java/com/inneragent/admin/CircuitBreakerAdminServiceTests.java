@@ -63,8 +63,13 @@ class CircuitBreakerAdminServiceTests {
     static void initLambdaColumnCache() {
         // 恢复路径改定向 LambdaUpdateWrapper:单测内省 SET 子句需 MP 列缓存
         // (Spring 装配下由 mapper 初始化,切片测试手动补 TableInfo)
-        TableInfoHelper.initTableInfo(
-                new MapperBuilderAssistant(new MybatisConfiguration(), ""), AppRegistration.class);
+        MapperBuilderAssistant assistant =
+                new MapperBuilderAssistant(new MybatisConfiguration(), "");
+        TableInfoHelper.initTableInfo(assistant, AppRegistration.class);
+        // MP 3.5.17 起列解析提前:紧急停用级联取消在途 run(AgentRun)与
+        // recentEvents(CircuitEvent)的 lambda wrapper 构造即解析列,同样需手动补
+        TableInfoHelper.initTableInfo(assistant, AgentRun.class);
+        TableInfoHelper.initTableInfo(assistant, CircuitEvent.class);
     }
 
     @BeforeEach

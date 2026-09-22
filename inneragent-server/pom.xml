@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.14</version>
+		<version>3.5.16</version>
 		<relativePath />
 	</parent>
 	<groupId>com.inneragent</groupId>
@@ -18,10 +18,10 @@
 	<properties>
 		<java.version>21</java.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
-		<anthropic-java.version>2.26.0</anthropic-java.version>
-		<dashscope-sdk-java.version>2.22.16</dashscope-sdk-java.version>
+		<anthropic-java.version>2.64.0</anthropic-java.version>
+		<dashscope-sdk-java.version>2.23.1</dashscope-sdk-java.version>
 		<agentscope.version>2.0.0</agentscope.version>
-		<opentelemetry-bom.version>1.62.0</opentelemetry-bom.version>
+		<opentelemetry-bom.version>1.66.0</opentelemetry-bom.version>
 		<victools.version>4.38.0</victools.version>
 		<testcontainers.version>1.21.3</testcontainers.version>
 		<awaitility.version>4.3.0</awaitility.version>
@@ -30,7 +30,7 @@
 
 	<dependencyManagement>
 		<dependencies>
-			<!-- OTel GenAI span 工厂(任务 #18b):api 版本经 BOM 对齐(1.62.0),
+			<!-- OTel GenAI span 工厂(任务 #18b):api 版本经 BOM 对齐(1.66.0),
 				覆盖 agentscope-core 的传递版本,避免跨版本 API 漂移 -->
 			<dependency>
 				<groupId>io.opentelemetry</groupId>
@@ -47,17 +47,18 @@
 				<scope>import</scope>
 			</dependency>
 			<!-- victools BOM 把 swagger-annotations(-jakarta) 压到 2.2.38,低于 springdoc
-				2.8.16 所带 swagger-core/models 2.2.43 的预期,/ia/api-docs 运行期抛
-				NoSuchMethodError(Schema.$dynamicRef);统一 pin 到 2.2.43 对齐 -->
+				所带 swagger-core/models 的预期,/ia/api-docs 运行期抛
+				NoSuchMethodError(Schema.$dynamicRef);统一 pin 对齐 springdoc 传递版本
+				(2.8.16→core 2.2.43;2.8.17→core 2.2.47,升 springdoc 时同步抬钉版) -->
 			<dependency>
 				<groupId>io.swagger.core.v3</groupId>
 				<artifactId>swagger-annotations-jakarta</artifactId>
-				<version>2.2.43</version>
+				<version>2.2.47</version>
 			</dependency>
 			<dependency>
 				<groupId>io.swagger.core.v3</groupId>
 				<artifactId>swagger-annotations</artifactId>
-				<version>2.2.43</version>
+				<version>2.2.47</version>
 			</dependency>
 			<!-- okhttp/okio 混栈修复(P2 台账项,18a):agentscope-core 2.0.0 传递
 				okhttp-jvm 5.3.2(内部连接链 BufferedSocketKt 调 okio.Okio.socket,
@@ -98,12 +99,12 @@
 		<dependency>
 			<groupId>com.baomidou</groupId>
 			<artifactId>mybatis-plus-spring-boot3-starter</artifactId>
-			<version>3.5.12</version>
+			<version>3.5.17</version>
 		</dependency>
 		<dependency>
 			<groupId>com.baomidou</groupId>
 			<artifactId>mybatis-plus-jsqlparser</artifactId>
-			<version>3.5.12</version>
+			<version>3.5.17</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -120,7 +121,7 @@
 		<dependency>
 			<groupId>org.bouncycastle</groupId>
 			<artifactId>bcprov-jdk18on</artifactId>
-			<version>1.84</version>
+			<version>1.86</version>
 		</dependency>
 		<!-- embed/act 双级令牌(P1-T1,技术方案 §6.1):OAuth2 JOSE 模块带 nimbus-jose-jwt,
 			embed token 验签与 act token(RS256)签发/JWKS 发布共用;
@@ -163,7 +164,7 @@
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>2.8.16</version>
+			<version>2.8.17</version>
 		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
@@ -214,7 +215,7 @@
 		<dependency>
 			<groupId>com.openai</groupId>
 			<artifactId>openai-java</artifactId>
-			<version>4.32.0</version>
+			<version>4.67.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.anthropic</groupId>

@@ -485,6 +485,10 @@ export default {
   },
   ia: {
     overview: {
+      'mapping-title': 'Guide section ↔ code location',
+      'mapping-subtitle': 'Where each integration point of this DEMO lives, mapped to the integration guide',
+      'col-guide': 'Guide section',
+      'col-code': 'DEMO code location',
       title: 'InnerAgent Integration Overview',
       subtitle: 'Per docs/接入指南.md: onboard & register → add starter + bridge config → write @IaTool tools → issue embed token → embed & tool calls',
       'step-1': '① Onboard (InnerAgent admin)',

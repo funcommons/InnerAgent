@@ -48,8 +48,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:9300',
         changeOrigin: true
       },
-      // InnerAgent server(SDK baseURL /ia/api/v1 与 SSE 流;iframe 被嵌页同源反代)
-      '/ia': {
+      // InnerAgent server(仅 API 前缀;SDK baseURL /ia/api/v1 与 SSE 流)。
+      // 不能放宽到 '/ia':/ia/overview|agents|embed|tools 是 SPA 路由、
+      // /ia/frame.html 是 public/ia/ 被嵌页,前缀过宽会被代理劫持成 404 JSON
+      // (真机截图验收发现的冲突,2026-09-22)。
+      '/ia/api': {
         target: 'http://127.0.0.1:18090',
         changeOrigin: true
       }

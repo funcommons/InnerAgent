@@ -485,6 +485,10 @@ export default {
   },
   ia: {
     overview: {
+      'mapping-title': '指南章节 ↔ 代码位置',
+      'mapping-subtitle': '本 DEMO 每一处接入点对应的接入指南章节与实现文件',
+      'col-guide': '接入指南章节',
+      'col-code': 'DEMO 代码位置',
       title: 'InnerAgent 接入总览',
       subtitle: '按《docs/接入指南.md》串起 开通登记 → 引依赖配桥 → 写工具 → 签发 embed token → 嵌入/工具调用 全链路',
       'step-1': '① 开通登记(平台方)',

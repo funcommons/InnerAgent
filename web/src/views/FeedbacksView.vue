@@ -6,7 +6,7 @@
  * COMPLETED÷(COMPLETED+FAILED),CANCELLED 单列观察;口径见
  * AdminUsageController swagger 注释/docs 灰度与指标大盘 B4)。
  */
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaListPage from '@/components/IaListPage.vue'
@@ -14,12 +14,20 @@ import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
 import IaTime from '@/components/IaTime.vue'
 import { useFeedbacksStore } from '@/stores/feedbacks'
+import { useAppContextStore } from '@/stores/appContext'
 import type { IaFeedback } from '@/api/types'
 
 const store = useFeedbacksStore()
+const appContext = useAppContextStore()
 
 onMounted(() => {
   void store.load()
+  void store.loadNorthStar()
+})
+
+/** 顶栏应用上下文切换 → 重置分页并按新应用重查列表与北极星卡 */
+watch(() => appContext.currentAppId, () => {
+  store.search()
   void store.loadNorthStar()
 })
 
@@ -99,7 +107,7 @@ function refreshAll() {
             class="toolbar__date"
             @change="refreshAll"
           />
-          <span class="dim">rating 过滤仅支持 UP/DOWN;appId 由服务端行级注入</span>
+          <span class="dim">rating 过滤仅支持 UP/DOWN;数据范围随顶栏应用上下文</span>
         </div>
       </template>
 

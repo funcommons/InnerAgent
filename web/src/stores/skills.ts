@@ -3,9 +3,11 @@
  * 覆盖 AdminSkillController:zip 预览(dryRun 零落库)/确认导入(服务端重校验,
  * overwrite 覆盖同名活跃行)/分页列表/激活(应用内上限 8,超限 409)/停用/删除。
  * 预览与确认分存(镜像 definitions store 的 lastPreview/lastImport 范式)。
+ * 2026-09-23:数据范围随管理面应用上下文(store/appContext,顶栏切换器)。
  */
 import { defineStore } from 'pinia'
 import { skillAdminApi } from '@/api/admin'
+import { useAppContextStore } from '@/stores/appContext'
 import type { IaSkill, SkillPreviewView } from '@/api/types'
 
 export const useSkillsStore = defineStore('skills', {
@@ -22,7 +24,11 @@ export const useSkillsStore = defineStore('skills', {
     async load() {
       this.loading = true
       try {
-        const page = await skillAdminApi.page({ pageNo: this.pageNo, pageSize: this.pageSize })
+        const page = await skillAdminApi.page({
+          appId: useAppContextStore().currentAppId,
+          pageNo: this.pageNo,
+          pageSize: this.pageSize,
+        })
         this.list = page.list
         this.total = page.total
       } finally {
@@ -40,7 +46,10 @@ export const useSkillsStore = defineStore('skills', {
     },
     /** 确认导入(服务端重校验;overwrite=true 覆盖同名活跃行;成功后刷新列表) */
     async importSkill(opts: { file: File | Blob; fileName: string; displayName?: string; overwrite?: boolean }): Promise<IaSkill> {
-      const row = await skillAdminApi.importSkill(opts)
+      const row = await skillAdminApi.importSkill({
+        ...opts,
+        appId: useAppContextStore().currentAppId,
+      })
       await this.load()
       return row
     },

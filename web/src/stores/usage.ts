@@ -6,10 +6,12 @@
  */
 import { defineStore } from 'pinia'
 import { usageAdminApi } from '@/api/admin'
+import { useAppContextStore } from '@/stores/appContext'
 import type { NorthStarSummary, UsageGranularity, UsageSummaryRow } from '@/api/types'
 import type { PageQuery } from '@/api/common'
 
 export interface UsageFilters extends PageQuery {
+  /** 页内显式过滤;缺省(null)回落管理面应用上下文(顶栏切换器) */
   appId: number | null
   userId: string
   from: string
@@ -42,7 +44,7 @@ export const useUsageStore = defineStore('usage', {
       this.loading = true
       try {
         const page = await usageAdminApi.summary({
-          appId: this.filters.appId ?? undefined,
+          appId: this.filters.appId ?? useAppContextStore().currentAppId,
           userId: this.filters.userId ? Number(this.filters.userId) : undefined,
           from: this.filters.from || undefined,
           to: this.filters.to || undefined,
@@ -62,7 +64,7 @@ export const useUsageStore = defineStore('usage', {
      */
     async loadOverview() {
       const page = await usageAdminApi.summary({
-        appId: this.filters.appId ?? undefined,
+        appId: this.filters.appId ?? useAppContextStore().currentAppId,
         userId: this.filters.userId ? Number(this.filters.userId) : undefined,
         from: this.filters.from || undefined,
         to: this.filters.to || undefined,

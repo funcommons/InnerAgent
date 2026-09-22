@@ -360,11 +360,13 @@ export const skillAdminApi = {
   /**
    * 确认导入(multipart file;服务端重校验,errors 非空 → 400;
    * overwrite=true 覆盖同名活跃行,缺省同名 409;软删同名行复活)。
+   * appId=管理面应用上下文(服务端 2026-09-23 起显式 appId 面,落目标应用)。
    */
-  importSkill: (opts: { file: File | Blob; fileName: string; displayName?: string; overwrite?: boolean }) => {
+  importSkill: (opts: { appId?: number; file: File | Blob; fileName: string; displayName?: string; overwrite?: boolean }) => {
     const form = new FormData()
     form.append('file', opts.file, opts.fileName)
     const query = buildQuery({
+      appId: opts.appId,
       displayName: opts.displayName,
       overwrite: opts.overwrite === true ? 'true' : '',
     })
@@ -386,28 +388,45 @@ export const skillAdminApi = {
 // ==================== mini 知识库(AdminKbController,P4-W14) ====================
 
 export const kbAdminApi = {
-  /** 导入文档(文本导入→服务端分块→tsvector 落列;单 app 上限 1000,超限 409 提示拆库) */
-  importDocument: (data: KbDocumentImportReq) =>
-    http.post<IaKbDocument>(`${BASE}/kb/documents/import`, data),
+  /**
+   * 导入文档(文本导入→服务端分块→tsvector 落列;单 app 上限 1000,超限 409 提示拆库)。
+   * appId=管理面应用上下文(服务端 2026-09-23 起显式 appId 面,落目标应用)。
+   */
+  importDocument: (appId: number, data: KbDocumentImportReq) =>
+    http.post<IaKbDocument>(
+      `${BASE}/kb/documents/import${buildQuery({ appId })}`,
+      data,
+    ),
   /** 文档分页列表(含状态/分段数;id 降序) */
   page: (params: KbDocumentListQuery = {}) =>
     http.get<PageResult<IaKbDocument>>(`${BASE}/kb/documents${buildQuery({ ...params })}`),
-  get: (id: number) => http.get<IaKbDocument>(`${BASE}/kb/documents/${id}`),
+  get: (appId: number, id: number) =>
+    http.get<IaKbDocument>(`${BASE}/kb/documents/${id}${buildQuery({ appId })}`),
   /** 字段级更新(带 content 即重分块) */
-  update: (id: number, data: KbDocumentUpdateReq) =>
-    http.put<IaKbDocument>(`${BASE}/kb/documents/${id}`, data),
+  update: (appId: number, id: number, data: KbDocumentUpdateReq) =>
+    http.put<IaKbDocument>(
+      `${BASE}/kb/documents/${id}${buildQuery({ appId })}`,
+      data,
+    ),
   /** 失效文档(标黄语义,不参与检索) */
-  deactivate: (id: number) => http.post<IaKbDocument>(`${BASE}/kb/documents/${id}/deactivate`),
+  deactivate: (appId: number, id: number) =>
+    http.post<IaKbDocument>(`${BASE}/kb/documents/${id}/deactivate${buildQuery({ appId })}`),
   /** 恢复文档(重新参与检索) */
-  activate: (id: number) => http.post<IaKbDocument>(`${BASE}/kb/documents/${id}/activate`),
+  activate: (appId: number, id: number) =>
+    http.post<IaKbDocument>(`${BASE}/kb/documents/${id}/activate${buildQuery({ appId })}`),
   /** 重建索引(search-config 变更或降级恢复后执行;按当前生效配置重算 tsv) */
-  rebuildIndex: (id: number) =>
-    http.post<IaKbDocument>(`${BASE}/kb/documents/${id}/rebuild-index`),
+  rebuildIndex: (appId: number, id: number) =>
+    http.post<IaKbDocument>(
+      `${BASE}/kb/documents/${id}/rebuild-index${buildQuery({ appId })}`,
+    ),
   /** 删除文档(软删主行+清理分段) */
-  remove: (id: number) => http.delete<boolean>(`${BASE}/kb/documents/${id}`),
+  remove: (appId: number, id: number) =>
+    http.delete<boolean>(`${BASE}/kb/documents/${id}${buildQuery({ appId })}`),
   /** 检索调试(top-k 命中及来源字段;searchConfig+degraded 随响应回显) */
-  search: (query: { q: string; topK?: number; source?: string }) =>
-    http.get<KbSearchDebugView>(`${BASE}/kb/documents/search${buildQuery({ ...query })}`),
+  search: (appId: number, query: { q: string; topK?: number; source?: string }) =>
+    http.get<KbSearchDebugView>(
+      `${BASE}/kb/documents/search${buildQuery({ appId, ...query })}`,
+    ),
 }
 
 // ==================== 用量统计(AdminUsageController,W15) ====================

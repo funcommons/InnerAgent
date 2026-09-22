@@ -5,7 +5,7 @@
  * 服务端分块)+ 状态门控(active/inactive,失效不参与检索)+ rebuild-index +
  * 检索调试小工具(输入查询 → top-k 命中与来源,含检索配置/降级标记)。
  */
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
@@ -14,12 +14,19 @@ import IaPagination from '@/components/IaPagination.vue'
 import IaListPage from '@/components/IaListPage.vue'
 import { apiErrorMessage } from '@/stores/apps'
 import { useKbStore } from '@/stores/kb'
+import { useAppContextStore } from '@/stores/appContext'
 import type { IaKbDocument } from '@/api/types'
 
 const store = useKbStore()
+const appContext = useAppContextStore()
 
 onMounted(() => {
   void store.load()
+})
+
+/** 顶栏应用上下文切换 → 重置分页并按新应用重查 */
+watch(() => appContext.currentAppId, () => {
+  void store.search()
 })
 
 // ===== 文本导入(标题+内容+分块参数;上限 1000 超限 409 提示拆库) =====

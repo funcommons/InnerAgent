@@ -38,6 +38,8 @@ describe('视图挂载冒烟', () => {
     expect(wrapper.text()).toContain('知识库')
     expect(wrapper.text()).toContain('用量统计')
     expect(wrapper.text()).toContain('用户反馈')
+    // 2026-09-23:顶栏应用上下文切换器(Skill/知识库/用量/反馈的数据范围)
+    expect(wrapper.find('[data-testid="app-context-select"]').exists()).toBe(true)
     wrapper.unmount()
   })
 

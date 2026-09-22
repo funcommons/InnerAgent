@@ -879,7 +879,10 @@ export interface KbDocumentUpdateReq {
 }
 
 /** 知识库分页列表查询 */
-export interface KbDocumentListQuery extends PageQuery {}
+/** 知识库文档分页查询(管理面显式 appId,缺省单应用 1) */
+export interface KbDocumentListQuery extends PageQuery {
+  appId?: number
+}
 
 /** 检索命中条目(镜像 KbSearchHitView;anchor 为分段锚点标题/序号来源) */
 export interface KbSearchHitView {

@@ -5,7 +5,7 @@
  * 校验清单/警告/错误,确认后入库,overwrite 覆盖同名活跃行)+ 激活/停用
  * (应用内同时上限 8,超限 409 友好呈现)+ 删除(逻辑删,同名再导入复活)。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Upload, View } from '@element-plus/icons-vue'
 import type { UploadFile } from 'element-plus'
@@ -15,13 +15,20 @@ import IaPagination from '@/components/IaPagination.vue'
 import SkillPreviewPanel from '@/components/SkillPreviewPanel.vue'
 import SkillDetailDrawer from '@/components/SkillDetailDrawer.vue'
 import { apiErrorMessage } from '@/stores/apps'
+import { useAppContextStore } from '@/stores/appContext'
 import { useSkillsStore } from '@/stores/skills'
 import type { SkillPreviewView } from '@/api/types'
 
 const store = useSkillsStore()
+const appContext = useAppContextStore()
 
 onMounted(() => {
   void store.load()
+})
+
+/** 顶栏应用上下文切换 → 重置分页并按新应用重查 */
+watch(() => appContext.currentAppId, () => {
+  void store.search()
 })
 
 const STATUS_META: Record<string, { label: string; tag: 'success' | 'info' }> = {

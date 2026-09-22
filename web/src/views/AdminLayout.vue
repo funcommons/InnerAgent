@@ -1,20 +1,25 @@
 <script setup lang="ts">
 /**
- * [new] 管理站布局壳:侧边导航 + 顶栏(会话/登出)。
+ * [new] 管理站布局壳:侧边导航 + 顶栏(应用上下文切换器/会话/登出)。
  * 导航项与视图清单一一对应;当前路由高亮。
  * P4 批次扩档:三方 MCP / Skill 管理 / 知识库(集成·知识侧)+
  * 用量统计 / 用户反馈(数据洞察侧)。
+ * 2026-09-23:顶栏应用上下文切换器(store/appContext)——Skill/知识库/用量/
+ * 反馈四个应用级视图随选中应用加载(各视图 watch 并重查);定义/工具等
+ * 聚合视角视图不受影响。
  */
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Monitor, Coin, Document, Cpu, Lightning, Connection, Tickets, SwitchButton, Link, MagicStick, Reading, TrendCharts, ChatDotRound } from '@element-plus/icons-vue'
 import IaEnvBadge from '@/components/IaEnvBadge.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useAppContextStore } from '@/stores/appContext'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const appContext = useAppContextStore()
 
 const navs = [
   { path: '/apps', title: '应用管理', icon: Monitor },
@@ -32,6 +37,15 @@ const navs = [
 ]
 
 const activePath = computed(() => `/${String(route.path).split('/')[1]}`)
+
+onMounted(() => {
+  void appContext.loadApps()
+})
+
+/** 应用管理页的增删改会影响下拉项:每次路由切换静默刷新候选列表 */
+watch(activePath, () => {
+  void appContext.loadApps()
+})
 
 async function handleLogout() {
   await auth.logout()
@@ -55,6 +69,21 @@ async function handleLogout() {
       <el-header class="admin-header">
         <span class="admin-header__title">{{ route.meta.title }}</span>
         <div class="admin-header__actions">
+          <el-select
+            class="admin-header__app"
+            data-testid="app-context-select"
+            :model-value="appContext.currentAppId"
+            :loading="appContext.loading"
+            placeholder="应用上下文"
+            @update:model-value="appContext.selectApp"
+          >
+            <el-option
+              v-for="app in appContext.apps"
+              :key="app.id"
+              :label="`${app.name}(${app.appKey})`"
+              :value="app.id"
+            />
+          </el-select>
           <IaEnvBadge />
           <el-button text :icon="SwitchButton" @click="handleLogout">退出登录</el-button>
         </div>
@@ -101,6 +130,9 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.admin-header__app {
+  width: 240px;
 }
 .admin-main {
   background: #f5f7fa;

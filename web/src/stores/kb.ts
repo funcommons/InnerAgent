@@ -2,9 +2,12 @@
  * [new] mini 知识库 store(P4-W14,视图清单 #10)。
  * 覆盖 AdminKbController:文本导入/分页列表/更新(带 content 即重分块)/
  * 状态门控(activate|deactivate)/rebuild-index/删除/检索调试(search)。
+ * 2026-09-23:数据范围随管理面应用上下文(store/appContext,顶栏切换器),
+ * 全部端点显式携带 appId(服务端显式 appId 面,落目标应用)。
  */
 import { defineStore } from 'pinia'
 import { kbAdminApi } from '@/api/admin'
+import { useAppContextStore } from '@/stores/appContext'
 import type {
   IaKbDocument,
   KbDocumentImportReq,
@@ -32,7 +35,11 @@ export const useKbStore = defineStore('kb', {
     async load() {
       this.loading = true
       try {
-        const page = await kbAdminApi.page({ pageNo: this.filters.pageNo, pageSize: this.filters.pageSize })
+        const page = await kbAdminApi.page({
+          appId: useAppContextStore().currentAppId,
+          pageNo: this.filters.pageNo,
+          pageSize: this.filters.pageSize,
+        })
         // 客户端过滤(服务端无 status/keyword 参数;镜像 tools 页 keyword 先例)
         let rows = page.list
         if (this.filters.status !== 'all') rows = rows.filter(d => d.status === this.filters.status)
@@ -49,33 +56,36 @@ export const useKbStore = defineStore('kb', {
       return this.load()
     },
     async importDocument(req: KbDocumentImportReq): Promise<IaKbDocument> {
-      const row = await kbAdminApi.importDocument(req)
+      const row = await kbAdminApi.importDocument(useAppContextStore().currentAppId, req)
       await this.load()
       return row
     },
     async updateDocument(id: number, req: KbDocumentUpdateReq): Promise<IaKbDocument> {
-      const row = await kbAdminApi.update(id, req)
+      const row = await kbAdminApi.update(useAppContextStore().currentAppId, id, req)
       await this.load()
       return row
     },
     async setStatus(id: number, active: boolean): Promise<IaKbDocument> {
-      const row = active ? await kbAdminApi.activate(id) : await kbAdminApi.deactivate(id)
+      const appId = useAppContextStore().currentAppId
+      const row = active
+        ? await kbAdminApi.activate(appId, id)
+        : await kbAdminApi.deactivate(appId, id)
       await this.load()
       return row
     },
     /** 重建索引(search-config 变更或降级恢复后执行) */
     async rebuildIndex(id: number): Promise<IaKbDocument> {
-      const row = await kbAdminApi.rebuildIndex(id)
+      const row = await kbAdminApi.rebuildIndex(useAppContextStore().currentAppId, id)
       await this.load()
       return row
     },
     async remove(id: number): Promise<void> {
-      await kbAdminApi.remove(id)
+      await kbAdminApi.remove(useAppContextStore().currentAppId, id)
       await this.load()
     },
     /** 检索调试(top-k 命中与来源;结果同时存 lastSearch 供视图展示) */
     async searchDebug(q: string, topK?: number): Promise<KbSearchDebugView> {
-      this.lastSearch = await kbAdminApi.search({ q, topK })
+      this.lastSearch = await kbAdminApi.search(useAppContextStore().currentAppId, { q, topK })
       return this.lastSearch
     },
   },

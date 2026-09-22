@@ -5,6 +5,7 @@
  */
 import { defineStore } from 'pinia'
 import { feedbackAdminApi, usageAdminApi } from '@/api/admin'
+import { useAppContextStore } from '@/stores/appContext'
 import type { FeedbackRating, IaFeedback, NorthStarSummary } from '@/api/types'
 import type { PageQuery } from '@/api/common'
 
@@ -30,6 +31,7 @@ export const useFeedbacksStore = defineStore('feedbacks', {
       try {
         const page = await feedbackAdminApi.page({
           rating: this.filters.rating || undefined,
+          appId: useAppContextStore().currentAppId,
           from: this.filters.from || undefined,
           to: this.filters.to || undefined,
           pageNo: this.filters.pageNo,
@@ -47,6 +49,7 @@ export const useFeedbacksStore = defineStore('feedbacks', {
     },
     async loadNorthStar() {
       this.northStar = await usageAdminApi.northStar({
+        appId: useAppContextStore().currentAppId,
         from: this.filters.from || undefined,
         to: this.filters.to || undefined,
       })

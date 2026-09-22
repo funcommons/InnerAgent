@@ -5,17 +5,26 @@
  * + 聚合表格分页。聚合口径:COMPLETED/FAILED/CANCELLED 终态调用,token 合计仅
  * COMPLETED(FAILED 行 token 列为空);汇总卡单页拉 100 行聚合,超出如实标注截断。
  */
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaListPage from '@/components/IaListPage.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
 import { useUsageStore } from '@/stores/usage'
+import { useAppContextStore } from '@/stores/appContext'
 
 const store = useUsageStore()
+const appContext = useAppContextStore()
 
 onMounted(() => {
+  void store.load()
+  void store.loadOverview()
+})
+
+/** 顶栏应用上下文切换 → 重置分页并按新应用重查(页内显式 appId 过滤优先) */
+watch(() => appContext.currentAppId, () => {
+  store.filters.pageNo = 1
   void store.load()
   void store.loadOverview()
 })
@@ -102,7 +111,7 @@ function refreshAll() {
             class="toolbar__date"
             @change="refreshAll"
           />
-          <span class="dim">appId 由服务端按缺省应用行级注入(管理面跨用户视图)</span>
+          <span class="dim">数据范围随顶栏应用上下文(跨用户聚合视图);页内显式过滤优先生效</span>
         </div>
       </template>
 

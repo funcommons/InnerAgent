@@ -1,0 +1,97 @@
+[
+  {
+    "route": "/definitions",
+    "tableRows": 10,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook Agent 定义 已连接 退出登录 管理站 / 定义中心 / 定义与提示词 定义与提示词 Agent 定义(ia_agent_definition):提示词三槽编辑与导入导出(编辑留痕审计) 导出选中 全量导出 导入 刷新 导入定位键为 (appId, agentType):跨环境定义 ID 不参与匹配;冲突按策略 skip=保留现",
+    "shot": "assets/admin-01-definitions.png"
+  },
+  {
+    "route": "/apps",
+    "tableRows": 2,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook 应用管理 已连接 退出登录 管理站 / 应用管理 / 应用列表 应用列表 宿主应用注册、embed 验签公钥轮换与 Webhook 配置 注册应用 状态 查询 appKey 名称 状态 embed 公钥 密钥指纹 保留期(天) 操作 default 默认应用 启用 已登记 39780d49efaf 180 轮换公钥 编辑 acme-",
+    "shot": "assets/admin-02-apps.png"
+  },
+  {
+    "route": "/tools",
+    "tableRows": 12,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook 工具注册 已连接 退出登录 管理站 / 工具中心 / 工具注册与授权 工具注册与授权 MCP 工具注册表、活刷新分诊与用户授权 批量体检 注册工具 工具注册表 用户授权(2) 风险等级 状态 查询 FQN 风险 schema 指纹 体检 状态 操作 mcp__acme-demo__create_ticket 低危 3699e52dd",
+    "shot": "assets/admin-03-tools.png"
+  },
+  {
+    "route": "/mcp-servers",
+    "tableRows": 1,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook 三方 MCP 已连接 退出登录 管理站 / 集成中心 / MCP 服务器 MCP 服务器 应用级三方 MCP 服务器:注册后目录自动挂载其工具(credentials 打码不回显) 刷新 注册服务器 serverKey 名称 端点 鉴权 头值 超时 状态 更新时间 操作 acme-echo ACME Echo 演示 http://1",
+    "shot": "assets/admin-04-mcp-servers.png"
+  },
+  {
+    "route": "/skills",
+    "tableRows": 1,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook Skill 管理 已连接 退出登录 管理站 / 集成中心 / Skill 目录 Skill 目录 应用 Skill 目录:zip 两段式导入(预览校验 → 确认入库),激活上限 8(超出需先停用) 刷新 导入 Skill 清单 name 显示名 描述 版本 激活态 内容指纹 操作 report-style ACME 报告写作规范 A",
+    "shot": "assets/admin-05-skills.png"
+  },
+  {
+    "route": "/kb",
+    "tableRows": 3,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook 知识库 已连接 退出登录 管理站 / 知识中心 / 知识库文档 知识库文档 mini 知识库:文本导入→服务端分块→tsvector 检索;失效文档不参与检索 检索调试 导入文档 全部 查询 状态过滤为客户端过滤(服务端无 status 参数) 标题 来源 状态 分段数 操作 ACME员工手册-请假制度.md seeds/kb-do",
+    "shot": "assets/admin-06-kb.png"
+  },
+  {
+    "route": "/usage",
+    "tableRows": 1,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook 用量统计 已连接 退出登录 管理站 / 数据洞察 / 用量概览 用量概览 模型调用用量:聚合口径=终态调用(COMPLETED/FAILED/CANCELLED),token 合计仅 COMPLETED 查询 调用次数(终态) 3 聚合行 全量 输入 tokens 3 仅 COMPLETED 调用 输出 tokens 3 输入+输出",
+    "shot": "assets/admin-07-usage.png"
+  },
+  {
+    "route": "/feedbacks",
+    "tableRows": 0,
+    "emptyTexts": [
+      "窗口内没有用户反馈用户在宿主对话中点 👍/👎 后,明细会汇总到这里重新查询"
+    ],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook 用户反馈 已连接 退出登录 管理站 / 数据洞察 / 反馈明细 反馈明细 宿主用户反馈明细:重复反馈按覆盖计(展示最近覆盖时间);管理面跨用户视图 查询 好评率 — 👍 0 ÷(👍+👎 0),窗口内全部反馈 带反馈完成率(代理) — 仅带反馈的根运行:完成 0 / 失败 0 / 取消(单列观察)0 口径说明 好评率 = 👍 ",
+    "shot": "assets/admin-08-feedbacks.png"
+  },
+  {
+    "route": "/audit",
+    "tableRows": 10,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook 审计查询 已连接 退出登录 管理站 / 审计中心 / 审计检索 审计检索 工具调用与授权生命周期的安全审计检索(decision_source 证明锚点) decision_source 裁决 查询 刷新 模式默认 = 按权限模式:只读直通/写确认 用户授权 = 命中用户「总是允许」授权 强制策略 = 管理员策略覆盖(force-a",
+    "shot": "assets/admin-09-audit.png"
+  },
+  {
+    "route": "/models",
+    "tableRows": 2,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook 模型配置 已连接 退出登录 管理站 / 模型中心 / 模型接入配置 模型接入配置 五协议模型接入、密钥掩码与连通性测试 新建 API 配置 协议平台 状态 查询 名称 协议平台 API 地址 密钥 状态 操作 MiniMax(Anthropic 兼容) Anthropic https://api.minimaxi.com/anthr",
+    "shot": "assets/admin-10-models.png"
+  },
+  {
+    "route": "/circuit",
+    "error": "TimeoutError: frame.waitForSelector: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator('.el-table__row, .el-empty, .ia-empty') to be visible\n",
+    "shot": "assets/admin-11-circuit.png"
+  },
+  {
+    "route": "/webhooks",
+    "tableRows": 10,
+    "emptyTexts": [],
+    "textHead": "InnerAgent 管理站 应用管理 工具注册与授权 Agent 定义 三方 MCP Skill 管理 知识库 审计查询 模型配置 用量统计 用户反馈 熔断与紧急停用 Webhook Webhook 已连接 退出登录 管理站 / 运行治理 / Webhook 通知 Webhook 通知 运行终态通知:HMAC 签名、5 次指数退避与手动重投 终态通知配置 回调地址 签名密钥 订阅事件 运行成功(run.finished) 运行失败(run.failed) 运行取消(run.cancelled) 资源上限触发(ru",
+    "shot": "assets/admin-12-webhooks.png"
+  },
+  {
+    "route": "/tools#grants",
+    "tableRows": 12,
+    "emptyTexts": [],
+    "shot": "assets/admin-13-tools-grants.png"
+  },
+  {
+    "route": "/feedbacks?from=2026-08-01",
+    "tableRows": 0,
+    "shot": "assets/admin-14-feedbacks-wide-window.png"
+  }
+]

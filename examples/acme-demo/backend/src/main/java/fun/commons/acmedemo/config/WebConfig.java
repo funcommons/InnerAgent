@@ -34,7 +34,6 @@ public class WebConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(demoAuthInterceptor)
                 .addPathPatterns("/api/ia/embed-token", "/api/ia/server-status",
-                        "/api/ia/agent-admin/**",
                         "/api/tickets/**", "/api/webhook-events",
                         "/api/demo/me", "/api/demo/logout")
                 .excludePathPatterns("/api/demo/login", "/api/demo/config",

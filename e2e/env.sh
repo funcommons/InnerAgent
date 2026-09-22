@@ -66,6 +66,7 @@ env_up() {
       IA_ADMIN_BOOTSTRAP_USERNAME="$ADMIN_USER" \
       IA_ADMIN_BOOTSTRAP_PASSWORD="$ADMIN_PASSWORD" \
       IA_DB_PORT="$DB_PORT" IA_REDIS_PORT="$REDIS_PORT" \
+      IA_CORS_ALLOWED_ORIGINS="${IA_CORS_ALLOWED_ORIGINS:-http://localhost:9203,http://localhost:18081}" \
       exec java -jar target/inneragent-server-0.1.0-SNAPSHOT.jar ) > "$LOGDIR/server.log" 2>&1 &
     echo $! > "$LOGDIR/server.pid"
     echo "  server pid=$(cat "$LOGDIR/server.pid"),日志 $LOGDIR/server.log"

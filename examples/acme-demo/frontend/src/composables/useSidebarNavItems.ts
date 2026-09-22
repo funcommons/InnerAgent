@@ -26,8 +26,8 @@ export function useSidebarNavItems(): ComputedRef<NavItem[]> {
       icon: Grid as unknown as Component,
     },
     {
-      index: '/ia/agent-admin',
-      label: t('router.ia-agent-admin'),
+      index: '/ia/admin',
+      label: t('router.ia-admin'),
       icon: Setting as unknown as Component,
     },
     {

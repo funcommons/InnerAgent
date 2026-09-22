@@ -78,9 +78,28 @@ api GET "/ia/api/v1/admin/apps"
 APP_ID=$(jpy "next((a['id'] for a in d['data'] if a['appKey']=='${ACME_APP_KEY}'), None)")
 if [[ "$APP_ID" != "None" && -n "$APP_ID" ]]; then
   ok "应用已存在: appId=${APP_ID}"
-  [[ "$NEW_KEYS" == "1" ]] && warn "密钥为新生成,与该应用已登记公钥可能不一致(embed 签名会验签失败;必要时删库重建或换 appKey)"
+  # 幂等公钥对齐:seeds/.local 密钥再生(目录丢失/换机)后,已登记公钥会与本机
+  # host.pub 脱钩 → embed token 全部 401「签名不匹配」(2026-09-22 真机踩坑:
+  # 只在创建时注册公钥,已存在仅告警,不变量悄悄断掉)。此处检测不一致即轮换对齐。
+  api GET "/ia/api/v1/admin/apps/${APP_ID}"
+  [[ "$REPLY_CODE" == "200" ]] || fail "应用详情失败: HTTP $REPLY_CODE"
+  # 指纹口径与 server 一致:sha256(DER) 前 16 hex 位(signKeyFingerprint)
+  LOCAL_FP=$(openssl rsa -in "$KEYS_DIR/host.key" -pubout -outform DER 2>/dev/null \
+    | openssl dgst -sha256 | awk '{print substr($2, 1, 16)}')
+  REMOTE_FP=$(jpy "d['data'].get('signKeyFingerprint') or ''")
+  if [[ -n "$REMOTE_FP" && "$REMOTE_FP" != "$LOCAL_FP" ]]; then
+    SIGN_PUB=$(python3 -c 'import sys; print(open(sys.argv[1]).read())' "$KEYS_DIR/host.pub")
+    python3 -c 'import json,sys
+print(json.dumps({"signPublicKey": sys.argv[1]}))' "$SIGN_PUB" > "$TMP_JSON"
+    api PUT "/ia/api/v1/admin/apps/${APP_ID}" -H 'Content-Type: application/json' \
+      --data-binary @"$TMP_JSON"
+    [[ "$REPLY_CODE" == "200" ]] || fail "公钥轮换对齐失败: HTTP $REPLY_CODE $(cat "$TMP_JSON")"
+    ok "已登记公钥(${REMOTE_FP}…)与本机 host.pub(${LOCAL_FP}…)不一致 → 已轮换对齐"
+  else
+    ok "已登记公钥与本机 host.pub 一致(${LOCAL_FP}…)"
+  fi
 else
-  SIGN_PUB=$(python3 -c 'print(open(sys.argv[1]).read())' "$KEYS_DIR/host.pub")
+  SIGN_PUB=$(python3 -c 'import sys; print(open(sys.argv[1]).read())' "$KEYS_DIR/host.pub")
   python3 -c '
 import json, sys
 print(json.dumps({

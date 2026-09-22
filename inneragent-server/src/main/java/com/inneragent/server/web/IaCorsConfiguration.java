@@ -20,7 +20,8 @@ import java.util.List;
  *   <li>允许方法 GET / POST / OPTIONS(SSE 端点
  *       {@code GET /ia/api/v1/runs/{runId}/events} 同规则);</li>
  *   <li>允许头 Authorization(embed token)/ X-IA-Act / X-IA-Admin-Key /
- *       Content-Type / Last-Event-ID(SSE 断点续传);</li>
+ *       Content-Type / Last-Event-ID(SSE 断点续传)/ X-Trace-Id(接入方
+ *       前端链路追踪头,acme-demo 真机联调补);</li>
  *   <li>credentials=true(allowlist 恒为显式来源清单,永不回退 {@code *},
  *       同源反代部署不受影响)。</li>
  * </ul>
@@ -53,7 +54,7 @@ public class IaCorsConfiguration implements WebMvcConfigurer {
                 .allowedOrigins(origins.toArray(String[]::new))
                 .allowedMethods("GET", "POST", "OPTIONS")
                 .allowedHeaders("Authorization", "X-IA-Act", "X-IA-Admin-Key",
-                        "Content-Type", "Last-Event-ID")
+                        "Content-Type", "Last-Event-ID", "X-Trace-Id")
                 .allowCredentials(true)
                 .maxAge(1800);
     }

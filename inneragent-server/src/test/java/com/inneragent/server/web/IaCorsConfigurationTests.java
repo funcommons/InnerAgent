@@ -61,13 +61,15 @@ class IaCorsConfigurationTests {
                         .header(ORIGIN, ALLOWED)
                         .header(ACCESS_CONTROL_REQUEST_METHOD, "GET")
                         .header(ACCESS_CONTROL_REQUEST_HEADERS,
-                                "Authorization, X-IA-Act, X-IA-Admin-Key"))
+                                "Authorization, X-IA-Act, X-IA-Admin-Key, X-Trace-Id"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED))
                 .andExpect(header().string(ACCESS_CONTROL_ALLOW_METHODS,
                         "GET,POST,OPTIONS"))
                 .andExpect(header().string(ACCESS_CONTROL_ALLOW_HEADERS,
                         containsString("Authorization")))
+                .andExpect(header().string(ACCESS_CONTROL_ALLOW_HEADERS,
+                        containsString("X-Trace-Id")))
                 .andExpect(header().string(ACCESS_CONTROL_ALLOW_HEADERS,
                         containsString("X-IA-Act")))
                 .andExpect(header().string(ACCESS_CONTROL_ALLOW_HEADERS,

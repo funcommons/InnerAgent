@@ -157,9 +157,10 @@ ok "库内回查: main=${MAIN_N} sub=${SUB_N}(期望 5+3)"
 [[ "$MAIN_N" == "5" && "$SUB_N" == "3" ]] || warn "定义数量与预期不符(5+3)"
 
 # ---------------------------------------------------------------------------
-# Skill:导入/激活 API 无显式 appId 面,行级拦截器按默认应用(id=1)回填——
-# 与 KB/工具注册/三方 MCP 同居默认应用,保证「导入 → 激活 → 进运行上下文」通链
-step "[4/7] Skill report-style:构建 + 预览 + 导入 + 激活(默认应用)"
+# Skill:管理面以系统模式执行,显式 appId 落目标应用(2026-09-23 修复——
+# 此前无显式 appId 面时行级拦截器按缺省应用(1)回填,而 embed 运行态按
+# 宿主应用解析,技能注入静默失效)。激活上限按目标应用内计数。
+step "[4/7] Skill report-style:构建 + 预览 + 导入 + 激活(appId=${APP_ID})"
 zsh "$SEEDS_DIR/skills/build-skills.sh" > /dev/null
 ok "zip 已构建: seeds/skills/report-style.zip"
 api POST "/ia/api/v1/admin/skills/import/preview" \
@@ -168,17 +169,17 @@ api POST "/ia/api/v1/admin/skills/import/preview" \
 [[ "$(jpy "d['data']['valid']")" == "True" && "$(jpy "len(d['data']['errors'])")" == "0" ]] \
   || { jpy "d['data']['errors']"; fail "Skill 包校验未通过"; }
 ok "预览校验通过(0 error)"
-api POST "/ia/api/v1/admin/skills/import?overwrite=true" \
+api POST "/ia/api/v1/admin/skills/import?appId=${APP_ID}&overwrite=true" \
   -F "file=@$SEEDS_DIR/skills/report-style.zip;type=application/zip" \
   -F "displayName=ACME 报告写作规范"
 [[ "$REPLY_CODE" == "200" ]] || fail "Skill 导入失败: HTTP $REPLY_CODE $(cat "$TMP_JSON")"
 SKILL_ID=$(jpy "d['data']['id']")
-ok "Skill 已导入(overwrite=true,同名覆盖): id=${SKILL_ID}"
+ok "Skill 已导入目标应用 appId=${APP_ID}(overwrite=true,同名覆盖): id=${SKILL_ID}"
 if [[ "$(jpy "d['data']['active']")" == "True" ]]; then
   ok "Skill 已是激活态(跳过激活)"
 else
   # 激活上限保护:应用内同时激活上限 8;已满则停用 id 最小(最早)的一个让位
-  api GET "/ia/api/v1/admin/skills?pageNo=1&pageSize=100"
+  api GET "/ia/api/v1/admin/skills?appId=${APP_ID}&pageNo=1&pageSize=100"
   ACTIVE_N=$(jpy "sum(1 for s in d['data']['list'] if s['active'])")
   if [[ "${ACTIVE_N:-0}" -ge 8 ]]; then
     OLDEST_ID=$(jpy "min(d['data']['list'], key=lambda s: s['id'])['id']")
@@ -192,8 +193,8 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-step "[5/7] KB 文档摄取(同名更新重分块,幂等)"
-api GET "/ia/api/v1/admin/kb/documents?pageNo=1&pageSize=100"
+step "[5/7] KB 文档摄取(同名更新重分块,幂等;显式 appId=${APP_ID})"
+api GET "/ia/api/v1/admin/kb/documents?appId=${APP_ID}&pageNo=1&pageSize=100"
 [[ "$REPLY_CODE" == "200" ]] || fail "KB 列表失败: HTTP $REPLY_CODE"
 KB_LIST_JSON=$(jpy "d['data']['list']")
 KB_IMPORTED=0
@@ -213,13 +214,13 @@ print(json.dumps({"title": sys.argv[1], "source": "seeds/kb-docs",
                  ensure_ascii=False))' \
     "$DOC_TITLE" "$doc" > "$TMP_JSON"
   if [[ -n "$DOC_ID" ]]; then
-    api PUT "/ia/api/v1/admin/kb/documents/${DOC_ID}" \
+    api PUT "/ia/api/v1/admin/kb/documents/${DOC_ID}?appId=${APP_ID}" \
       -H 'Content-Type: application/json' --data-binary @"$TMP_JSON"
     [[ "$REPLY_CODE" == "200" ]] || fail "KB 更新失败(${DOC_TITLE}): HTTP $REPLY_CODE $(cat "$TMP_JSON")"
     ok "同名文档已更新并重分块: ${DOC_TITLE}(id=${DOC_ID}, $(jpy "d['data']['chunkCount']") 段)"
     KB_UPDATED=$((KB_UPDATED + 1))
   else
-    api POST "/ia/api/v1/admin/kb/documents/import" \
+    api POST "/ia/api/v1/admin/kb/documents/import?appId=${APP_ID}" \
       -H 'Content-Type: application/json' --data-binary @"$TMP_JSON"
     [[ "$REPLY_CODE" == "200" ]] || fail "KB 导入失败(${DOC_TITLE}): HTTP $REPLY_CODE $(cat "$TMP_JSON")"
     ok "文档已导入: ${DOC_TITLE}(id=$(jpy "d['data']['id']"), $(jpy "d['data']['chunkCount']") 段)"
@@ -229,7 +230,7 @@ done
 ok "KB 计数: 新导入 ${KB_IMPORTED} 篇 / 更新 ${KB_UPDATED} 篇"
 # 检索冒烟:验证检索链路可用(有命中即 tsvector/分块正常)
 Q=$(python3 -c 'from urllib.parse import quote; print(quote("年假有几天"))')
-api GET "/ia/api/v1/admin/kb/documents/search?q=${Q}&topK=3"
+api GET "/ia/api/v1/admin/kb/documents/search?appId=${APP_ID}&q=${Q}&topK=3"
 if [[ "$REPLY_CODE" == "200" ]]; then
   HITS=$(jpy "len(d['data']['hits'])")
   [[ "${HITS:-0}" -gt 0 ]] \

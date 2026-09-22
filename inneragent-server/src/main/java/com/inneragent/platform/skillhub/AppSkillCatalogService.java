@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.common.PageResult;
+import com.inneragent.platform.context.AppContext;
 import com.inneragent.platform.skillhub.mapper.IaSkillFileMapper;
 import com.inneragent.platform.skillhub.mapper.IaSkillMapper;
 import com.inneragent.platform.toolhub.ToolAuditService;
@@ -37,6 +38,14 @@ import java.util.Set;
  * /definition-updated(覆盖导入/激活/停用/删除),decision_source=admin,
  * tool_fqn 用伪命名 {@code skill:<name>}(先例 agent-definition:<key>)。
  * 审计 fail-closed:落审计失败即业务失败回滚(与状态存储一致性原则同形)。
+ *
+ * <p>管理面方法(import/page/get/activate/deactivate/delete)以系统模式执行
+ * (与 AgentDefinitionAdminService 同模式):范围由显式 appId 条件或主键定位
+ * 提供,避免 X-IA-Admin-Key 无 AppContext 线程上被行级拦截器注入
+ * {@code app_id=1},致显式 appId≠1 的管理面读写静默落空(2026-09-23 真机:
+ * provision 导入落 app 1、embed 运行态按 app 34 解析,report-writer 技能
+ * 注入静默失效)。运行态 {@link #activatedSkills(long)}/listActive 不经此
+ * 包裹——embed 过滤器已写入 AppContext,拦截器注入与显式条件同向。
  */
 @Service
 @Slf4j
@@ -89,6 +98,17 @@ public class AppSkillCatalogService {
      */
     @Transactional
     public SkillView importSkill(
+            long appId,
+            String fileName,
+            byte[] zipBytes,
+            String displayNameOverride,
+            boolean overwrite,
+            Long operatorId) {
+        return AppContext.runAsSystem(() ->
+                doImportSkill(appId, fileName, zipBytes, displayNameOverride, overwrite, operatorId));
+    }
+
+    private SkillView doImportSkill(
             long appId,
             String fileName,
             byte[] zipBytes,
@@ -162,6 +182,10 @@ public class AppSkillCatalogService {
 
     /** 分页列表(按 create_time 降序;出参含激活状态)。 */
     public PageResult<SkillView> page(long appId, int pageNo, int pageSize) {
+        return AppContext.runAsSystem(() -> doPage(appId, pageNo, pageSize));
+    }
+
+    private PageResult<SkillView> doPage(long appId, int pageNo, int pageSize) {
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.min(Math.max(pageSize, 1), 100);
         Page<IaSkill> page = skillMapper.selectPage(
@@ -179,6 +203,10 @@ public class AppSkillCatalogService {
 
     /** 详情(含文件内容;总量受导入 128KB 上限约束)。 */
     public SkillDetailView get(long id) {
+        return AppContext.runAsSystem(() -> doGet(id));
+    }
+
+    private SkillDetailView doGet(long id) {
         IaSkill row = requireRow(id);
         List<FileView> files = fileMapper.selectList(
                         new LambdaQueryWrapper<IaSkillFile>()
@@ -194,6 +222,10 @@ public class AppSkillCatalogService {
     /** 激活:应用内同时上限 8(PRD 缺省,可配),超限 409 明确报错。 */
     @Transactional
     public SkillView activate(long id, Long operatorId) {
+        return AppContext.runAsSystem(() -> doActivate(id, operatorId));
+    }
+
+    private SkillView doActivate(long id, Long operatorId) {
         IaSkill row = requireRow(id);
         if (!STATUS_ACTIVE.equals(row.getStatus())) {
             long activeCount = skillMapper.countActive(row.getAppId());
@@ -214,6 +246,10 @@ public class AppSkillCatalogService {
     /** 停用:状态复位 inactive,激活时间/操作人清空。 */
     @Transactional
     public SkillView deactivate(long id, Long operatorId) {
+        return AppContext.runAsSystem(() -> doDeactivate(id, operatorId));
+    }
+
+    private SkillView doDeactivate(long id, Long operatorId) {
         IaSkill row = requireRow(id);
         if (STATUS_ACTIVE.equals(row.getStatus())) {
             row.setStatus(STATUS_INACTIVE);
@@ -229,6 +265,13 @@ public class AppSkillCatalogService {
     /** 逻辑删除:先复位激活位再置删除标志(同名再导入按复活处理)。 */
     @Transactional
     public void delete(long id, Long operatorId) {
+        AppContext.runAsSystem(() -> {
+            doDelete(id, operatorId);
+            return null;
+        });
+    }
+
+    private void doDelete(long id, Long operatorId) {
         IaSkill row = requireRow(id);
         skillMapper.softDelete(id);
         audit(row.getAppId(), row.getName(), "definition-updated", "deleted",

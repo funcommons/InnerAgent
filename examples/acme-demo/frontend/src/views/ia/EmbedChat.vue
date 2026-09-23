@@ -11,6 +11,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { FcButton, FcSection, FcSectionHeader, FcSelect } from '@/components/sdk'
 import type { SelectOption } from '@/components/sdk'
 import { demoApi, type DemoConfig } from '@/api/demo'
@@ -19,11 +20,12 @@ import { createEmbedTokenGetter, resolveInnerAgentAppKey } from '@/ia/innerAgent
 import { buildIframeEmbedOptions, describeEmbedEvent, resolveFrameSrc } from '@/ia/iframeEmbed'
 import { loadIframeEmbed, loadInnerAgentSdk, type IFrameEmbedHandle } from '@/ia/sdkLoader'
 import { useLocalStorage } from '@/composables/useLocalStorage'
-import { DEMO_AGENTS, IA_EMBED_AGENT_TYPE_KEY, isDemoAgentType } from '@/ia/demoAgents'
+import { DEMO_AGENTS, IA_EMBED_AGENT_TYPE_KEY, isDemoAgentType, type DemoAgentType } from '@/ia/demoAgents'
 
 defineOptions({ name: 'IaEmbedChat' })
 
 const { t } = useI18n()
+const router = useRouter()
 
 const config = ref<DemoConfig | null>(null)
 const mode = ref<'wc' | 'iframe'>('wc')
@@ -168,6 +170,16 @@ function onSelectAgentType(): void {
 /** 测试挂载点:暴露当前接入模式(组件内其余状态经 DOM 断言) */
 defineExpose({ mode })
 
+/**
+ * 空态引导 chip(2026-09-23 UX 优化 §A1):未挂载态时,演示员常问"我该说什么"。
+ * SDK 内部空态由 vendor 产物控制不可侵入;在容器下方给一个 5 场景 chip 区,
+ * 点击 → 跳到场景画陈列并展开该场景的剧本折叠(便于复制话术)。
+ * chip 用 agentType 自身作为语义锚,文案走 ia.demo.agents.*.tagline。
+ */
+function jumpToScript(agentType: DemoAgentType): void {
+  router.push({ path: '/ia/agents', query: { expand: agentType } })
+}
+
 onMounted(async () => {
   try {
     config.value = await demoApi.config()
@@ -247,6 +259,33 @@ onBeforeUnmount(() => {
 
       <!-- WC 模式:SDK 产物注册的自定义元素 -->
       <inneragent-chat v-if="mode === 'wc' && mounted" view="chat" class="ia-chat" data-testid="ia-chat" />
+
+      <!-- 已挂载态:发送口径提示(2026-09-23 §D2),消除 placeholder 文案歧义 -->
+      <p v-if="mounted" class="send-hint" data-testid="send-hint">
+        <i class="ri-keyboard-line" aria-hidden="true" />
+        {{ t('ia.embed.send-hint') }}
+      </p>
+
+      <!-- 空态引导(2026-09-23 §A1):未挂载态给出 5 场景"可一句话试"快捷 chip。
+           SDK 内部空态由 vendor 产物控制不可侵入,此处给 host 侧兜底。
+           点击 chip → 跳场景画陈列并展开该 agentType 剧本,便于复制话术。 -->
+      <div v-if="!mounted" class="quick-prompts" data-testid="quick-prompts">
+        <p class="quick-prompts__title">{{ t('ia.embed.quick-prompt-title') }}</p>
+        <p class="quick-prompts__hint">{{ t('ia.embed.quick-prompt-hint') }}</p>
+        <div class="quick-prompts__chips">
+          <button
+            v-for="a in DEMO_AGENTS"
+            :key="a.agentType"
+            type="button"
+            class="quick-chip"
+            :data-testid="`quick-chip-${a.agentType}`"
+            @click="jumpToScript(a.agentType)"
+          >
+            <span class="quick-chip__name">{{ t(`ia.demo.agents.${a.agentType}.name`) }}</span>
+            <span class="quick-chip__type">{{ a.agentType }}</span>
+          </button>
+        </div>
+      </div>
 
       <!-- iframe 模式:容器由 createIframeEmbed 接管 -->
       <div v-show="mode === 'iframe'" ref="containerRef" class="ia-frame-container" />
@@ -345,6 +384,17 @@ onBeforeUnmount(() => {
   }
 }
 
+.send-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+
+  i { font-size: 14px; }
+}
+
 .ia-chat {
   display: block;
   width: 100%;
@@ -370,6 +420,62 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 13px;
   color: var(--el-text-color-placeholder);
+}
+
+.quick-prompts {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border: 1px dashed var(--el-color-primary-light-5);
+  border-radius: 10px;
+  background: var(--el-color-primary-light-9);
+}
+
+.quick-prompts__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+
+.quick-prompts__hint {
+  margin: 4px 0 10px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.quick-prompts__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+
+  &:hover {
+    color: var(--el-color-primary);
+    border-color: var(--el-color-primary-light-5);
+  }
+}
+
+.quick-chip__name {
+  font-weight: 600;
+}
+
+.quick-chip__type {
+  font-size: 10px;
+  color: var(--el-text-color-placeholder);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .log-list {

@@ -4,7 +4,7 @@
  * 实时拉取后端公开配置与管理面开通状态,直观验证「开通没/可达没/公钥登记没」;
  * 并给出「接入指南章节 ↔ 本 DEMO 代码位置」映射表(范式沿用原 acme README)。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { FcButton, FcSection, FcSectionHeader, FcTag } from '@/components/sdk'
@@ -18,6 +18,33 @@ const router = useRouter()
 
 const config = ref<DemoConfig | null>(null)
 const serverStatus = ref<IaServerStatus | null>(null)
+
+// 状态卡可观测性(2026-09-23 §B4):Last checked + 手动重查 + 连续失败告警
+const now = ref(Date.now())
+const lastCheckedAt = ref<number | null>(null)
+const firstFailureAt = ref<number | null>(null)
+const rechecking = ref(false)
+let nowTicker: ReturnType<typeof setInterval> | null = null
+
+const relativeChecked = computed(() => {
+  if (lastCheckedAt.value === null) return '—'
+  const deltaSec = Math.max(0, Math.round((now.value - lastCheckedAt.value) / 1000))
+  if (deltaSec < 30) return t('ia.overview.last-checked-just')
+  const deltaMin = Math.floor(deltaSec / 60)
+  return deltaMin < 1
+    ? t('ia.overview.last-checked-just')
+    : t('ia.overview.last-checked-min', { n: deltaMin })
+})
+
+const isFailed = computed(() =>
+  serverStatus.value?.state !== 'registered' && serverStatus.value !== null)
+
+const failureWallText = computed(() => {
+  if (firstFailureAt.value === null) return ''
+  const d = new Date(firstFailureAt.value)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+})
 
 const steps = computed(() => [
   { key: 'step-1', done: true },
@@ -70,10 +97,47 @@ async function load() {
   } catch {
     return
   }
-  serverStatus.value = await fetchIaServerStatus().catch(() => null)
+  await recheckStatus()
 }
 
-onMounted(load)
+async function recheckStatus() {
+  if (rechecking.value) return
+  rechecking.value = true
+  try {
+    const prevState = serverStatus.value?.state
+    const status = await fetchIaServerStatus().catch(() => null)
+    serverStatus.value = status
+    lastCheckedAt.value = Date.now()
+    now.value = Date.now()
+    // 首次失败时间只在「registered → 非 registered」跃迁时刷新(避免抖动)
+    if (status && status.state !== 'registered' && prevState === 'registered') {
+      firstFailureAt.value = Date.now()
+    } else if (status?.state === 'registered') {
+      firstFailureAt.value = null
+    }
+  } finally {
+    rechecking.value = false
+  }
+}
+
+function startTicker() {
+  if (nowTicker) return
+  nowTicker = setInterval(() => { now.value = Date.now() }, 1000)
+}
+
+function stopTicker() {
+  if (nowTicker) {
+    clearInterval(nowTicker)
+    nowTicker = null
+  }
+}
+
+onMounted(() => {
+  void load()
+  startTicker()
+})
+
+onBeforeUnmount(stopTicker)
 </script>
 
 <template>
@@ -103,10 +167,20 @@ onMounted(load)
 
     <FcSection>
       <FcSectionHeader :title="t('ia.overview.status-title')" :subtitle="config?.inneragentBaseUrl">
-        <template #extra>
+        <template #actions>
           <FcTag :type="stateTagType" data-testid="server-state">
             {{ t(`ia.overview.state-${serverStatus?.state ?? 'unreachable'}`) }}
           </FcTag>
+          <FcButton
+            size="sm"
+            variant="secondary"
+            :loading="rechecking"
+            data-testid="server-recheck"
+            @click="recheckStatus"
+          >
+            <i class="ri-refresh-line" aria-hidden="true" />
+            {{ rechecking ? t('ia.overview.rechecking') : t('ia.overview.recheck') }}
+          </FcButton>
         </template>
       </FcSectionHeader>
       <div class="status">
@@ -122,6 +196,15 @@ onMounted(load)
           <span class="k">{{ t('ia.overview.field-fingerprint') }}</span>
           <code>{{ serverStatus?.signKeyFingerprint || '—' }}</code>
         </div>
+        <div class="status-row status-row--meta">
+          <span class="k">{{ t('ia.overview.last-checked') }}</span>
+          <code data-testid="server-last-checked">{{ relativeChecked }}</code>
+        </div>
+        <p v-if="isFailed && failureWallText" class="status-fail" data-testid="server-fail-banner">
+          <i class="ri-error-warning-line" aria-hidden="true" />
+          {{ t('ia.overview.last-checked-fail') }}: <code>{{ failureWallText }}</code>
+          <span class="status-fail__hint">{{ t('ia.overview.state-warning') }}</span>
+        </p>
         <p class="status-hint">{{ t('ia.overview.state-hint') }}</p>
       </div>
     </FcSection>
@@ -242,6 +325,40 @@ onMounted(load)
   code {
     font-size: 12px;
   }
+}
+
+.status-row--meta {
+  margin-top: 4px;
+  color: var(--el-text-color-placeholder);
+
+  .k { color: var(--el-text-color-placeholder); }
+}
+
+.status-fail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+  border: 1px solid var(--el-color-warning-light-7);
+  border-radius: 8px;
+
+  i { font-size: 14px; }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--el-text-color-primary);
+  }
+}
+
+.status-fail__hint {
+  flex-basis: 100%;
+  color: var(--el-text-color-secondary);
+  font-size: 11.5px;
 }
 
 .status-hint {

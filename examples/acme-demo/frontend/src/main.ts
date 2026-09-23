@@ -22,6 +22,20 @@ const app = createApp(App)
 // 注册 Element Plus
 app.use(ElementPlus)
 
+// §D1 toast 位置:全局 CSS 覆盖默认 top-center,改为右上方避免遮标题区
+// (Element Plus ElMessage 自身没有全局 options,只能用 CSS 调位置;top-right
+//  默认 offset 为 16,我们也设 16 与全站统一)
+const elMessageStyleId = 'ia-toast-position'
+if (!document.getElementById(elMessageStyleId)) {
+  const style = document.createElement('style')
+  style.id = elMessageStyleId
+  style.textContent = `
+    .el-message { top: 16px !important; right: 16px !important; left: auto !important; }
+    .el-message.is-center { left: 50% !important; transform: translateX(-50%); }
+  `
+  document.head.appendChild(style)
+}
+
 // 注册所有 Element Plus 图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)

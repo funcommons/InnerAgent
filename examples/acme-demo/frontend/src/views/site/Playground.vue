@@ -88,6 +88,17 @@ async function issueToken() {
   }
 }
 
+// 拼接一份「可复制的接入示例」:baseUrl/token 用本次签发的值,agentType 给知识库问答
+// (其它 agent 改 agentType 即可),无外部依赖,可直接贴 curl 工具跑通
+const curlExample = computed(() => {
+  const baseUrl = session.value
+    ? `${window.location.protocol}//${window.location.hostname}:9300`
+    : 'http://localhost:9300'
+  return t('playground.curl-cmd')
+    .replace('{baseUrl}', baseUrl)
+    .replace('{token}', embed.value?.token ?? '<embed-token>')
+})
+
 async function submit() {
   const name = username.value.trim()
   if (!name || phase.value === 'loading') return
@@ -213,6 +224,11 @@ onBeforeUnmount(stopTicker)
           <div class="pg-raw">
             <p class="pg-raw__cap">{{ t('playground.raw-token') }}</p>
             <CodeBlock :code="embed.token" lang="text" />
+          </div>
+
+          <div class="pg-curl" data-testid="pg-curl">
+            <p class="pg-curl__cap">{{ t('playground.curl-cap') }}</p>
+            <CodeBlock :code="curlExample" lang="bash" />
           </div>
         </template>
 
@@ -496,6 +512,16 @@ onBeforeUnmount(stopTicker)
   margin-top: 16px;
 
   .pg-raw__cap {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
+}
+
+.pg-curl {
+  margin-top: 16px;
+
+  &__cap {
     margin: 0 0 8px;
     font-size: 12px;
     color: var(--el-text-color-secondary);

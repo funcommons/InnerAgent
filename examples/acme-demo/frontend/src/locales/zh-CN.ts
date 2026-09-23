@@ -332,6 +332,8 @@ export default {
     expired: '已过期',
     'expired-hint': 'embed token 已过期:SDK 在 401 时会自动重取,体验台可手动重新签发。',
     'raw-token': '原始 token(可复制,慎贴公开场合)',
+    'curl-cap': 'curl 接入示例(复制即可)',
+    'curl-cmd': 'curl -X POST {baseUrl}/ia/api/v1/embed/chat \\\n  -H "Authorization: Bearer {token}" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"agentType":"knowledge-qa","message":"年假有几天"}\'',
     'use-console': '在控制台使用',
     'signed-ok': '签发成功',
     error: {
@@ -349,6 +351,10 @@ export default {
   site: {
     name: 'InnerAgent',
     tagline: '应用内嵌智能体微服务',
+    // 演示站品牌名(/ia 路由标题用,避开控制台内部代号;2026-09-23 演示站品牌收口)
+    demo: {
+      'brand-name': 'ACME 接入演示',
+    },
     nav: {
       product: '产品',
       demo: 'Demo',
@@ -520,6 +526,13 @@ export default {
       'state-admin_key_missing': '未配置 IA_ADMIN_KEY(自检不可用,不影响运行期签发)',
       'field-fingerprint': '公钥指纹 signKeyFingerprint',
       'state-hint': '状态自检为 fail-open:探测失败只影响展示,不影响 embed token 签发与桥运行。',
+      'last-checked': '上次检测',
+      'last-checked-just': '刚刚',
+      'last-checked-min': '{n} 分钟前',
+      'last-checked-fail': '首次失败时间',
+      'recheck': '手动重查',
+      'rechecking': '检测中…',
+      'state-warning': '持续失败中,请检查 InnerAgent 服务可达性与 IA_ADMIN_KEY 配置',
       'go-embed': '去嵌入演示',
       'go-tools': '去工具演示',
     },
@@ -543,6 +556,11 @@ export default {
       'config-missing': '后端公开配置拉取失败:请确认演示后端已启动(:9300)',
       'handshake-log': '握手 / 事件日志',
       'log-empty': '挂载后此处展示 IA_TOKEN / IA_READY / IA_EVENT 流水',
+      // §D2 发送口径统一:SDK placeholder 写「Enter 换行,Ctrl+Enter 发送」,演示口径是「点发送按钮」——host 显式提示
+      'send-hint': '发送方式:回车=换行;点「发送」按钮提交(SDK 内置输入框)',
+      // 空态引导:5 个场景"可一句话试"快捷区,演示员常问「我该说什么」——点 chip 跳场景画陈列并展开剧本
+      'quick-prompt-title': '不知道说什么?试试这些场景剧本',
+      'quick-prompt-hint': '点击下方场景跳转画陈列页(剧本已展开),复制剧本话术粘贴到对话框发送即可',
     },
     tools: {
       title: '工具调用演示',

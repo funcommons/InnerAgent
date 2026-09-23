@@ -294,6 +294,21 @@ register_tool "resolve_scope" "返回当前页面上下文的可见域/可写字
 register_tool "query_sales" "查询 ACME 销售数据(区域×月份×产品,单位元)" \
   '{"type":"object","properties":{"month":{"type":"string","description":"YYYY-MM"},"region":{"type":"string","description":"华东/华北/华南"}}}'
 
+# §E5 工具面装配自检(2026-09-23):provisioning 完成后,以一次会话级工具可解析性
+# 验证替代直接发对话——清单 (get) 数值=4 且 app_id 全等于本应用 → 内核工具面非空。
+# 这道闸在 09-23 DEF-02 教训后必须存在:防止工具行落错应用(原 appId 串台)、
+# 防止缓存失效不及时、防 appId 兜底写错。
+api GET "/ia/api/v1/admin/tools?serverKey=${ACME_APP_KEY}"
+[[ "$REPLY_CODE" == "200" ]] || fail "工具面自检拉取失败: HTTP $REPLY_CODE"
+TOOL_COUNT=$(jpy "len(d['data'])")
+WRONG_APP=$(jpy "sum(1 for t in d['data'] if t['appId'] != ${APP_ID})")
+if [[ "${TOOL_COUNT:-0}" -lt 4 ]]; then
+  fail "工具面自检失败: 期望 ≥4 条工具,实得 ${TOOL_COUNT}(acme-demo 工具未注册全)"
+elif [[ "${WRONG_APP:-0}" -gt 0 ]]; then
+  fail "工具面自检失败: ${WRONG_APP} 条工具 appId≠${APP_ID}(appId 串台;DEF-02 修复后此分支应消失)"
+fi
+ok "工具面装配自检通过: ${TOOL_COUNT} 条工具,appId=${APP_ID} 一致"
+
 # ---------------------------------------------------------------------------
 MCP_NOTE="跳过(ACME_SKIP_MCP=1)"
 if [[ "${ACME_SKIP_MCP:-0}" != "1" ]]; then

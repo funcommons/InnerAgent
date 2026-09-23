@@ -206,11 +206,21 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach(async (to, _from) => {
   const title = to.meta.title as string
-  // 公开官网区标题用产品名 InnerAgent;控制台沿用脚手架/OEM 命名
+  // 三类区域各用其品牌名,避免对外暴露控制台内部代号(2026-09-23 演示站品牌收口):
+  //  公开官网:产品名 InnerAgent
+  //  /ia 演示:ACME 接入演示
+  //  /dev 脚手架:沿用 OEM 内部命名(app.name)
   const isPublicLayout = to.matched.some((r) => r.meta.layout === 'public')
-  const siteName = isPublicLayout ? t('site.name') : t('app.name')
+  const isDemoLayout = to.path.startsWith('/ia')
+  const siteName = isPublicLayout
+    ? t('site.name')
+    : isDemoLayout
+      ? t('demo.brand-name')
+      : t('app.name')
   if (title) {
-    document.title = `${t(title)} - ${siteName}`
+    document.title = isPublicLayout
+      ? `${t(title)} · ${siteName}`
+      : `${siteName} · ${t(title)}`
   }
 
   // SEO: 按路由更新 meta description(静态兜底在 index.html)

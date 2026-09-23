@@ -332,6 +332,8 @@ export default {
     expired: 'Expired',
     'expired-hint': 'The embed token has expired: the SDK re-fetches automatically on 401; here you can re-issue manually.',
     'raw-token': 'Raw token (copyable — handle with care)',
+    'curl-cap': 'curl integration snippet (copy-ready)',
+    'curl-cmd': 'curl -X POST {baseUrl}/ia/api/v1/embed/chat \\\n  -H "Authorization: Bearer {token}" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"agentType":"knowledge-qa","message":"年假有几天"}\'',
     'use-console': 'Use it in the console',
     'signed-ok': 'Token issued',
     error: {
@@ -349,6 +351,10 @@ export default {
   site: {
     name: 'InnerAgent',
     tagline: 'In-app AI agent microservice',
+    // demo brand label (used in /ia route titles; avoids leaking internal console codename)
+    demo: {
+      'brand-name': 'ACME Integration Demo',
+    },
     nav: {
       product: 'Product',
       demo: 'Demo',
@@ -520,6 +526,13 @@ export default {
       'state-admin_key_missing': 'IA_ADMIN_KEY not set (probe unavailable; runtime signing unaffected)',
       'field-fingerprint': 'Public key fingerprint (signKeyFingerprint)',
       'state-hint': 'The probe is fail-open: failures only affect this display, never embed-token signing or the bridge.',
+      'last-checked': 'Last checked',
+      'last-checked-just': 'just now',
+      'last-checked-min': '{n} min ago',
+      'last-checked-fail': 'First failure at',
+      'recheck': 'Refresh',
+      'rechecking': 'Checking…',
+      'state-warning': 'Repeated failures — check InnerAgent reachability and IA_ADMIN_KEY',
       'go-embed': 'Open embed demo',
       'go-tools': 'Open tool demo',
     },
@@ -543,6 +556,12 @@ export default {
       'config-missing': 'Failed to load public demo config: is the demo backend up on :9300?',
       'handshake-log': 'Handshake / event log',
       'log-empty': 'IA_TOKEN / IA_READY / IA_EVENT entries appear here after mounting',
+      // §D2 send-key convention: SDK placeholder says "Enter newline, Ctrl+Enter send"; demo guidance is "click the Send button".
+      'send-hint': 'Send: Enter = newline; click the "Send" button to submit (SDK built-in input).',
+      // Empty-state guidance: "what should I say?" 5-scenario quick prompts.
+      // Clicking a chip opens the scenario gallery with the script expanded.
+      'quick-prompt-title': 'Not sure what to say? Try these scenario scripts',
+      'quick-prompt-hint': 'Click a chip to jump to the scenario gallery (script pre-expanded); copy the script line and paste it into the chat input.',
     },
     tools: {
       title: 'Tool-call Demo',

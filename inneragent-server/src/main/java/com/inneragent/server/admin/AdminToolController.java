@@ -134,23 +134,38 @@ public class AdminToolController {
     }
 
     /**
-     * 工具列表(P2-W5 增分页):pageNo/pageSize 均缺省 → 旧全量 List 形
-     * (向后兼容,web 既有调用不破);任一出现 → PageResult 形(与
-     * audit-logs 一致:list/total/pageNo/pageSize,缺省 1/100)。
+     * 工具列表(P2-W5 增分页;2026-09-23 fix 增 {@code appId} / {@code appKey} /
+     * {@code toolName} / {@code riskLevel} 过滤):pageNo/pageSize 均缺省 →
+     * 旧全量 List 形(向后兼容,web 既有调用不破);任一出现 → PageResult 形
+     * (与 audit-logs 一致:list/total/pageNo/pageSize,缺省 1/100)。
+     *
+     * <p>appId 优先级:显式 {@code ?appId=N} > 隐式 {@code ?appKey=}
+     * > null(跨应用聚合,管理面「跨 serverKey 工具列表」应为全局视图,
+     * 详见 {@link ToolRegistryService#list(String, String, String, Boolean, Long)})。
+     * 显式 appId 不存在→{@code 422}(复用 {@link AdminAppService#requireEntity422});
+     * appKey 不存在/禁用→{@code 401}(复用
+     * {@link AdminAppService#requireEnabledByAppKey},与 embed 验签链口径一致)。
      */
     @GetMapping
-    @Operation(summary = "工具列表(serverKey/enabled 过滤;pageNo/pageSize 可选分页,"
-            + "缺省=全量)")
+    @Operation(summary = "工具列表(serverKey/toolName/enabled/riskLevel 过滤;"
+            + "?appId=N 显式作用域(不存在→422),?appKey=解析 appId(不存在/禁用→401),"
+            + "均缺省=跨应用聚合;pageNo/pageSize 可选分页,缺省=全量)")
     public CommonResult<?> list(
             @RequestParam(required = false) String serverKey,
+            @RequestParam(required = false) String toolName,
+            @RequestParam(required = false) String riskLevel,
             @RequestParam(required = false) Boolean enabled,
+            @RequestParam(required = false) Long appId,
+            @RequestParam(required = false) String appKey,
             @RequestParam(required = false) Integer pageNo,
             @RequestParam(required = false) Integer pageSize) {
+        Long resolvedAppId = resolveAppId(appId, appKey);
         if (pageNo == null && pageSize == null) {
-            return success(toolRegistryService.list(serverKey, enabled));
+            return success(toolRegistryService.list(
+                    serverKey, toolName, riskLevel, enabled, resolvedAppId));
         }
         Page<ToolRegistryEntry> page = toolRegistryService.page(
-                serverKey, enabled,
+                serverKey, toolName, riskLevel, enabled, resolvedAppId,
                 pageNo == null ? 1 : pageNo,
                 pageSize == null ? DEFAULT_PAGE_SIZE : pageSize);
         PageResult<ToolRegistryEntry> result =
@@ -158,6 +173,25 @@ public class AdminToolController {
         result.setPageNo((int) page.getCurrent());
         result.setPageSize((int) page.getSize());
         return success(result);
+    }
+
+    /**
+     * 解析 appId 入口(2026-09-23 fix):显式 {@code ?appId=N} 优先于
+     * {@code ?appKey=};两者均缺省返回 null(跨应用聚合视图)。同时传两
+     * 者以 appId 为准(appKey 静默忽略,避免不一致报错打断既有调用方)。
+     */
+    private Long resolveAppId(Long appId, String appKey) {
+        if (appId != null) {
+            // 显式 appId 必须存在,防止把宿主应用工具写到错的应用(2026-09-23
+            // fix 根因:admin/tools 走 AppContext 缺省 1,acme-demo 视角 catalog 静默空)
+            adminAppService.requireEntity422(appId);
+            return appId;
+        }
+        if (appKey != null && !appKey.isBlank()) {
+            // appKey 解析:不存在/禁用抛 401,与 embed 验签链口径一致
+            return adminAppService.requireEnabledByAppKey(appKey.trim()).getId();
+        }
+        return null;
     }
 
     @GetMapping("/{id}")

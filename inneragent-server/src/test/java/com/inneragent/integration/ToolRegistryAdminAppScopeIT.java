@@ -31,6 +31,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -371,6 +372,177 @@ class ToolRegistryAdminAppScopeIT {
                 });
         AppRegistration acme = adminAppService.requireEntity422(TARGET_APP);
         assertThat(acme.getAppKey()).isEqualTo(ACME_SERVER_KEY);
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("GET 路径 fix 核心断言(2026-09-23):POST ?appId=34 注册 4 工具后,"
+            + "GET ?serverKey=acme-demo 返 4 条且全 appId=34;无 appId/serverKey "
+            + "→ 跨应用聚合看到全部 acme-demo 工具")
+    void getPathAfterProvisionReturnsAcmeTools() throws Exception {
+        // provision:注册 4 条 acme-demo 工具,全部 appId=34
+        String[] tools = {"create_ticket", "list_tickets", "resolve_scope", "query_sales"};
+        for (String tool : tools) {
+            registryService.register(command(
+                    tool, ACME_SERVER_KEY,
+                    "ACME 演示工具:" + tool,
+                    TARGET_APP));
+        }
+
+        // 1. 显式 ?serverKey=acme-demo(无 appId)— 跨应用聚合,4 条全 appId=34
+        // 直接断言 serverKey/appId/toolName 三元组,绕过 length() 在 Jayway
+        // JsonPath 上「按元素求 length」的歧义(实测返回描述串长度而非数组大小)
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("serverKey", ACME_SERVER_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].serverKey").value(ACME_SERVER_KEY))
+                .andExpect(jsonPath("$.data[0].appId").value(TARGET_APP))
+                .andExpect(jsonPath("$.data[0].fqn")
+                        .value("mcp__acme-demo__create_ticket"))
+                .andExpect(jsonPath("$.data[*].serverKey",
+                        org.hamcrest.Matchers.everyItem(
+                                org.hamcrest.Matchers.equalTo(ACME_SERVER_KEY))))
+                .andExpect(jsonPath("$.data[*].appId",
+                        org.hamcrest.Matchers.everyItem(
+                                org.hamcrest.Matchers.equalTo((int) TARGET_APP))))
+                .andExpect(jsonPath("$.data[*].toolName",
+                        org.hamcrest.Matchers.hasItems(
+                                "create_ticket", "list_tickets",
+                                "resolve_scope", "query_sales")));
+
+        // 2. 显式 ?appId=34 + ?serverKey=acme-demo — 同样返 4 条(显式 appId 优先)
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("serverKey", ACME_SERVER_KEY)
+                        .param("appId", String.valueOf(TARGET_APP)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].appId").value(TARGET_APP))
+                .andExpect(jsonPath("$.data[*].toolName",
+                        org.hamcrest.Matchers.hasItems(
+                                "create_ticket", "list_tickets",
+                                "resolve_scope", "query_sales")));
+
+        // 3. ?appKey=acme-demo — 解析到 appId=34,返 4 条
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("appKey", ACME_SERVER_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].appId").value(TARGET_APP))
+                .andExpect(jsonPath("$.data[*].toolName",
+                        org.hamcrest.Matchers.hasItems(
+                                "create_ticket", "list_tickets",
+                                "resolve_scope", "query_sales")));
+
+        // 4. 直查 DB 兜底:全 appId=34 一致(防 MockMvc JSON 路径误判)
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT COUNT(*) FROM ia_tool_registry "
+                             + "WHERE server_key = ? AND app_id = ? AND deleted = FALSE")) {
+            statement.setString(1, ACME_SERVER_KEY);
+            statement.setLong(2, TARGET_APP);
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                assertThat(rs.getLong(1)).as("acme-demo 工具必须 4 行全 app_id=34")
+                        .isEqualTo(4L);
+            }
+        }
+    }
+
+    @Test
+    @Order(11)
+    @DisplayName("GET 路径:无 serverKey 仅 ?appId=34 — 返所有 appId=34 的工具(跨 serverKey)")
+    void getPathByAppIdReturnsAllServerKeys() throws Exception {
+        // BeforeEach 清掉 acme-demo 名下工具,但 acme-echo 等其他 serverKey 不清;
+        // 用本地新建的「隔离 serverKey」避免被 Order(3) 的 unscoped_tool 干扰
+        String isolatedServerKey = "isolated-get-test";
+        try (Connection connection = openConnection();
+             PreparedStatement clearOther = connection.prepareStatement(
+                     "DELETE FROM ia_tool_registry WHERE server_key = ?")) {
+            clearOther.setString(1, isolatedServerKey);
+            clearOther.executeUpdate();
+        }
+
+        // 注册两个 serverKey 的工具,均在 appId=34
+        registryService.register(command(
+                "create_ticket", ACME_SERVER_KEY, "ACME 工具", TARGET_APP));
+        registryService.register(command(
+                "echo_isolated", isolatedServerKey, "isolated 工具",
+                TARGET_APP));
+
+        // ?appId=34 — 跨 serverKey 看到 2 条(acme-demo 1 + isolated 1)
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("appId", String.valueOf(TARGET_APP)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].appId").value(TARGET_APP))
+                .andExpect(jsonPath("$.data[*].appId",
+                        org.hamcrest.Matchers.everyItem(
+                                org.hamcrest.Matchers.equalTo((int) TARGET_APP))))
+                .andExpect(jsonPath("$.data[*].serverKey",
+                        org.hamcrest.Matchers.containsInAnyOrder(
+                                ACME_SERVER_KEY, isolatedServerKey)));
+    }
+
+    @Test
+    @Order(12)
+    @DisplayName("GET ?appId=999(不存在):422 + 应用不存在 msg")
+    void getPathNonExistentAppIdReturns422() throws Exception {
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("appId", "999"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(422))
+                .andExpect(jsonPath("$.msg").value(
+                        org.hamcrest.Matchers.containsString("应用不存在")));
+    }
+
+    @Test
+    @Order(13)
+    @DisplayName("GET ?appKey=unknown-app(未知 appKey):401 透传(embed 验签链口径)")
+    void getPathUnknownAppKeyReturns401() throws Exception {
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("appKey", "unknown-app"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @Order(14)
+    @DisplayName("GET ?toolName=&?riskLevel= 过滤组合")
+    void getPathToolNameAndRiskLevelFilters() throws Exception {
+        // 注册低危工具 + 高危删除工具
+        registryService.register(command(
+                "list_tickets", ACME_SERVER_KEY, "查询工单",
+                TARGET_APP));
+        registryService.register(command(
+                "delete_record", ACME_SERVER_KEY, "删除记录",
+                TARGET_APP));
+
+        // toolName 命中
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("serverKey", ACME_SERVER_KEY)
+                        .param("toolName", "list_tickets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].toolName").value("list_tickets"));
+
+        // riskLevel=high 命中删除类(强制高危)
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("serverKey", ACME_SERVER_KEY)
+                        .param("riskLevel", "high"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].toolName").value("delete_record"));
+
+        // riskLevel=invalid → 400
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header("X-IA-Admin-Key", ADMIN_KEY)
+                        .param("riskLevel", "critical"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.msg").value(
+                        org.hamcrest.Matchers.containsString("riskLevel 仅支持")));
     }
 
     // ------------------------------------------------------------------

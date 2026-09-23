@@ -488,15 +488,33 @@ public class ToolRegistryService {
     }
 
     public List<ToolRegistryEntry> list(String serverKey, Boolean enabled) {
-        LambdaQueryWrapper<ToolRegistryEntry> query = new LambdaQueryWrapper<ToolRegistryEntry>()
-                .orderByAsc(ToolRegistryEntry::getServerKey)
-                .orderByAsc(ToolRegistryEntry::getToolName);
-        if (serverKey != null && !serverKey.isBlank()) {
-            query.eq(ToolRegistryEntry::getServerKey, serverKey.trim());
-        }
-        if (enabled != null) {
-            query.eq(ToolRegistryEntry::getEnabled, enabled);
-        }
+        return list(serverKey, null, null, enabled, null);
+    }
+
+    /**
+     * 工具列表全量(管理面口径,2026-09-23 fix):
+     * <ul>
+     *   <li>行级拦截器(AppIdLineHandler)在管理面无 AppContext 时会注入
+     *       {@code app_id = currentOrDefault() = 1},导致 acme-demo 等
+     *       非默认应用的工具被砍掉——此处统一走
+     *       {@link AppContext#runAsSystem(java.util.function.Supplier)}
+     *       跳过 app_id 注入(同
+     *       {@link com.inneragent.server.admin.AgentDefinitionAdminService#page}
+     *       「definitions GET 跨应用视图」风格);</li>
+     *   <li>{@code appId} 非空时按显式 appId 过滤,空时跨应用聚合(管理面
+     *       「跨 serverKey 工具列表」应为全局视图)。</li>
+     * </ul>
+     */
+    public List<ToolRegistryEntry> list(String serverKey, String toolName,
+                                        String riskLevel, Boolean enabled, Long appId) {
+        return AppContext.runAsSystem(
+                () -> doList(serverKey, toolName, riskLevel, enabled, appId));
+    }
+
+    private List<ToolRegistryEntry> doList(String serverKey, String toolName,
+                                           String riskLevel, Boolean enabled, Long appId) {
+        LambdaQueryWrapper<ToolRegistryEntry> query = baseQuery(
+                serverKey, toolName, riskLevel, enabled, appId);
         return registryMapper.selectList(query);
     }
 
@@ -506,19 +524,63 @@ public class ToolRegistryService {
      */
     public Page<ToolRegistryEntry> page(String serverKey, Boolean enabled,
                                         int pageNo, int pageSize) {
+        return page(serverKey, null, null, enabled, null, pageNo, pageSize);
+    }
+
+    /**
+     * 工具列表分页(管理面口径,2026-09-23 fix):与
+     * {@link #list(String, String, String, Boolean, Long)} 同过滤同口径,详见该处注释。
+     */
+    public Page<ToolRegistryEntry> page(String serverKey, String toolName,
+                                        String riskLevel, Boolean enabled, Long appId,
+                                        int pageNo, int pageSize) {
+        return AppContext.runAsSystem(
+                () -> doPage(serverKey, toolName, riskLevel, enabled, appId, pageNo, pageSize));
+    }
+
+    private Page<ToolRegistryEntry> doPage(String serverKey, String toolName,
+                                           String riskLevel, Boolean enabled, Long appId,
+                                           int pageNo, int pageSize) {
+        LambdaQueryWrapper<ToolRegistryEntry> query = baseQuery(
+                serverKey, toolName, riskLevel, enabled, appId);
+        return registryMapper.selectPage(
+                new Page<>(Math.max(pageNo, 1),
+                        Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE)),
+                query);
+    }
+
+    /**
+     * list/page 共享过滤装配(riskLevel 缺省不过滤;非 low/medium/high → 400;
+     * 显式 appId → {@code eq(getAppId, appId)};空字符串统一 trim)。
+     */
+    private LambdaQueryWrapper<ToolRegistryEntry> baseQuery(String serverKey, String toolName,
+                                                           String riskLevel, Boolean enabled,
+                                                           Long appId) {
         LambdaQueryWrapper<ToolRegistryEntry> query = new LambdaQueryWrapper<ToolRegistryEntry>()
                 .orderByAsc(ToolRegistryEntry::getServerKey)
                 .orderByAsc(ToolRegistryEntry::getToolName);
         if (serverKey != null && !serverKey.isBlank()) {
             query.eq(ToolRegistryEntry::getServerKey, serverKey.trim());
         }
+        if (toolName != null && !toolName.isBlank()) {
+            query.eq(ToolRegistryEntry::getToolName, toolName.trim());
+        }
+        if (riskLevel != null && !riskLevel.isBlank()) {
+            // 值域与 ia_tool_registry.risk_level 列注释一致(对齐 V2 DDL)
+            String normalized = riskLevel.trim().toLowerCase(Locale.ROOT);
+            if (!Set.of("low", "medium", "high").contains(normalized)) {
+                throw new BusinessException(400,
+                        "riskLevel 仅支持 low/medium/high: " + riskLevel);
+            }
+            query.eq(ToolRegistryEntry::getRiskLevel, normalized);
+        }
         if (enabled != null) {
             query.eq(ToolRegistryEntry::getEnabled, enabled);
         }
-        return registryMapper.selectPage(
-                new Page<>(Math.max(pageNo, 1),
-                        Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE)),
-                query);
+        if (appId != null) {
+            query.eq(ToolRegistryEntry::getAppId, appId);
+        }
+        return query;
     }
 
     public List<ToolRegistryEntry> listEnabled() {

@@ -184,7 +184,8 @@ class AdminToolApiTests {
     @Test
     @DisplayName("列表/详情/历史/停用/删除路由")
     void listGetDisableDelete() throws Exception {
-        when(registryService.list(Mockito.isNull(), Mockito.isNull()))
+        when(registryService.list(Mockito.isNull(), Mockito.isNull(),
+                Mockito.isNull(), Mockito.isNull(), Mockito.isNull()))
                 .thenReturn(List.of(entry(9L)));
         when(registryService.getRequired(9L)).thenReturn(entry(9L));
         ToolSchemaHistory history = new ToolSchemaHistory();
@@ -226,8 +227,10 @@ class AdminToolApiTests {
         page.setRecords(List.of(paged));
         page.setTotal(21);
         when(registryService.page(Mockito.isNull(), Mockito.isNull(),
+                Mockito.isNull(), Mockito.isNull(), Mockito.isNull(),
                 Mockito.eq(2), Mockito.eq(50))).thenReturn(page);
-        when(registryService.list(Mockito.isNull(), Mockito.isNull()))
+        when(registryService.list(Mockito.isNull(), Mockito.isNull(),
+                Mockito.isNull(), Mockito.isNull(), Mockito.isNull()))
                 .thenReturn(List.of(entry(9L)));
 
         // 分页形(与 audit-logs PageResult 一致)
@@ -259,5 +262,103 @@ class AdminToolApiTests {
                         .header(AdminTokenFilter.HEADER, ADMIN_KEY)
                         .content("{\"riskLevel\":\"low\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("GET 显式 ?appId=N 命中:requireEntity422 验过后透传 appId 到 service")
+    void listWithExplicitAppIdForwardedToService() throws Exception {
+        com.inneragent.server.admin.AppRegistration acme =
+                new com.inneragent.server.admin.AppRegistration();
+        acme.setId(34L);
+        acme.setAppKey("acme-demo");
+        when(adminAppService.requireEntity422(34L)).thenReturn(acme);
+        when(registryService.list(Mockito.eq("acme-demo"), Mockito.isNull(),
+                Mockito.isNull(), Mockito.isNull(), Mockito.eq(34L)))
+                .thenReturn(List.of(entry(9L)));
+
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("serverKey", "acme-demo")
+                        .param("appId", "34"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].toolName").value("list_users"));
+    }
+
+    @Test
+    @DisplayName("GET 显式 ?appId=999(不存在):422 + 应用不存在 msg")
+    void listWithNonExistentAppIdReturns422() throws Exception {
+        when(adminAppService.requireEntity422(999L))
+                .thenThrow(new BusinessException(422, "应用不存在: 999"));
+
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("appId", "999"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(422))
+                .andExpect(jsonPath("$.msg").value(
+                        org.hamcrest.Matchers.containsString("应用不存在")));
+    }
+
+    @Test
+    @DisplayName("GET ?appKey=acme-demo 解析:透传 appId=34 到 service;appKey 缺失→401")
+    void listWithAppKeyResolution() throws Exception {
+        com.inneragent.server.admin.AppRegistration acme =
+                new com.inneragent.server.admin.AppRegistration();
+        acme.setId(34L);
+        acme.setAppKey("acme-demo");
+        when(adminAppService.requireEnabledByAppKey("acme-demo")).thenReturn(acme);
+        when(registryService.list(Mockito.isNull(), Mockito.isNull(),
+                Mockito.isNull(), Mockito.isNull(), Mockito.eq(34L)))
+                .thenReturn(List.of(entry(9L)));
+
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("appKey", "acme-demo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].toolName").value("list_users"));
+
+        // appKey 不存在/禁用→401 透传(requireEnabledByAppKey 语义)
+        when(adminAppService.requireEnabledByAppKey("unknown-app"))
+                .thenThrow(new BusinessException(401, "未知或禁用的应用: unknown-app"));
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("appKey", "unknown-app"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET ?appId 同时传 ?appKey:appId 优先(appKey 静默忽略)")
+    void listWithBothAppIdAndAppKeyPrefersAppId() throws Exception {
+        com.inneragent.server.admin.AppRegistration acme =
+                new com.inneragent.server.admin.AppRegistration();
+        acme.setId(34L);
+        acme.setAppKey("acme-demo");
+        when(adminAppService.requireEntity422(34L)).thenReturn(acme);
+        when(registryService.list(Mockito.isNull(), Mockito.isNull(),
+                Mockito.isNull(), Mockito.isNull(), Mockito.eq(34L)))
+                .thenReturn(List.of(entry(9L)));
+
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("appId", "34")
+                        .param("appKey", "ignored"))
+                .andExpect(status().isOk());
+        // appKey 不应被解析,requireEnabledByAppKey 不被调用
+        Mockito.verify(adminAppService, Mockito.never()).requireEnabledByAppKey(Mockito.anyString());
+    }
+
+    @Test
+    @DisplayName("GET ?riskLevel=invalid:400 透传(riskLevel 值域校验)")
+    void listWithInvalidRiskLevelRejected() throws Exception {
+        when(registryService.list(Mockito.isNull(), Mockito.isNull(),
+                Mockito.eq("invalid"), Mockito.isNull(), Mockito.isNull()))
+                .thenThrow(new BusinessException(400, "riskLevel 仅支持 low/medium/high: invalid"));
+
+        mockMvc.perform(get("/ia/api/v1/admin/tools")
+                        .header(AdminTokenFilter.HEADER, ADMIN_KEY)
+                        .param("riskLevel", "invalid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.msg").value(
+                        org.hamcrest.Matchers.containsString("riskLevel 仅支持")));
     }
 }

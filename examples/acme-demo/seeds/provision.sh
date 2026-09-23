@@ -247,8 +247,16 @@ register_tool() { # register_tool <toolName> <description> <schemaJSON>
   local tool="$1" desc="$2" schema="$3"
   api GET "/ia/api/v1/admin/tools?serverKey=${ACME_APP_KEY}"
   [[ "$REPLY_CODE" == "200" ]] || fail "工具列表失败: HTTP $REPLY_CODE"
+  # 2026-09-23 fix:工具若已存在,校验其 appId 是否落在目标应用;
+  # 历史上(本 fix 前)全部注册到 app_id=1,这里识别为「串台」并报错
   if [[ "$(jpy "any(t['toolName']=='${tool}' for t in d['data'])")" == "True" ]]; then
-    ok "已注册,跳过: ${tool}"
+    local existing_appid
+    existing_appid=$(jpy "next((t.get('appId') for t in d['data'] if t['toolName']=='${tool}'), None)")
+    if [[ "$existing_appid" != "None" && "$existing_appid" != "$APP_ID" ]]; then
+      fail "工具 ${tool} 已在 appId=${existing_appid},目标应用是 appId=${APP_ID};"
+           fail "请先 DELETE /ia/api/v1/admin/tools/<id> 清理错位行,再重跑 provision"
+    fi
+    ok "已注册,跳过: ${tool}(appId=${existing_appid})"
     return 0
   fi
   python3 -c '
@@ -258,10 +266,12 @@ print(json.dumps({"serverKey": sys.argv[1], "toolName": sys.argv[2],
                   "source": "host_app", "endpointUrl": sys.argv[4],
                   "parametersSchema": sys.argv[5]}, ensure_ascii=False))' \
     "$ACME_APP_KEY" "$tool" "$desc" "$BRIDGE_ENDPOINT" "$schema" > "$TMP_JSON"
-  api POST "/ia/api/v1/admin/tools" -H 'Content-Type: application/json' \
+  # 显式 appId 写入目标应用(2026-09-23 fix:不传则行级拦截器按缺省 app_id=1
+  # 兜底,acme-demo 视角下 catalog 静默空;带上后既有串台行会被 422 拦下)
+  api POST "/ia/api/v1/admin/tools?appId=${APP_ID}" -H 'Content-Type: application/json' \
     --data-binary @"$TMP_JSON"
   if [[ "$REPLY_CODE" == "200" ]]; then
-    ok "工具已注册: ${tool}"
+    ok "工具已注册: ${tool}(appId=${APP_ID})"
   elif [[ "$REPLY_CODE" == "409" ]]; then
     # 同 fqn 活跃行=幂等跳过;工具名被他 serverKey 占用=真冲突,把 msg 亮出来
     if [[ "$(jpy "'重名冲突' in (d['msg'] or '')")" == "True" ]]; then
@@ -269,6 +279,8 @@ print(json.dumps({"serverKey": sys.argv[1], "toolName": sys.argv[2],
     else
       ok "已注册(409 幂等跳过): ${tool}"
     fi
+  elif [[ "$REPLY_CODE" == "422" ]]; then
+    fail "工具 ${tool} 串台(appId 不匹配,2026-09-23 fix 防呆): $(jpy "d['msg']")"
   else
     fail "工具注册失败(${tool}): HTTP $REPLY_CODE $(cat "$TMP_JSON")"
   fi

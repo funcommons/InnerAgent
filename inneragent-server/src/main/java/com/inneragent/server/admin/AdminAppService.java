@@ -102,6 +102,19 @@ public class AdminAppService {
         return app;
     }
 
+    /**
+     * 显式 appId 校验专用(2026-09-23 fix):管理面 {@code ?appId=N} 入口,
+     * 不存在以 {@code 422} 抛(对齐「写操作的请求字段语义错误」语义,
+     * 区别于 {@link #requireEntity} 的资源查找 404,统一管理面写面读侧)。
+     */
+    public AppRegistration requireEntity422(long id) {
+        AppRegistration app = appMapper.selectById(id);
+        if (app == null) {
+            throw new BusinessException(422, "应用不存在: " + id);
+        }
+        return app;
+    }
+
     public AppView update(long id, String name, String signPublicKeyPem,
                           String webhookUrl, String webhookSecret, Integer status) {
         AppRegistration app = requireEntity(id);

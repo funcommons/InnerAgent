@@ -69,10 +69,20 @@ public class ToolRegistryService {
     /**
      * 注册工具:计算 FQN 与 schema 指纹,注解生成默认风险级(人工可覆盖),
      * 删除/资金/凭据类强制高危;应用内工具名唯一 + 与内置工具重名拒绝。
+     *
+     * <p>显式 appId(2026-09-23 fix):传 {@code command.appId()} 非空时以其
+     * 为准(管理面按 {@code ?appId=N} 解析;存在性由 AdminToolController 入口
+     * 校验,不依赖行级拦截器);空则维持原 {@link AppContext#currentOrDefault()}
+     * 兜底(单应用部署=1)——保留既有调用方语义不被破坏。
+     *
+     * <p>幂等保证:同 fqn 活跃行→{@code 409};但若调用方显式 appId 与既有行
+     * appId 不一致,直接 {@code 422}(防止把宿主应用工具再写到错的应用——典型
+     * 场景:acme-demo 视角下 catalog 静默空)。逻辑删行仍走复活(同 fqn 跨
+     * 应用复活 = 数据迁移,接受该路径覆盖)。
      */
     @Transactional
     public ToolRegistryEntry register(RegisterCommand command) {
-        long appId = AppContext.currentOrDefault();
+        long appId = command.appId() != null ? command.appId() : AppContext.currentOrDefault();
         String serverKey = requireText(command.serverKey(), "serverKey");
         if (!SERVER_KEY_PATTERN.matcher(serverKey).matches()) {
             throw new BusinessException(400,
@@ -95,11 +105,25 @@ public class ToolRegistryService {
         }
 
         ToolAnnotations annotations = ToolAnnotations.parse(objectMapper, command.annotationsJson());
-        ToolRegistryEntry existing = registryMapper.selectByFqnIncludingDeleted(fqn);
+        // 必须 runAsSystem:AppIdLineHandler 在缺省上下文下注入 app_id=1 过滤,
+        // 会让其他应用(app_id=N)的同 FQN 行被遮蔽→防串台 422 失效(DEF-fix-20260923)
+        ToolRegistryEntry existing = AppContext.runAsSystem(
+                () -> registryMapper.selectByFqnIncludingDeleted(fqn));
         if (existing != null && !Boolean.TRUE.equals(existing.getDeleted())) {
+            if (command.appId() != null && !command.appId().equals(existing.getAppId())) {
+                // DEF-fix-20260923:防串台——显式 appId 与既有行 appId 不一致,
+                // 既有行的 FQN 已被其他应用占用,直接 422 而非吞掉(原 409 路径
+                // 会让 caller 误以为幂等成功,但 catalog 按 caller 视角聚合=空)
+                throw new BusinessException(422,
+                        "工具已注册到其他应用,禁止串写: " + fqn
+                                + " (existingAppId=" + existing.getAppId()
+                                + ", requestedAppId=" + command.appId() + ")");
+            }
             throw new BusinessException(409, "工具已注册: " + fqn);
         }
-        ToolRegistryEntry nameClash = registryMapper.selectActiveByToolName(toolName);
+        // 同上,跨应用工具名冲突检查也必须 runAsSystem
+        ToolRegistryEntry nameClash = AppContext.runAsSystem(
+                () -> registryMapper.selectActiveByToolName(toolName));
         if (nameClash != null && !nameClash.getFqn().equals(fqn)) {
             throw new BusinessException(409, "工具名应用内唯一,重名冲突: " + toolName);
         }
@@ -154,15 +178,20 @@ public class ToolRegistryService {
         entry.setEnabled(command.enabled() == null || command.enabled());
         entry.setDeleted(false);
         boolean revived = existing != null;
-        if (revived) {
-            // DEF-03:必须先显式复活逻辑删行——实体 deleted 带 @TableLogic,
-            // updateById 被追加 WHERE deleted=false,对死行更新 0 行静默失效,
-            // 唯一键 uk_ia_tool_registry_fqn 亦被死行永久占用
-            registryMapper.revive(existing.getId());
-            registryMapper.updateById(entry);
-        } else {
-            registryMapper.insert(entry);
-        }
+        // runAsSystem:AppIdLineHandler 缺省上下文注入 app_id=currentOrDefault()
+        // 会覆盖 entity.appId(显式 ?appId=N 被吞掉,DEF-fix-20260923 根因)
+        AppContext.runAsSystem(() -> {
+            if (revived) {
+                // DEF-03:必须先显式复活逻辑删行——实体 deleted 带 @TableLogic,
+                // updateById 被追加 WHERE deleted=false,对死行更新 0 行静默失效,
+                // 唯一键 uk_ia_tool_registry_fqn 亦被死行永久占用
+                registryMapper.revive(existing.getId());
+                registryMapper.updateById(entry);
+            } else {
+                registryMapper.insert(entry);
+            }
+            return null;
+        });
 
         recordHistory(entry, null, fingerprint, "unchanged", OUTCOME_APPLIED,
                 revived ? "register_revived" : "register");
@@ -525,7 +554,9 @@ public class ToolRegistryService {
     private void recordHistory(ToolRegistryEntry entry, String previousSha, String newSha,
                                String triage, String outcome, Object detail) {
         ToolSchemaHistory row = new ToolSchemaHistory();
-        row.setAppId(AppContext.currentOrDefault());
+        // [DEF-fix-20260923] 使用 entry 自身的 appId(已携带显式 ?appId=N),
+        // 不再回退 currentOrDefault()(会落入缺省 app_id=1,致历史行 appId 串台)
+        row.setAppId(entry.getAppId());
         row.setToolId(entry.getId());
         row.setFqn(entry.getFqn());
         row.setPreviousSha256(previousSha);
@@ -534,7 +565,8 @@ public class ToolRegistryService {
         row.setOutcome(outcome);
         row.setActor("admin");
         row.setDetail(detail == null ? null : String.valueOf(detail));
-        historyMapper.insert(row);
+        // runAsSystem:同上,行级拦截器不覆盖显式 appId
+        AppContext.runAsSystem(() -> historyMapper.insert(row));
     }
 
     private void invalidateCatalog(long appId) {
@@ -565,7 +597,9 @@ public class ToolRegistryService {
             String source,
             String endpointUrl,
             String toolVersion,
-            Boolean enabled) {
+            Boolean enabled,
+            /** 显式 appId(2026-09-23 fix);null=走 AppContext 兜底,向后兼容。 */
+            Long appId) {
     }
 
     /** 元数据更新命令(null=不修改)。 */

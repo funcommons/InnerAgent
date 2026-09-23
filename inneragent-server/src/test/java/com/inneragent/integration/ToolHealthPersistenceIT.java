@@ -75,7 +75,7 @@ class ToolHealthPersistenceIT {
                         null, null, null, null,
                         ToolRegistryService.SOURCE_HOST_APP,
                         "http://127.0.0.1:" + deadPort + "/ia-mcp",
-                        "v1", true));
+                        "v1", true, null));
         long toolId = registered.getId();
 
         ToolHealthService.ToolCheckResult result = healthService.checkOne(toolId);
@@ -122,7 +122,7 @@ class ToolHealthPersistenceIT {
                         null, null, null, null,
                         ToolRegistryService.SOURCE_HOST_APP,
                         "http://127.0.0.1:1/ia-mcp",
-                        "v1", true));
+                        "v1", true, null));
 
         ToolRegistryEntry persisted = registryMapper.selectById(registered.getId());
         assertThat(persisted.getHealthStatus()).isNull();

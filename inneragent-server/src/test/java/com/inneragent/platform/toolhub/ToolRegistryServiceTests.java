@@ -111,7 +111,7 @@ class ToolRegistryServiceTests {
         return new ToolRegistryService.RegisterCommand(
                 "crm", toolName, "查询客户", schema, annotations,
                 risk, null, null, null,
-                ToolRegistryService.SOURCE_HOST_APP, null, "v1", true);
+                ToolRegistryService.SOURCE_HOST_APP, null, "v1", true, null);
     }
 
     private ToolRegistryEntry persisted(ToolRegistryService.RegisterCommand cmd) {
@@ -177,7 +177,7 @@ class ToolRegistryServiceTests {
         when(registryMapper.selectActiveByToolName("list_users")).thenReturn(existing);
         ToolRegistryService.RegisterCommand clash = new ToolRegistryService.RegisterCommand(
                 "erp", "list_users", null, SCHEMA_V1, null, null, null, null, null,
-                ToolRegistryService.SOURCE_HOST_APP, null, null, true);
+                ToolRegistryService.SOURCE_HOST_APP, null, null, true, null);
         assertThatThrownBy(() -> service.register(clash))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("重名");
@@ -228,7 +228,7 @@ class ToolRegistryServiceTests {
     void serverKeyWithUnderscoreRejected() {
         ToolRegistryService.RegisterCommand bad = new ToolRegistryService.RegisterCommand(
                 "bad_key", "t", null, SCHEMA_V1, null, null, null, null, null,
-                ToolRegistryService.SOURCE_HOST_APP, null, null, true);
+                ToolRegistryService.SOURCE_HOST_APP, null, null, true, null);
         assertThatThrownBy(() -> service.register(bad))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("serverKey");

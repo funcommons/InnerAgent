@@ -178,7 +178,7 @@ class McpThirdPartyServerIT {
                 "{\"type\":\"object\"}", "{\"readOnlyHint\":true}",
                 null, null, null, null,
                 ToolRegistryService.SOURCE_HOST_APP,
-                "http://127.0.0.1:1/ia-mcp", null, true));
+                "http://127.0.0.1:1/ia-mcp", null, true, null));
 
         List<McpToolCatalogEntry> entries = catalog.catalog(1L);
         assertThat(entries).extracting(McpToolCatalogEntry::fqn)

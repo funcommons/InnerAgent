@@ -45,6 +45,11 @@ public class AdminToolController {
 
     private final ToolRegistryService toolRegistryService;
     private final ToolHealthService toolHealthService;
+    /**
+     * 显式 {@code ?appId=N} 校验依赖(2026-09-23 fix):不存在→422;
+     * 不传则维持原 AppContext 兜底(单应用 1)向后兼容。
+     */
+    private final AdminAppService adminAppService;
 
     public record RegisterToolReqVO(
             @NotBlank String serverKey,
@@ -101,9 +106,16 @@ public class AdminToolController {
     }
 
     @PostMapping
-    @Operation(summary = "注册工具(FQN 唯一/指纹/注解默认风险级/强制高危)")
+    @Operation(summary = "注册工具(FQN 唯一/指纹/注解默认风险级/强制高危;"
+            + "?appId=N 显式指定应用,不存在→422;不传=走 AppContext 兜底)")
     public CommonResult<ToolRegistryEntry> register(
+            @RequestParam(required = false) Long appId,
             @Validated @RequestBody RegisterToolReqVO request) {
+        if (appId != null) {
+            // 显式 appId 必须存在,防止把宿主应用工具写到错的应用(2026-09-23
+            // fix 根因:admin/tools 走 AppContext 缺省 1,acme-demo 视角 catalog 静默空)
+            adminAppService.requireEntity422(appId);
+        }
         return success(toolRegistryService.register(new ToolRegistryService.RegisterCommand(
                 request.serverKey(),
                 request.toolName(),
@@ -117,7 +129,8 @@ public class AdminToolController {
                 request.source(),
                 request.endpointUrl(),
                 request.toolVersion(),
-                request.enabled())));
+                request.enabled(),
+                appId)));
     }
 
     /**

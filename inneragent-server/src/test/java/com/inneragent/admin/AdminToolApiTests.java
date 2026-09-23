@@ -5,6 +5,7 @@ import com.inneragent.platform.toolhub.ToolHealthService;
 import com.inneragent.platform.toolhub.ToolRegistryEntry;
 import com.inneragent.platform.toolhub.ToolRegistryService;
 import com.inneragent.platform.toolhub.ToolSchemaHistory;
+import com.inneragent.server.admin.AdminAppService;
 import com.inneragent.server.admin.AdminTokenFilter;
 import com.inneragent.server.admin.AdminToolController;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,7 @@ class AdminToolApiTests {
 
     private ToolRegistryService registryService;
     private ToolHealthService healthService;
+    private AdminAppService adminAppService;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -44,7 +46,9 @@ class AdminToolApiTests {
     void setUp() {
         registryService = Mockito.mock(ToolRegistryService.class);
         healthService = Mockito.mock(ToolHealthService.class);
-        AdminToolController controller = new AdminToolController(registryService, healthService);
+        adminAppService = Mockito.mock(AdminAppService.class);
+        AdminToolController controller = new AdminToolController(
+                registryService, healthService, adminAppService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new AdminAppApiTests.BusinessExceptionAdvice())
                 .addFilters(new AdminTokenFilter(ADMIN_KEY))
@@ -79,7 +83,8 @@ class AdminToolApiTests {
     @Test
     @DisplayName("无密钥:全部 403(复用 AdminTokenFilter 缺省封闭)")
     void requiresAdminKey() throws Exception {
-        MockMvc closed = MockMvcBuilders.standaloneSetup(new AdminToolController(registryService, healthService))
+        MockMvc closed = MockMvcBuilders.standaloneSetup(new AdminToolController(
+                registryService, healthService, adminAppService))
                 .setControllerAdvice(new AdminAppApiTests.BusinessExceptionAdvice())
                 .addFilters(new AdminTokenFilter(""))
                 .build();

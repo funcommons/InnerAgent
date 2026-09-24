@@ -319,6 +319,11 @@ onBeforeUnmount(() => {
         <div class="field">
           <span class="label">{{ t('ia.embed.mode') }}</span>
           <FcSelect v-model="mode" :options="modeOptions" style="width: 240px" />
+          <!-- §D3 模式副文(2026-09-24):WC/iframe 适用场景一句话说明,演示员答疑 -->
+          <span class="mode-desc" data-testid="embed-mode-desc">
+            <i :class="mode === 'wc' ? 'ri-flashlight-line' : 'ri-shield-keyhole-line'" aria-hidden="true" />
+            {{ t(mode === 'wc' ? 'ia.embed.mode-wc-desc' : 'ia.embed.mode-iframe-desc') }}
+          </span>
         </div>
         <div class="actions">
           <FcButton type="primary" :loading="loading" :disabled="!config" data-testid="embed-mount" @click="onMount">
@@ -466,6 +471,22 @@ onBeforeUnmount(() => {
 
   code {
     font-size: 12px;
+  }
+
+  /* §D3 模式副文(2026-09-24):WC/iframe 一句话说明,演示员答疑 */
+  .mode-desc {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--el-text-color-secondary);
+    line-height: 1.4;
+  }
+
+  .mode-desc i {
+    font-size: 12px;
+    flex-shrink: 0;
   }
 }
 

@@ -103,6 +103,14 @@ function priorityTagType(priority: string): 'info' | 'warning' | 'danger' {
   if (priority === 'low') return 'info'
   return 'warning'
 }
+
+/** §B3 SLA 兑现(2026-09-24):优先级 → 承诺 chip 文案(对齐 ticket-assistant 系统提示词 SLA 口径) */
+function slaChipKey(priority: string): 'sla-chip-high' | 'sla-chip-normal' | 'sla-chip-low' | null {
+  if (priority === 'high') return 'sla-chip-high'
+  if (priority === 'low') return 'sla-chip-low'
+  if (priority === 'normal') return 'sla-chip-normal'
+  return null
+}
 </script>
 
 <template>
@@ -150,6 +158,12 @@ function priorityTagType(priority: string): 'info' | 'warning' | 'danger' {
       </div>
 
       <div class="ticket-list" data-testid="ticket-list">
+        <!-- §B3 SLA 兑现(2026-09-24):legend 横条交代三档优先级承诺 -->
+        <div class="sla-legend" data-testid="sla-legend">
+          <i class="ri-time-line" aria-hidden="true" />
+          <span>{{ t('ia.tools.sla-legend') }}</span>
+        </div>
+
         <!-- §B2 工单 filter tab:AWS 控制台风格 -->
         <div class="filter-tabs" data-testid="ticket-filter-tabs" role="tablist">
           <button
@@ -181,6 +195,16 @@ function priorityTagType(priority: string): 'info' | 'warning' | 'danger' {
             <FcTag :type="priorityTagType(row.priority)">{{ row.priority }}</FcTag>
             <FcTag :type="row.channel === 'agent' ? 'success' : 'info'">
               {{ t(row.channel === 'agent' ? 'ia.tools.channel-agent' : 'ia.tools.channel-direct') }}
+            </FcTag>
+            <!-- §B3 SLA 兑现(2026-09-24):行内 chip 兑现优先级首响承诺 -->
+            <FcTag
+              v-if="slaChipKey(row.priority)"
+              :type="row.priority === 'high' ? 'danger' : row.priority === 'normal' ? 'warning' : 'info'"
+              size="sm"
+              :data-testid="`sla-chip-${row.ticketId}`"
+            >
+              <i class="ri-time-line" aria-hidden="true" />
+              {{ t(`ia.tools.${slaChipKey(row.priority)}`) }}
             </FcTag>
             <span class="ticket-meta">{{ t('ia.tools.created-by') }} {{ row.createdBy }}</span>
           </div>
@@ -231,6 +255,24 @@ function priorityTagType(priority: string): 'info' | 'warning' | 'danger' {
 
 .confirm-flow-hint i {
   font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* §B3 SLA 兑现(2026-09-24):legend 横条 */
+.sla-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-left: 3px solid var(--el-color-primary);
+  border-radius: 4px;
+}
+.sla-legend i {
+  font-size: 14px;
   flex-shrink: 0;
 }
 

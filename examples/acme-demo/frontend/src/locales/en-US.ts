@@ -550,6 +550,9 @@ export default {
       destroy: 'Destroy',
       'mode-wc': 'WC mount (recommended)',
       'mode-iframe': 'iframe postMessage',
+      // §D3 mode subtitle (2026-09-24):one-liner for each access mode
+      'mode-wc-desc': 'Lightweight/single-page: SDK custom element mounts in-DOM; token fetched via tokenGetter.',
+      'mode-iframe-desc': 'Isolated/secure: token never enters URL; delivered only via postMessage bridge.',
       'iframe-src': 'Frame src (no token in URL)',
       'handshake-pending': 'Handshaking…',
       'handshake-ok': 'Handshake: done (origin verified)',
@@ -596,6 +599,12 @@ export default {
       'channel-direct': 'Host direct',
       'channel-agent': 'InnerAgent run',
       'created-by': 'Created by:',
+      // §B3 SLA兑现 (2026-09-24):visualize SLA promise
+      'sla-legend': 'SLA promise (by priority): high — first response 30min, plan 4h. Normal — 2h / 24h. Low — 1 business day.',
+      'sla-chip-high': '30min first response',
+      'sla-chip-normal': '2h first response',
+      'sla-chip-low': '1 business day',
+      'sla-row-suffix': 'SLA',
       'webhook-title': 'Webhook events',
       'webhook-subtitle': 'Run terminal callbacks (run.finished/failed/cancelled), deduplicated by X-IA-Delivery',
       'webhook-empty': 'No events yet (nothing delivered; try the admin config/test connectivity check)',

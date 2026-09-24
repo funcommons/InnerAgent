@@ -550,6 +550,9 @@ export default {
       destroy: '销毁',
       'mode-wc': 'WC 直挂(推荐)',
       'mode-iframe': 'iframe postMessage',
+      // §D3 模式副文(2026-09-24):WC/iframe 适用场景一句话
+      'mode-wc-desc': '轻量/单页,SDK 自定义元素直接挂载,token 经 tokenGetter 拉取',
+      'mode-iframe-desc': '隔离/安全,token 不入 URL,仅经 postMessage 消息桥下发',
       'iframe-src': '被嵌页地址(src 无 token)',
       'handshake-pending': '握手中…',
       'handshake-ok': '握手: 完成(origin 校验通过)',
@@ -593,6 +596,12 @@ export default {
       'channel-direct': '宿主直建',
       'channel-agent': 'InnerAgent 会话',
       'created-by': '创建者:',
+      // §B3 SLA 兑现(2026-09-24):系统提示词已承诺 SLA,UI 兑现可视化
+      'sla-legend': 'SLA 承诺(按优先级):high 首响 30min · 方案 4h;normal 首响 2h · 闭环 24h;low 1 工作日',
+      'sla-chip-high': '30min 首响',
+      'sla-chip-normal': '2h 首响',
+      'sla-chip-low': '1 工作日',
+      'sla-row-suffix': 'SLA',
       'webhook-title': 'Webhook 事件流',
       'webhook-subtitle': '运行终态回调(run.finished/failed/cancelled),X-IA-Delivery 幂等去重',
       'webhook-empty': '暂无事件(尚未收到 InnerAgent 投递;可先在管理面 config/test 连通性测试)',

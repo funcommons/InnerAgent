@@ -1,0 +1,450 @@
+[
+  {
+    "id": "L0-1",
+    "line": "站点框架",
+    "title": "首页可达且渲染品牌区",
+    "status": "PASS",
+    "notes": [
+      "控制台错误 14 条(见 consoleErrors)"
+    ],
+    "shots": [
+      "assets/L0-1-home.png"
+    ],
+    "consoleErrors": [
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Invalid linked format\n1  |  InnerAgent 只服务宿主应用:后端用 @IaTool 把业务能力开放成 MCP 工具,前端引入 JS SDK 嵌入对话界面;双级令牌、确认流与审计脱敏开箱即用。\n   |                          ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected lexical analysis in token: 'IaTool 把业…'\n1  |  InnerAgent 只服务宿主应用:后端用 @IaTool 把业务能力开放成 MCP 工具,前端引入 JS SDK 嵌入对话界面;双级令牌、确认流与审计脱敏开箱即用。\n   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected empty linked key\n1  |  InnerAgent 只服务宿主应用:后端用 @IaTool 把业务能力开放成 MCP 工具,前端引入 JS SDK 嵌入对话界面;双级令牌、确认流与审计脱敏开箱即用。\n   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unterminated closing brace\n1  |  前端 init({appKey, tokenGetter}) 并注册 <inneragent-chat> Web Component,对话能力即插即用。\n   |                 ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unbalanced closing brace\n1  |  前端 init({appKey, tokenGetter}) 并注册 <inneragent-chat> Web Component,对话能力即插即用。\n   |                              ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Invalid linked format\n1  |  宿主 @IaTool 业务工具经 /ia-mcp 桥暴露\n   |      ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected lexical analysis in token: 'IaTool 业务…'\n1  |  宿主 @IaTool 业务工具经 /ia-mcp 桥暴露\n   |     ^^^^^^^^^^^^^^^^^^^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected empty linked key\n1  |  宿主 @IaTool 业务工具经 /ia-mcp 桥暴露\n   |      ^^^^^^^^^^^^^^^^^^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Invalid linked format\n1  |  宿主方法加 @IaTool 注解即成 MCP 工具,经 /ia-mcp 桥暴露;平台侧注册登记、指纹轮询感知清单。\n   |         ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected lexical analysis in token: 'IaTool 注解…'\n1  |  宿主方法加 @IaTool 注解即成 MCP 工具,经 /ia-mcp 桥暴露;平台侧注册登记、指纹轮询感知清单。\n   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected empty linked key\n1  |  宿主方法加 @IaTool 注解即成 MCP 工具,经 /ia-mcp 桥暴露;平台侧注册登记、指纹轮询感知清单。\n   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Invalid linked format\n1  |  embed token 签发 · @IaTool 工具\n   |                    ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected lexical analysis in token: 'IaTool 工具'\n1  |  embed token 签发 · @IaTool 工具\n   |                   ^^^^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected empty linked key\n1  |  embed token 签发 · @IaTool 工具\n   |                    ^^^^^^^^^"
+      }
+    ],
+    "httpErrors": [],
+    "ms": 197
+  },
+  {
+    "id": "L1-1",
+    "line": "登录与会话",
+    "title": "空用户名提交被前端校验拦截",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L1-1-empty-blocked.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 994
+  },
+  {
+    "id": "L1-2",
+    "line": "登录与会话",
+    "title": "轻登录 alice 成功并进入总览",
+    "status": "PASS",
+    "notes": [
+      "控制台错误 9 条(见 consoleErrors)"
+    ],
+    "shots": [
+      "assets/L1-2-login-ok.png"
+    ],
+    "consoleErrors": [
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Invalid linked format\n1  |  ③ 写宿主工具 @IaTool\n   |           ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected lexical analysis in token: 'IaTool'\n1  |  ③ 写宿主工具 @IaTool\n   |          ^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected empty linked key\n1  |  ③ 写宿主工具 @IaTool\n   |           ^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Invalid linked format\n1  |  ③ 写宿主工具 @IaTool\n   |           ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected lexical analysis in token: 'IaTool'\n1  |  ③ 写宿主工具 @IaTool\n   |          ^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected empty linked key\n1  |  ③ 写宿主工具 @IaTool\n   |           ^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Invalid linked format\n1  |  ③ 写宿主工具 @IaTool\n   |           ^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected lexical analysis in token: 'IaTool'\n1  |  ③ 写宿主工具 @IaTool\n   |          ^^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Unexpected empty linked key\n1  |  ③ 写宿主工具 @IaTool\n   |           ^^^^^^"
+      }
+    ],
+    "httpErrors": [],
+    "ms": 136
+  },
+  {
+    "id": "L2-1",
+    "line": "接入总览",
+    "title": "五步自检卡渲染齐全",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L2-1-steps.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 34
+  },
+  {
+    "id": "L2-2",
+    "line": "接入总览",
+    "title": "开通状态=已注册且指纹非空",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L2-2-registered.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 33
+  },
+  {
+    "id": "L2-3",
+    "line": "接入总览",
+    "title": "能力覆盖表渲染(≥16 行且行行有落点)",
+    "status": "PASS",
+    "notes": [
+      "覆盖表 19 行全部有落点"
+    ],
+    "shots": [
+      "assets/L2-3-coverage.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 50
+  },
+  {
+    "id": "L3-1",
+    "line": "场景画廊",
+    "title": "五张场景卡+能力矩阵渲染",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L3-1-gallery.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 127
+  },
+  {
+    "id": "L3-2",
+    "line": "场景画廊",
+    "title": "剧本折叠默认收起且可展开",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L3-2-script-open.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 482
+  },
+  {
+    "id": "L3-3",
+    "line": "场景画廊",
+    "title": "「开始对话」深链携带 agentType",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L3-3-deeplink.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 386
+  },
+  {
+    "id": "L4-1",
+    "line": "嵌入对话·WC",
+    "title": "挂载成功:WC 聊天组件出现",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L4-1-mounted.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 1378
+  },
+  {
+    "id": "L4-2",
+    "line": "嵌入对话·WC",
+    "title": "SSE 真模型流式回复(MiniMax-M3)",
+    "status": "PASS",
+    "notes": [
+      "回复长度 150 字符"
+    ],
+    "shots": [
+      "assets/L4-2-sse-reply.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 6086
+  },
+  {
+    "id": "L4-3",
+    "line": "嵌入对话·WC",
+    "title": "Enter=换行不误发送,点「发送」才提交",
+    "status": "PASS",
+    "notes": [
+      "Enter 后未触发发送(无新回复),值含换行"
+    ],
+    "shots": [
+      "assets/L4-3-enter-newline.png",
+      "assets/L4-3-sent-ok.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 10685
+  },
+  {
+    "id": "L4-4",
+    "line": "嵌入对话·WC",
+    "title": "销毁后重新挂载可用",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L4-4-remount.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 697
+  },
+  {
+    "id": "L5-1",
+    "line": "确认流(WRITE 工具)",
+    "title": "建单意图触发确认卡(WRITE 先确认)",
+    "status": "FAIL",
+    "notes": [
+      "异常: Error: 120s 内未出现确认卡;消息区尾部: right 全量回归创建\n⚠️ 优先级说明:你指定为 high,按我的判定口径这属于 P0 故障(影响生产)级别,响应承诺为 30 分钟内响应、4 小时内给出方案。如果只是测试用途,建议改为 normal。\n\n请确认是否按 high 提交?如需调整请告诉我(例如「改为 normal」)。\n\n下一步:等待你确认后发起建单 ✍️\n\n确认,信息无误,请立即按上述内容提交建单。\n\n收到确认,立即提交建单 ✅\n\nmcp__acme-demo__create_ticket\n执行中\nAgent 运行不存在\n重试\nmock-text\nMiniMax M3\n默认（按工具设定）\n每次询问\n总是允许\n完全访问\n发送",
+      "DOM 文本: assets/L5-1-fail-dom.txt"
+    ],
+    "shots": [
+      "assets/L5-1-fail.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 123497
+  },
+  {
+    "id": "L5-3",
+    "line": "确认流(WRITE 工具)",
+    "title": "确认流工单落台账(channel=agent)",
+    "status": "FAIL",
+    "notes": [
+      "异常: Error: 台账未见「回归测试工单A」",
+      "DOM 文本: assets/L5-3-fail-dom.txt"
+    ],
+    "shots": [
+      "assets/L5-3-fail.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 131
+  },
+  {
+    "id": "L6-1",
+    "line": "KB 检索",
+    "title": "knowledge-qa 回答携带 [KB:] 引用标记",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L6-1-kb-citation.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 13455
+  },
+  {
+    "id": "L7-1",
+    "line": "Skill 注入",
+    "title": "report-writer 技能场景正常回复",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L7-1-skill-reply.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 11453
+  },
+  {
+    "id": "L8-1",
+    "line": "子 Agent 编排",
+    "title": "ops-analyst 双层编排正常回复",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L8-1-subagent.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 7434
+  },
+  {
+    "id": "L9-1",
+    "line": "工具调用演示",
+    "title": "表单直建工单(channel=direct)",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L9-1-direct-ticket.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 1662
+  },
+  {
+    "id": "L9-2",
+    "line": "工具调用演示",
+    "title": "Webhook 事件流渲染(事件或空态)",
+    "status": "PASS",
+    "notes": [
+      "事件流为空态(合理:未配置事件窗口内无投递)"
+    ],
+    "shots": [
+      "assets/L9-2-webhook-events.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 32
+  },
+  {
+    "id": "L10-1",
+    "line": "管理台嵌入",
+    "title": "iframe 登录并落定义页(独立管理员会话)",
+    "status": "PASS",
+    "notes": [
+      "定义页 10 行",
+      "控制台错误 1 条(见 consoleErrors)",
+      "HTTP≥400 1 条(见 httpErrors)"
+    ],
+    "shots": [
+      "assets/L10-1-admin-embed.png"
+    ],
+    "consoleErrors": [
+      {
+        "type": "console.error",
+        "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      }
+    ],
+    "httpErrors": [
+      {
+        "status": 403,
+        "url": "http://localhost:18081/ia/api/v1/admin/audit-logs/dictionary"
+      }
+    ],
+    "ms": 3254
+  },
+  {
+    "id": "L11-1",
+    "line": "体验台",
+    "title": "签发 embed token 并可视化 claims",
+    "status": "PASS",
+    "notes": [
+      "控制台错误 1 条(见 consoleErrors)"
+    ],
+    "shots": [
+      "assets/L11-1-playground.png"
+    ],
+    "consoleErrors": [
+      {
+        "type": "console.error",
+        "text": "Message compilation error: Invalid token in placeholder: '\"agentType\":\"knowledge-qa\",\"message\":\"年假有几天\"'\n2  |    -H \"Authorization: Bearer {token}\" \\\n3  |    -H \"Content-Type: application/json\" \\\n4  |    -d '{\"agentType\":\"knowledge-qa\",\"message\":\"年假有几天\"}'\n   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      }
+    ],
+    "httpErrors": [],
+    "ms": 179
+  },
+  {
+    "id": "L12-1",
+    "line": "嵌入·iframe 模式",
+    "title": "切换 iframe 模式并完成握手",
+    "status": "PASS",
+    "notes": [
+      "握手完成"
+    ],
+    "shots": [
+      "assets/L12-1-iframe-handshake.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 1082
+  },
+  {
+    "id": "L1-3",
+    "line": "登录与会话",
+    "title": "登出回到登录页",
+    "status": "PASS",
+    "notes": [],
+    "shots": [
+      "assets/L1-3-logout.png"
+    ],
+    "consoleErrors": [],
+    "httpErrors": [],
+    "ms": 1662
+  }
+]

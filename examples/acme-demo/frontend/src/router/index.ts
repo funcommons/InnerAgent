@@ -218,9 +218,14 @@ router.beforeEach(async (to, _from) => {
       ? t('demo.brand-name')
       : t('app.name')
   if (title) {
-    document.title = isPublicLayout
-      ? `${t(title)} · ${siteName}`
-      : `${siteName} · ${t(title)}`
+    // §C3 公开页面 title 副标语:产品名 InnerAgent + 副标语「应用内嵌智能体微服务」
+    // 让浏览器标签一眼看到产品定位;只在公开页面叠加副标语,避免污染控制台标签
+    const tagline = isPublicLayout ? t('site.title-suffix') : ''
+    document.title = tagline
+      ? `${t(title)} · ${siteName} · ${tagline}`
+      : isPublicLayout
+        ? `${t(title)} · ${siteName}`
+        : `${siteName} · ${t(title)}`
   }
 
   // SEO: 按路由更新 meta description(静态兜底在 index.html)

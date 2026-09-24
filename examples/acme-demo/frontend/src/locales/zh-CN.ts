@@ -352,6 +352,8 @@ export default {
   site: {
     name: 'InnerAgent',
     tagline: '应用内嵌智能体微服务',
+    // §C3 公开页面 title 副标语(产品首页/文档中心/API 体验台 三处复用)
+    'title-suffix': '应用内嵌智能体微服务',
     // 演示站品牌名(/ia 路由标题用,避开控制台内部代号;2026-09-23 演示站品牌收口)
     demo: {
       'brand-name': 'ACME 接入演示',
@@ -558,6 +560,12 @@ export default {
       'handshake-log': '握手 / 事件日志',
       'log-empty': '挂载后此处展示 IA_TOKEN / IA_READY / IA_EVENT 流水',
       'copy-last-reply': '复制最后回复',
+      'copy-success': '已复制助手回复',
+      'copy-empty': '尚无助手回复可复制',
+      // §A3 重发:host 侧不动 SDK,监听 textarea input 记录最近输入,失败/中断时一键重发
+      'retry-last': '重发上一条',
+      'retry-success': '已重发',
+      'retry-empty': '尚无最近输入可重发',
       // §D2 发送口径统一:SDK placeholder 写「Enter 换行,Ctrl+Enter 发送」,演示口径是「点发送按钮」——host 显式提示
       'send-hint': '发送方式:回车=换行;点「发送」按钮提交(SDK 内置输入框)',
       // 空态引导:5 个场景"可一句话试"快捷区,演示员常问「我该说什么」——点 chip 跳场景画陈列并展开剧本

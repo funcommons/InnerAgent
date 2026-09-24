@@ -352,6 +352,8 @@ export default {
   site: {
     name: 'InnerAgent',
     tagline: 'In-app AI agent microservice',
+    // §C3 public page title sub-tagline (reused on product home / docs / playground)
+    'title-suffix': 'In-app AI agent microservice',
     // demo brand label (used in /ia route titles; avoids leaking internal console codename)
     demo: {
       'brand-name': 'ACME Integration Demo',
@@ -558,6 +560,12 @@ export default {
       'handshake-log': 'Handshake / event log',
       'log-empty': 'IA_TOKEN / IA_READY / IA_EVENT entries appear here after mounting',
       'copy-last-reply': 'Copy last reply',
+      'copy-success': 'Assistant reply copied',
+      'copy-empty': 'No assistant reply yet to copy',
+      // §A3 retry: host stays out of SDK; capture textarea input to remember the last user message, then one-click resend on error / interruption
+      'retry-last': 'Resend last',
+      'retry-success': 'Resent',
+      'retry-empty': 'No recent input to resend',
       // §D2 send-key convention: SDK placeholder says "Enter newline, Ctrl+Enter send"; demo guidance is "click the Send button".
       'send-hint': 'Send: Enter = newline; click the "Send" button to submit (SDK built-in input).',
       // Empty-state guidance: "what should I say?" 5-scenario quick prompts.

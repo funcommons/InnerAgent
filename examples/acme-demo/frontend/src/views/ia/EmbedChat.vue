@@ -8,6 +8,17 @@
  *   401 时 SDK 重调一次)。启动失败落错误卡 + 重试,不白屏。
  * - iframe postMessage:public/ia/iframe-host.js 的 createIframeEmbed 挂载
  *   /ia/frame.html(mountIframeAgent);token 不入 URL,经握手后的消息桥下发。
+ *
+ * 一键演示 URL 参数(2026-09-24 P0 A1,见 test-report/2026-09-24-01/99-优化建议.md §A1):
+ * - ?agentType=X:已有,自动挂载到该场景
+ * - ?demoMode=guided:一键演示模式——挂载后自动填输入框(per-agent prefillLine 或
+ *   ?prefill= 覆盖)+ 自动点「发送」。SDK 加载 + 内部渲染需要时间,等 2s 后再
+ *   找 textarea / 发送按钮
+ * - ?prefill=<text>:预填模式——挂载后只填不送。prefill 优先级 > prefillLine。
+ *   场景画陈列剧本步骤的「📋 预填到对话」按钮落的就是 prefill=
+ *
+ * 注意:本组件不修改 vendor SDK(<inneragent-chat> 黑盒),只能通过 DOM 查找
+ * textarea / 按钮交互;SDK 未渲染出来则放弃并落日志(防御性)。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,6 +32,7 @@ import { buildIframeEmbedOptions, describeEmbedEvent, resolveFrameSrc } from '@/
 import { loadIframeEmbed, loadInnerAgentSdk, type IFrameEmbedHandle } from '@/ia/sdkLoader'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { DEMO_AGENTS, IA_EMBED_AGENT_TYPE_KEY, isDemoAgentType, type DemoAgentType } from '@/ia/demoAgents'
+import { runChatAutoSequence, type ChatAutoSequenceResult } from '@/ia/chatAutoSequence'
 
 defineOptions({ name: 'IaEmbedChat' })
 
@@ -45,11 +57,36 @@ const deepLinkAgentType = new URLSearchParams(window.location.search).get('agent
 const hasDeepLinkAgent = isDemoAgentType(deepLinkAgentType)
 if (hasDeepLinkAgent) selectedAgentType.value = deepLinkAgentType
 
+/**
+ * 一键演示 URL 参数解析(2026-09-24 §A1):demoMode=guided 触发自动填+自动送;
+ * prefill= 显式指定填入文本(优先于 per-agent prefillLine)。两者皆无 → 普通挂载。
+ * URL 单次解析:此页 deep-link 仅在 onMounted 时读一次(同 agentType 深链一致),后续
+ * 重挂载由用户在控件里改 agentType 触发,不再次解析 URL。
+ */
+const urlParams = new URLSearchParams(window.location.search)
+const demoMode = urlParams.get('demoMode') === 'guided'
+const hasPrefill = urlParams.has('prefill')
+const prefillFromUrl = urlParams.get('prefill') ?? ''
+
 /** 实际生效的 agentType:选中的演示场景优先,否则用后端公开配置的默认值 */
 const effectiveAgentType = computed(() => {
   if (isDemoAgentType(selectedAgentType.value)) return selectedAgentType.value
   return config.value?.agentType ?? ''
 })
+
+/**
+ * 一键演示「重置对话」链接 href:同 agentType + demoMode,但去 prefill。
+ * 用原生 <a href> 触发硬刷新(而非 router.push),保证 vendor SDK 整体重挂载 + 自动序列重启。
+ */
+const resetHref = computed(() => {
+  const params = new URLSearchParams()
+  if (effectiveAgentType.value) params.set('agentType', effectiveAgentType.value)
+  params.set('demoMode', 'guided')
+  return `/ia/embed?${params.toString()}`
+})
+
+/** 仅预填模式(无 demoMode)下,挂载成功后给一行提示——demoMode 自带 banner 免重复 */
+const showPrefilledHint = computed(() => hasPrefill && !demoMode && mounted.value)
 
 /** 选择器选项:后端默认 + 5 场景(名称走 ia.demo.agents.<agentType>.name) */
 const agentTypeOptions = computed<SelectOption[]>(() => [
@@ -137,6 +174,12 @@ async function onMount(): Promise<void> {
     }
     mounted.value = true
     status.value = 'ready'
+    // 一键演示序列(2026-09-24 §A1):仅在 deep-link 进 demoMode/prefill 时触发;
+    // 手动「挂载」按钮不走自动序列(避免越权)。WC 模式才需要,iframe 子页独立
+    // 自管理 SDK,不在 host 侧操控。失败降级为日志(不破主流程)。
+    if (mode.value === 'wc' && (demoMode || hasPrefill)) {
+      void runAutoSequence()
+    }
   } catch (e) {
     embed = null
     status.value = 'error'
@@ -169,6 +212,41 @@ function onSelectAgentType(): void {
 
 /** 测试挂载点:暴露当前接入模式(组件内其余状态经 DOM 断言) */
 defineExpose({ mode })
+
+/**
+ * 一键演示自动序列(2026-09-24 §A1):
+ * - 解析要填的文本:URL ?prefill= 优先,否则读 per-agent prefillLine,空则降级放弃
+ * - 调 chatAutoSequence 在 SDK 内部 textarea 上 set value + dispatch input +
+ *   (demoMode) 找「发送」按钮 click
+ * - 结果仅落 addLog,不抛错——vendor SDK 不可控,失败不能让主流程(挂载态)翻车
+ *
+ * 「剧本第一条」的语义:per-agent prefillLine 是各场景最适合一键演示的用户提示
+ * (脚本[0] 多为元说明:「先在工具演示页直建一张…」,直接发给模型反而不合适)。
+ */
+async function runAutoSequence(): Promise<void> {
+  const explicitPrefill = hasPrefill ? prefillFromUrl : ''
+  const prefillLineText = effectiveAgentType.value
+    ? (t(`ia.demo.agents.${effectiveAgentType.value}.prefillLine`) as unknown as string)
+    : ''
+  // vue-i18n 缺键时 t() 返回 key 路径字符串(以 'ia.demo.agents.' 开头),视为缺值
+  const text =
+    explicitPrefill ||
+    (prefillLineText && !prefillLineText.startsWith('ia.demo.agents.') ? prefillLineText : '')
+  if (!text) {
+    addLog('PREFILL', '未提供预填文本(无 prefill= 且该场景无 prefillLine),跳过')
+    return
+  }
+  const result: ChatAutoSequenceResult = await runChatAutoSequence({
+    text,
+    autoSend: demoMode,
+    chatSelector: '[data-testid="ia-chat"]',
+    // SDK vendor 产物「发送」按钮文本按 locale 切换(zh-CN「发送」/en-US「Send」);
+    // helper 默认「发送」,en-US 由 chatAutoSequence 内 i18n 单独走——此处先固定 zh
+    sendButtonText: '发送',
+  })
+  addLog(result.filled ? 'PREFILL' : 'PREFILL_SKIP', result.detail)
+  if (result.sent) addLog('AUTO_SEND', result.detail)
+}
 
 /**
  * 空态引导 chip(2026-09-23 UX 优化 §A1):未挂载态时,演示员常问"我该说什么"。
@@ -260,10 +338,36 @@ onBeforeUnmount(() => {
       <!-- WC 模式:SDK 产物注册的自定义元素 -->
       <inneragent-chat v-if="mode === 'wc' && mounted" view="chat" class="ia-chat" data-testid="ia-chat" />
 
+      <!-- 演示模式 chip(2026-09-24 §A1):挂在 chat 顶部,「重置对话」链接硬刷新同 URL(去 prefill)重演 -->
+      <div
+        v-if="mode === 'wc' && demoMode && mounted"
+        class="demo-mode-banner"
+        data-testid="demo-mode-banner"
+        role="status"
+      >
+        <i class="ri-script-line" aria-hidden="true" />
+        <span class="demo-mode-banner__text">
+          {{ t('ia.embed.demo-mode-banner', { type: effectiveAgentType }) }}
+        </span>
+        <a
+          class="demo-mode-banner__reset"
+          data-testid="demo-mode-reset"
+          :href="resetHref"
+        >
+          {{ t('ia.embed.demo-mode-reset') }}
+        </a>
+      </div>
+
       <!-- 已挂载态:发送口径提示(2026-09-23 §D2),消除 placeholder 文案歧义 -->
       <p v-if="mounted" class="send-hint" data-testid="send-hint">
         <i class="ri-keyboard-line" aria-hidden="true" />
         {{ t('ia.embed.send-hint') }}
+      </p>
+
+      <!-- 预填模式提示(2026-09-24 §A1):仅 prefill= 单独(demoMode 自带一行免冗余) -->
+      <p v-if="showPrefilledHint" class="prefilled-hint" data-testid="prefilled-hint">
+        <i class="ri-chat-upload-line" aria-hidden="true" />
+        {{ t('ia.embed.prefilled-hint') }}
       </p>
 
       <!-- 空态引导(2026-09-23 §A1):未挂载态给出 5 场景"可一句话试"快捷 chip。
@@ -401,6 +505,64 @@ onBeforeUnmount(() => {
   height: 560px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 10px;
+}
+
+/**
+ * 演示模式 chip(2026-09-24 §A1):挂在 chat 顶部高亮一行,
+ * 「点此重置对话」链接硬刷新同 URL(去 prefill)重演脚本第一条。
+ */
+.demo-mode-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-5);
+  border-radius: 8px;
+
+  > i {
+    font-size: 16px;
+  }
+}
+
+.demo-mode-banner__text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.demo-mode-banner__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+
+  &:hover {
+    color: var(--el-color-primary-light-3);
+  }
+}
+
+/** 预填模式提示(prefill= 单独,无 demoMode):免抢用为 chip,克制一行小提示 */
+.prefilled-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--el-color-info);
+  background: var(--el-color-info-light-9);
+  border-radius: 6px;
+
+  i { font-size: 14px; }
 }
 
 .ia-frame-container {

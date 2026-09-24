@@ -117,4 +117,46 @@ describe('AgentsGallery(场景画廊)', () => {
     }
     w.unmount()
   })
+
+  // ===== A1 一键演示(2026-09-24 §A1):每条剧本步骤「📋 预填到对话」按钮 =====
+  it('剧本步骤「📋 预填到对话」按钮:跳 /ia/embed?agentType=X&prefill=<步骤文本>', async () => {
+    const router = createTestRouter()
+    const w = mountGallery(router)
+    const agent = DEMO_AGENTS[0]!.agentType // ticket-assistant
+    // 展开剧本
+    await w.find(`[data-testid="script-toggle-${agent}"]`).trigger('click')
+    await flushPromises()
+    const steps = w.find(`[data-testid="script-steps-${agent}"]`)
+    expect(steps.exists()).toBe(true)
+    const prefillBtns = w.findAll(`[data-testid^="script-prefill-${agent}-"]`)
+    // 每条剧本步骤(>=1 条)对应一个按钮
+    expect(prefillBtns.length).toBeGreaterThanOrEqual(1)
+    expect(prefillBtns.length).toBe((zhCN.ia.demo.agents[agent].script as string[]).length)
+
+    // 点击第一条按钮 → 跳 EmbedChat,query 含 agentType + prefill(=该步文本,经 URL 编码)
+    const firstStep = (zhCN.ia.demo.agents[agent].script as string[])[0]!
+    await prefillBtns[0]!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/ia/embed')
+    expect(router.currentRoute.value.query.agentType).toBe(agent)
+    // URL 解码后文本应当 === firstStep(vue-router 自动 URL 编解码)
+    const fromQuery = router.currentRoute.value.query.prefill
+    const decoded = Array.isArray(fromQuery) ? fromQuery[0] : fromQuery
+    expect(decoded).toBe(firstStep)
+    w.unmount()
+  })
+
+  it('5 个场景都至少有一条剧本步骤带预填按钮', async () => {
+    const router = createTestRouter()
+    const w = mountGallery(router)
+    for (const a of DEMO_AGENTS) {
+      await w.find(`[data-testid="script-toggle-${a.agentType}"]`).trigger('click')
+      await flushPromises()
+      const btns = w.findAll(`[data-testid^="script-prefill-${a.agentType}-"]`)
+      expect(btns.length, `${a.agentType} 应有预填按钮`).toBeGreaterThanOrEqual(1)
+      // 按钮文案走 i18n
+      expect(btns[0]!.text()).toContain(zhCN.ia.demo['prefill-to-chat'].replace(/^📋 /, ''))
+    }
+    w.unmount()
+  })
 })

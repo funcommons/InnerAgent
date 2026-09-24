@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 import EmbedChat from '@/views/ia/EmbedChat.vue'
 import type { InnerAgentSdkModule } from '@/ia/sdkLoader'
 import type { SelectOption } from '@/components/sdk'
 import { DEMO_AGENT_TYPES, IA_EMBED_AGENT_TYPE_KEY } from '@/ia/demoAgents'
+import zhCN from '@/locales/zh-CN'
 
 // api 层全 mock(避免 axios/router 重链路);sdkLoader mock 掉动态 import
 const configMock = vi.fn()
@@ -42,7 +44,11 @@ vi.mock('@/ia/sdkLoader', async (importOriginal) => {
 })
 
 function mountChat() {
-  return mount(EmbedChat, { attachTo: document.body })
+  const i18n = createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } })
+  return mount(EmbedChat, {
+    attachTo: document.body,
+    global: { plugins: [i18n] },
+  })
 }
 
 beforeEach(() => {
@@ -253,6 +259,95 @@ describe('EmbedChat(agentType 场景选择器)', () => {
     await flushPromises()
     const options = createIframeEmbedMock.mock.calls[0]![0] as { agentType?: string }
     expect(options.agentType).toBe('ticket-assistant')
+    w.unmount()
+  })
+})
+
+// ===== A1 一键演示(2026-09-24 §A1):demoMode=guided / prefill= URL 参数 + chip =====
+
+/**
+ * 一键演示自动序列在测试环境下不可见 vendor SDK 真实 DOM;为测语义层,
+ * 单独测三件事:
+ * 1. ?demoMode=guided → 挂载后渲染 demo-mode-banner(含 chip 文案 + 重置链接)
+ * 2. ?prefill=…(无 demoMode) → 挂载后渲染 prefilled-hint 行(只填不送)
+ * 3. resetHref 形如 /ia/embed?agentType=X&demoMode=guided
+ *
+ * runAutoSequence 内部对 textarea / 按钮的 DOM 操作交给 chatAutoSequence 单测覆盖,
+ * 此处只断言 EmbedChat 组件层级的契约(挂载 / 文案 / chip)。
+ */
+describe('EmbedChat(A1 一键演示 2026-09-24)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    window.history.replaceState({}, '', '/')
+  })
+  afterEach(() => {
+    window.history.replaceState({}, '', '/')
+    document.body.querySelectorAll('[data-testid="ia-chat"]').forEach((el) => el.remove())
+  })
+
+  it('?demoMode=guided:挂载后渲染 demo-mode-banner,含「点此重置对话」链接', async () => {
+    window.history.replaceState({}, '', '/ia/embed?agentType=ticket-assistant&demoMode=guided')
+    const w = mountChat()
+    await flushPromises()
+    await flushPromises()
+    // 挂载成功 → banner 出现
+    expect(w.find('[data-testid="ia-chat"]').exists()).toBe(true)
+    const banner = w.find('[data-testid="demo-mode-banner"]')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('演示模式')
+    expect(banner.text()).toContain('ticket-assistant')
+    // 重置链接 href 形如 /ia/embed?agentType=...&demoMode=guided(去 prefill)
+    const reset = w.find('[data-testid="demo-mode-reset"]')
+    expect(reset.exists()).toBe(true)
+    const href = reset.attributes('href') ?? ''
+    expect(href).toContain('agentType=ticket-assistant')
+    expect(href).toContain('demoMode=guided')
+    expect(href).not.toContain('prefill=')
+    w.unmount()
+  })
+
+  it('?prefill=…(无 demoMode):挂载后只显示 prefilled-hint,无 banner', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/ia/embed?agentType=knowledge-qa&prefill=' + encodeURIComponent('差旅住宿上限是多少'),
+    )
+    const w = mountChat()
+    await flushPromises()
+    await flushPromises()
+    expect(w.find('[data-testid="ia-chat"]').exists()).toBe(true)
+    // 预填提示存在(只有「已自动预填」一行)
+    const hint = w.find('[data-testid="prefilled-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('已自动预填')
+    // demo-mode-banner 不应出现(prefill 单独不是 demoMode)
+    expect(w.find('[data-testid="demo-mode-banner"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('demoMode 与 prefill 同存:挂载后 banner 优先(prefilled-hint 不显示免冗余)', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/ia/embed?agentType=ticket-assistant&demoMode=guided&prefill=' +
+        encodeURIComponent('帮我建一张高优先级工单'),
+    )
+    const w = mountChat()
+    await flushPromises()
+    await flushPromises()
+    expect(w.find('[data-testid="demo-mode-banner"]').exists()).toBe(true)
+    // 预填模式提示被 banner 顶替,不重复
+    expect(w.find('[data-testid="prefilled-hint"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('普通 ?agentType=X(无 demoMode/prefill):既无 banner 也无预填提示', async () => {
+    window.history.replaceState({}, '', '/ia/embed?agentType=ticket-assistant')
+    const w = mountChat()
+    await flushPromises()
+    await flushPromises()
+    expect(w.find('[data-testid="demo-mode-banner"]').exists()).toBe(false)
+    expect(w.find('[data-testid="prefilled-hint"]').exists()).toBe(false)
     w.unmount()
   })
 })

@@ -562,6 +562,16 @@ export default {
       // Clicking a chip opens the scenario gallery with the script expanded.
       'quick-prompt-title': 'Not sure what to say? Try these scenario scripts',
       'quick-prompt-hint': 'Click a chip to jump to the scenario gallery (script pre-expanded); copy the script line and paste it into the chat input.',
+      // ===== A1 One-click demo (2026-09-24): demoMode=guided / prefill= URL params + demo-mode chip =====
+      // Demo-mode chip: highlighted banner above the chat after mount, hinting
+      // "running the first line of the script". "Reset" link reloads the same
+      // URL (without prefill) to replay the sequence from scratch.
+      'demo-mode-banner': '📜 Demo mode — first line of the {type} script is running',
+      'demo-mode-reset': 'Reset conversation',
+      // Prefill-only mode (fill, no send): gallery "📋 Prefill to chat" button
+      // drops prefill= URL param, EmbedChat auto-fills the input but does not
+      // auto-send (avoids overreach).
+      'prefilled-hint': 'Auto-prefilled — click "Send" to submit',
     },
     tools: {
       title: 'Tool-call Demo',
@@ -591,6 +601,8 @@ export default {
       'script-open': 'Show script',
       'script-close': 'Hide script',
       'doc-link': 'Related docs',
+      // ===== A1 Script-step "📋 Prefill to chat" button (2026-09-24) =====
+      'prefill-to-chat': '📋 Prefill to chat',
       'capability-title': 'Capability × Scenario matrix',
       'capability-subtitle': 'Rows = platform capabilities, columns = demo scenarios; a check means the scenario makes the capability observable',
       'col-scenario': 'Scenario ╲ Capability',
@@ -600,6 +612,7 @@ export default {
         'ticket-assistant': {
           name: 'Ticket Assistant',
           tagline: 'Create and query tickets in one sentence: MCP host-bridge tools + write confirmation cards + SLA tone.',
+          prefillLine: 'Create a ticket titled — payment page returns 500, priority high',
           script: [
             'On the tool-call demo page, first create a ticket via the host form (channel=direct) as a control group.',
             'Say to me: "create a ticket titled — payment page returns 500, priority high".',
@@ -611,6 +624,7 @@ export default {
         'knowledge-qa': {
           name: 'Knowledge Q&A',
           tagline: 'Answers only what the knowledge base has: mini-KB retrieval injection, [KB:id] citation tracing, no fabrication on a miss.',
+          prefillLine: 'What is the travel accommodation cap',
           script: [
             'On the admin station\'s mini-KB page, confirm the 3 documents are indexed, then debug a search for "how many annual leave days" to see chunk hits and source anchors.',
             'Ask me "what is the travel accommodation cap": the answer builds on injected reference material, annotated with [KB:chunkId].',
@@ -621,6 +635,7 @@ export default {
         'report-writer': {
           name: 'Report Writer',
           tagline: 'On-demand Skill injection: compare before/after activating report-style and a disciplined writing template appears.',
+          prefillLine: 'Write the opening of a Q3 sales summary on East-China receivables, following the report style guide.',
           script: [
             'On the admin station\'s Skill page, confirm report-style is active; its details show SKILL.md and the references/outline.md structure template.',
             'Core comparison: ask me for a weekly report without the Skill (generic writing habits); then resend the same request with enabledSkills:["report-style"] — the output instantly becomes "executive summary first + key-metrics table + next actions with owners and due dates".',
@@ -630,6 +645,7 @@ export default {
         'ops-analyst': {
           name: 'Ops Data Analyst',
           tagline: 'Delegates number-crunching to sub-agents: cascading orchestration + run hierarchy events + read-only data query tool.',
+          prefillLine: 'Query the 2026-09 East-China sales data',
           script: [
             'On the admin station\'s Agent Definitions page, inspect my spec: tool surface query_sales plus two sub-agent references (sales-query / chart-pitch), each entry carrying toolName/refAgentType.',
             'Say to me "query the 2026-09 East-China sales data": query_sales (READ, via the /ia-mcp bridge) returns region × month × product details and totals.',
@@ -639,6 +655,7 @@ export default {
         'master-demo': {
           name: 'Full-Stack Demo Host',
           tagline: 'One conversation chaining confirm flow + KB + Skill + sub-agents — the full-family finale.',
+          prefillLine: 'Give me the full demo',
           script: [
             'Say to me "give me the full demo": ① ticket confirmation card → ② KB-cited Q&A → ③ Skill writing discipline → ④ sub-agent digest, each segment narrating which capability is being demoed.',
             'Spot checks: ticket confirmation card (scenario 1), "annual leave days" (scenario 2), enabledSkills report (scenario 3), digest_material compressing long material to ≤120 chars (scenario 4).',

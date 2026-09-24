@@ -42,6 +42,18 @@ function startChat(agentType: DemoAgentType): void {
   void router.push({ path: '/ia/embed', query: { agentType } })
 }
 
+/**
+ * 一键预填到对话(2026-09-24 §A1):把该剧本步骤文本落 ?prefill= URL 参数,
+ * 跳 EmbedChat 挂载后自动填入输入框(不自动发送;避免越权,演示员自己点发送)。
+ * vue-router 自动做 URL 编码,中文 / 标点不需要手动 encode。
+ */
+function prefillStepToChat(agentType: DemoAgentType, text: string): void {
+  void router.push({
+    path: '/ia/embed',
+    query: { agentType, prefill: text },
+  })
+}
+
 /** 矩阵单元格测试锚(capability × agentType) */
 function cellTestid(capability: DemoCapabilityId, agentType: string): string {
   return `matrix-${capability}-${agentType}`
@@ -92,7 +104,22 @@ function cellTestid(capability: DemoCapabilityId, agentType: string): string {
               {{ t('ia.demo.script-title') }}
             </button>
             <ol v-show="expanded[a.agentType]" class="script-steps" :data-testid="`script-steps-${a.agentType}`">
-              <li v-for="(step, i) in scriptSteps(a.agentType)" :key="i">{{ step }}</li>
+              <li v-for="(step, i) in scriptSteps(a.agentType)" :key="i" class="script-step">
+                <span class="script-step-text">{{ step }}</span>
+                <!-- 一键演示(2026-09-24 §A1):每条剧本步骤后给"📋 预填到对话"按钮,
+                     跳 /ia/embed?agentType=X&prefill=<step> 让 EmbedChat 挂载并自动填,
+                     不自动送(避免越权);由演示员手动点发送提交 -->
+                <button
+                  type="button"
+                  class="script-prefill-btn"
+                  :data-testid="`script-prefill-${a.agentType}-${i}`"
+                  :title="t('ia.demo.prefill-to-chat')"
+                  @click="prefillStepToChat(a.agentType, step)"
+                >
+                  <i class="ri-chat-upload-line" aria-hidden="true" />
+                  {{ t('ia.demo.prefill-to-chat') }}
+                </button>
+              </li>
             </ol>
           </div>
 
@@ -258,6 +285,41 @@ function cellTestid(capability: DemoCapabilityId, agentType: string): string {
 
   li + li {
     margin-top: 4px;
+  }
+}
+
+/** 一键演示步骤行(2026-09-24 §A1):文字 + 「📋 预填到对话」按钮,按钮小且克制 */
+.script-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.script-step-text {
+  flex: 1;
+}
+
+.script-prefill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-5);
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    color: var(--el-color-white);
+    background: var(--el-color-primary);
+  }
+
+  i {
+    font-size: 12px;
   }
 }
 

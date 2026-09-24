@@ -561,6 +561,14 @@ export default {
       // 空态引导:5 个场景"可一句话试"快捷区,演示员常问「我该说什么」——点 chip 跳场景画陈列并展开剧本
       'quick-prompt-title': '不知道说什么?试试这些场景剧本',
       'quick-prompt-hint': '点击下方场景跳转画陈列页(剧本已展开),复制剧本话术粘贴到对话框发送即可',
+      // ===== A1 一键演示(2026-09-24):demoMode=guided / prefill= URL 参数 + 演示模式 chip =====
+      // 演示模式 chip:挂载成功后在聊天区顶部高亮,提示"正在跑剧本第一条"
+      // "点此重置对话" 链接跳同 URL(无 prefill),触发页面重载 + 剧本重演
+      'demo-mode-banner': '📜 演示模式,正在跑 {type} 剧本第一条',
+      'demo-mode-reset': '点此重置对话',
+      // 预填模式(只填不送):剧本步骤"📋 预填到对话"按钮落 prefill= URL 参数后
+      // EmbedChat 挂载后自动填输入框,不自动发送(避免越权)
+      'prefilled-hint': '已自动预填:点「发送」按钮提交',
     },
     tools: {
       title: '工具调用演示',
@@ -590,6 +598,8 @@ export default {
       'script-open': '展开剧本',
       'script-close': '收起剧本',
       'doc-link': '相关文档',
+      // ===== A1 剧本步骤「📋 预填到对话」按钮(2026-09-24)=====
+      'prefill-to-chat': '📋 预填到对话',
       'capability-title': '能力 × 场景矩阵',
       'capability-subtitle': '行 = 平台能力,列 = 演示场景;勾 = 该场景的对话可感知此能力',
       'col-scenario': '场景 ╲ 能力',
@@ -599,6 +609,9 @@ export default {
         'ticket-assistant': {
           name: '客服工单助手',
           tagline: '建单查单一句话:MCP 宿主桥工具 + 写操作确认卡 + SLA 语气。',
+          // prefillLine:一键演示模式(demoMode=guided)默认填到对话框的用户提示;
+          // 显式 ?prefill=… 参数会覆盖此默认值。脚本[0] 多为元说明(meta),不能直接发模型。
+          prefillLine: '帮我建一张工单,标题是支付页面报 500,优先级 high',
           script: [
             '在「工具调用演示」页先用表单直建一张工单(channel=direct)做对照组。',
             '对我说:「帮我建一张工单,标题是支付页面报 500,优先级 high」。',
@@ -610,6 +623,7 @@ export default {
         'knowledge-qa': {
           name: '企业知识问答',
           tagline: '只答知识库有的:mini KB 检索注入、[KB:id] 引用溯源、无命中不编造。',
+          prefillLine: '差旅住宿上限是多少',
           script: [
             '管理站「mini 知识库」页确认 3 篇文档在库,检索调试输入「年假有几天」看分段命中与来源锚点。',
             '问我「差旅住宿上限是多少」:回答基于注入的引用资料,并以 [KB:分段id] 标注出处。',
@@ -620,6 +634,7 @@ export default {
         'report-writer': {
           name: '报告撰写助手',
           tagline: 'Skill 按需注入:激活 report-style 前后对比,规范写作模板立现。',
+          prefillLine: '请按报告规范写一段 Q3 销售总结的开头,主题是华东区回款',
           script: [
             '管理站「Skill」页确认 report-style 已激活,详情可看 SKILL.md 与 references/outline.md 结构模板。',
             '核心对比:先不激活 Skill 让我写一份周报(通用写作习惯);再带 enabledSkills:["report-style"] 重发同一请求——输出立即变成「执行摘要先行 + 关键数据表格 + 下一步动作带责任人」。',
@@ -629,6 +644,7 @@ export default {
         'ops-analyst': {
           name: '运维数据主管',
           tagline: '查数交给子 Agent:级联编排 + 事件层级 + 只读数据查询工具。',
+          prefillLine: '查一下 2026-09 华东的销售数据',
           script: [
             '管理站「Agent 定义」页看我的 spec:工具面 query_sales + 两个子 Agent 引用(sales-query / chart-pitch),子条目带 toolName/refAgentType。',
             '对我说「查一下 2026-09 华东的销售数据」:query_sales(READ,经 /ia-mcp 桥)返回区域×月份×产品明细与合计。',
@@ -638,6 +654,7 @@ export default {
         'master-demo': {
           name: '全栈演示官',
           tagline: '一次对话串起确认流 + KB + Skill + 子 Agent,收尾全家桶。',
+          prefillLine: '来一遍全面演示',
           script: [
             '对我说「来一遍全面演示」:① 确认卡建单 → ② KB 引用问答 → ③ Skill 写作规范 → ④ 子 Agent 摘要,每段自动报幕演示的是什么能力。',
             '单点抽查:建单确认卡(场景 1)、「年假几天」(场景 2)、enabledSkills 写报告(场景 3)、长材料 digest_material 压成 ≤120 字摘要(场景 4)。',

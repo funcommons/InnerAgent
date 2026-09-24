@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.config.AgentScopeV2Properties;
+import com.inneragent.platform.context.AppContext;
 import com.inneragent.agent.entity.AgentEvent;
 import com.inneragent.agent.entity.AgentRun;
 import com.inneragent.platform.enums.ai.AgentRunStatus;
@@ -97,8 +98,11 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         PendingConfirmation safeCandidate = Objects.requireNonNull(
                 candidate, "candidate must not be null");
         validateConfirmation(safeCandidate);
+        // 2026-09-24 fix:同 transactional()(注释见下);recordConfirmationCandidateTx
+        // 也是按 runId 全局定位的系统路径,必须 AppContext.runAsSystem。
         return Mono.fromRunnable(() -> transactions.executeWithoutResult(ignored ->
-                        recordConfirmationCandidateTx(safeRunId, safeCandidate)))
+                        AppContext.runAsSystem(() ->
+                                recordConfirmationCandidateTx(safeRunId, safeCandidate))))
                 .subscribeOn(schedulers.journal())
                 .then();
     }
@@ -907,8 +911,13 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
     }
 
     private <T> Mono<T> transactional(Supplier<T> operation) {
+        // 2026-09-24 fix:L5 真模型复测暴露 EVENT_PERSIST_FAILED「Agent 运行不存在」——
+        // enterWaitingConfirmationTx / enterWaitingExternalTx 走 runId 全局定位,
+        // 必须以系统模式跑(拦截器跳过 app_id 注入,否则 reactor 调度线程上 AppContext
+        // 缺省回落 1 → SELECT * FROM ia_agent_run WHERE run_id=? AND app_id=1
+        // 拿不到行 → 抛 404)。MySqlAgentEventRepository.appendTx 已用同样模式。
         return Mono.fromCallable(() -> Objects.requireNonNull(
-                        transactions.execute(ignored -> operation.get()),
+                        transactions.execute(ignored -> AppContext.runAsSystem(operation::get)),
                         "WAITING transaction returned no result"))
                 .subscribeOn(schedulers.journal());
     }

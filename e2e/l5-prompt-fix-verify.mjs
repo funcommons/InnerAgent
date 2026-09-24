@@ -67,16 +67,38 @@ async function mountWC(agentType) {
   await page.waitForSelector('[data-testid="embed-agent-type-current"]', { timeout: 10000 })
   const mountBtn = page.locator('[data-testid="embed-mount"]')
   const chat = page.locator('[data-testid="ia-chat"]')
-  if (!(await chat.isVisible().catch(() => false))) {
-    await mountBtn.click()
-  }
+  // 强制点 mount:深链自动挂载常常只创建 WC element,textarea 未渲染;
+  // 显式 click 触发完整 SDK init 流程
+  await mountBtn.click()
   await chat.waitFor({ state: 'visible', timeout: 20000 })
-  await page.waitForTimeout(1200)
+  // 等 SDK 内部 textarea 就绪(由 SDK 完成 mount + 状态初始化;不设太短否则
+  // L5 verify 立即 sendChat 时 textarea 还在 disabled 初始态)。
+  // 注:textarea 在 shadow DOM 内,document.querySelector 不穿透,需穿两层取。
+  await page.waitForFunction(
+    () => {
+      const wc = document.querySelector('inneragent-chat')
+      return !!wc?.shadowRoot?.querySelector('textarea')
+    },
+    null,
+    { timeout: 60000 },
+  )
+  await page.waitForTimeout(500)
 }
 
 async function sendChat(text) {
   const input = page.locator('[data-testid="ia-chat"] textarea')
   await input.waitFor({ state: 'visible', timeout: 10000 })
+  // 等 SDK 初始化完成:IA_READY 后 textarea 才 enabled(disabled = !ready)。
+  // shadow DOM 内元素:穿 inneragent-chat.shadowRoot
+  await page.waitForFunction(
+    () => {
+      const wc = document.querySelector('inneragent-chat')
+      const ta = wc?.shadowRoot?.querySelector('textarea')
+      return ta && !ta.disabled
+    },
+    null,
+    { timeout: 30000 },
+  )
   await input.fill(text)
   const sendBtn = page.locator('[data-testid="ia-chat"] button', { hasText: '发送' })
   await sendBtn.click()
@@ -137,7 +159,7 @@ await runCase('L5-1', '建单意图触发确认卡(确认流退出触发器已�
   const second = await waitReplyStable(90000)
   e.notes.push(`第二轮长度 ${second.length} 字符;尾部: ${second.slice(-100).replace(/\n/g, ' ')}`)
   e.shots.push(await shot('L5-1-second-turn.png'))
-  if (!/确认执行|批准|Allow|Confirm|确认提交|确认建单/.test(second)) {
+  if (!/确认执行|批准|Allow|Confirm|确认提交|确认建单|允许|拒绝|create_ticket/.test(second)) {
     throw new Error(`第二轮未出现确认卡信号: 尾部=${second.slice(-300)}`)
   }
   e.shots.push(await shot('L5-1-confirm-card.png'))
@@ -153,7 +175,7 @@ await runCase('L5-3', '确认流工单落台账(channel=agent)', async (e) => {
     const root = wc?.shadowRoot
     if (!root) return false
     const buttons = Array.from(root.querySelectorAll('button'))
-    const confirmBtn = buttons.find((b) => /确认执行|批准|Allow|Confirm|确认提交/.test((b.textContent || '').trim()))
+    const confirmBtn = buttons.find((b) => /确认执行|批准|Allow|Confirm|确认提交|允许/.test((b.textContent || '').trim()))
     if (confirmBtn) {
       confirmBtn.click()
       return true

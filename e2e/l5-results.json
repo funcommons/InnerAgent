@@ -2,16 +2,16 @@
   {
     "id": "L5-1",
     "title": "建单意图触发确认卡(确认流退出触发器已生效)",
-    "status": "FAIL",
-    "ms": 16225,
+    "status": "PASS",
+    "ms": 16207,
     "notes": [
-      "首轮长度 292 字符;尾部:   请确认是否按以上内容建单?如需调整优先级,也请一并告知。  mock-text MiniMax M3 默认（按工具设定） 每次询问 总是允许 完全访问 发送",
-      "第二轮长度 390 字符;尾部: 。  mcp__acme-demo__create_ticket 执行中 Agent 运行不存在 重试 mock-text MiniMax M3 默认（按工具设定） 每次询问 总是允许 完全访问 发送"
+      "首轮长度 388 字符;尾部:  我立即提交; 或补充描述后再提交。  下一步:等待您确认。  mock-text MiniMax M3 默认（按工具设定） 每次询问 总是允许 完全访问 发送",
+      "第二轮长度 487 字符;尾部: icket 等待确认 等待确认 · 剩余 23 小时 59 分  约束范围已注入本次运行  拒绝 允许 mock-text MiniMax M3 默认（按工具设定） 每次询问 总是允许 完全访问 停止"
     ],
     "shots": [
       "l5-assets/L5-1-after-first-turn.png",
       "l5-assets/L5-1-second-turn.png",
-      "l5-assets/L5-1-fail.png"
+      "l5-assets/L5-1-confirm-card.png"
     ],
     "consoleErrors": [
       {
@@ -39,17 +39,15 @@
         "text": "Message compilation error: Unexpected empty linked key\n1  |  ③ 写宿主工具 @IaTool\n   |           ^^^^^^"
       }
     ],
-    "httpErrors": [],
-    "error": "第二轮未出现确认卡信号: 尾部=A\n优先级:high(注:按 SLA 口径,high 通常用于影响生产的 P0 故障;本次为测试类工单,实际建议优先级为 normal。如确认按 high 提交,请回复「确认」即可按 high 建单。)\n描述:Playwright 全量回归创建\n\n请确认是否按以上内容建单?如需调整优先级,也请一并告知。\n\n确认,信息无误,请立即按上述内容提交建单。\n\n收到「确认」指令,立即按 high 优先级建单。\n\nmcp__acme-demo__create_ticket\n执行中\nAgent 运行不存在\n重试\nmock-text\nMiniMax M3\n默认（按工具设定）\n每次询问\n总是允许\n完全访问\n发送",
-    "dump": "l5-assets/L5-1-fail-dom.txt"
+    "httpErrors": []
   },
   {
     "id": "L5-3",
     "title": "确认流工单落台账(channel=agent)",
     "status": "FAIL",
-    "ms": 6705,
+    "ms": 8709,
     "notes": [
-      "未找到确认执行按钮(可能 UI 已自动批准)"
+      "已点确认执行"
     ],
     "shots": [
       "l5-assets/L5-3-tools-board.png",
@@ -79,9 +77,26 @@
       {
         "type": "console.error",
         "text": "Message compilation error: Unexpected empty linked key\n1  |  ③ 写宿主工具 @IaTool\n   |           ^^^^^^"
+      },
+      {
+        "type": "console.error",
+        "text": "Failed to load resource: the server responded with a status of 500 ()"
+      },
+      {
+        "type": "console.error",
+        "text": "[Unhandled Rejection] Error: Pending tool confirmation changed after submission failure\n    at http://localhost:9203/src/vendor/inneragent/inneragent-chat.js:1904:19\n    at L (http://localhost:9203/src/vendor/inneragent/inneragent-chat.js:1520:12)\n    at ot (http://localhost:9203/src/vendor/innerage"
+      },
+      {
+        "type": "pageerror",
+        "text": "Error: Pending tool confirmation changed after submission failure"
       }
     ],
-    "httpErrors": [],
+    "httpErrors": [
+      {
+        "status": 500,
+        "url": "http://localhost:18090/ia/api/v1/runs/9fa7ac7e22ee4247833c3b6ddd03ee57/confirm"
+      }
+    ],
     "error": "tools 页 agent 渠道未出现「回归测试工单A」",
     "dump": "l5-assets/L5-3-fail-dom.txt"
   }

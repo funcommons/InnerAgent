@@ -258,6 +258,19 @@ function jumpToScript(agentType: DemoAgentType): void {
   router.push({ path: '/ia/agents', query: { expand: agentType } })
 }
 
+/** §A3 复制最后回复:从 SDK 容器读 innerText;不可读降级到日志最新一条 detail */
+async function copyLastReply() {
+  const chat = document.querySelector('[data-testid="ia-chat"]')
+  const text = (chat?.textContent ?? logs.value[0]?.detail ?? '').trim()
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    addLog('CLIPBOARD', '已复制最后回复文本')
+  } catch {
+    addLog('CLIPBOARD', `复制失败: ${text.slice(0, 80)}`)
+  }
+}
+
 onMounted(async () => {
   try {
     config.value = await demoApi.config()
@@ -335,6 +348,12 @@ onBeforeUnmount(() => {
         <span data-testid="embed-handshake">{{ handshake }}</span>
       </p>
 
+      <!-- 2026-09-24 §D1 修复:send-hint 上移到 SDK 容器之前(常驻),消除 height:560px 视觉遮挡 -->
+      <p class="send-hint" data-testid="send-hint">
+        <i class="ri-keyboard-line" aria-hidden="true" />
+        {{ t('ia.embed.send-hint') }}
+      </p>
+
       <!-- WC 模式:SDK 产物注册的自定义元素 -->
       <inneragent-chat v-if="mode === 'wc' && mounted" view="chat" class="ia-chat" data-testid="ia-chat" />
 
@@ -358,12 +377,9 @@ onBeforeUnmount(() => {
         </a>
       </div>
 
-      <!-- 已挂载态:发送口径提示(2026-09-23 §D2),消除 placeholder 文案歧义 -->
-      <p v-if="mounted" class="send-hint" data-testid="send-hint">
-        <i class="ri-keyboard-line" aria-hidden="true" />
-        {{ t('ia.embed.send-hint') }}
-      </p>
-
+      
+      
+      
       <!-- 预填模式提示(2026-09-24 §A1):仅 prefill= 单独(demoMode 自带一行免冗余) -->
       <p v-if="showPrefilledHint" class="prefilled-hint" data-testid="prefilled-hint">
         <i class="ri-chat-upload-line" aria-hidden="true" />
@@ -395,7 +411,21 @@ onBeforeUnmount(() => {
       <div v-show="mode === 'iframe'" ref="containerRef" class="ia-frame-container" />
 
       <FcSection>
-        <FcSectionHeader :title="t('ia.embed.handshake-log')" />
+        <FcSectionHeader :title="t('ia.embed.handshake-log')">
+          <template #actions>
+            <!-- §A3 复制最后回复(从 SDK 容器读 innerText;不可读降级日志最新 detail) -->
+            <FcButton
+              size="sm"
+              variant="secondary"
+              data-testid="copy-last-reply"
+              :disabled="logs.length === 0"
+              @click="copyLastReply"
+            >
+              <i class="ri-file-copy-line" aria-hidden="true" />
+              {{ t('ia.embed.copy-last-reply') }}
+            </FcButton>
+          </template>
+        </FcSectionHeader>
         <p v-if="logs.length === 0" class="log-empty">{{ t('ia.embed.log-empty') }}</p>
         <ul v-else class="log-list" data-testid="embed-log">
           <li v-for="(l, i) in logs" :key="i" class="log-item">

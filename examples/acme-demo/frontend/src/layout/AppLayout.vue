@@ -20,6 +20,7 @@ import FcMain from '@/components/sdk/layout/FcMain.vue'
 import FcDrawer from '@/components/sdk/overlay/FcDrawer.vue'
 import FcDialog from '@/components/sdk/overlay/FcDialog.vue'
 import FcSwitch from '@/components/sdk/form/FcSwitch.vue'
+import { demoApi, type DemoConfig } from '@/api/demo'
 import { showSuccess } from '@/utils'
 
 const preference = usePreferenceStore()
@@ -37,6 +38,13 @@ const { t } = useI18n()
 const { isMobile } = useResponsive()
 
 const appVersion = __APP_VERSION__
+
+// 当前应用徽标(C4 顶栏应用上下文):从 /api/demo/config 拉取 appKey,
+// 显示在 sidebar 顶部 app-logo 下方(对照 AWS 每页 Account/Region 徽标)。
+const demoConfig = ref<DemoConfig | null>(null)
+async function loadDemoConfig() {
+  try { demoConfig.value = await demoApi.config() } catch { /* ignore */ }
+}
 const formattedBuildTime = computed(() => {
   try {
     return new Date(__BUILD_TIME__).toLocaleString()
@@ -106,6 +114,7 @@ onMounted(() => {
   if (userStore.accessToken) {
     userStore.startHeartbeat()
   }
+  void loadDemoConfig()
 })
 
 onUnmounted(() => {
@@ -177,6 +186,21 @@ useKeyboardShortcut('mod+k', () => openCommandPalette())
             <div class="app-logo__text">
               <strong>{{ oemCompanyName }}</strong>
             </div>
+          </div>
+          <!-- 当前应用徽标(C4,2026-09-24):从 /api/demo/config 拉取 appKey,点击跳覆盖表行 -->
+          <div
+            v-if="demoConfig?.appKey"
+            class="app-badge"
+            data-testid="app-context-badge"
+            role="button"
+            tabindex="0"
+            :title="t('app.current-app') + ': ' + demoConfig.appKey"
+            @click="router.push('/ia/overview')"
+            @keydown.enter="router.push('/ia/overview')"
+          >
+            <i class="ri-apps-2-line" aria-hidden="true" />
+            <span class="app-badge__label">{{ t('app.current-app') }}</span>
+            <code class="app-badge__value">{{ demoConfig.appKey }}</code>
           </div>
         </template>
 
@@ -276,6 +300,17 @@ useKeyboardShortcut('mod+k', () => openCommandPalette())
               <div class="app-logo__text">
                 <strong>{{ oemCompanyName }}</strong>
               </div>
+            </div>
+            <div
+              v-if="demoConfig?.appKey"
+              class="app-badge app-badge--compact"
+              data-testid="app-context-badge-mobile"
+              role="button"
+              tabindex="0"
+              @click="router.push('/ia/overview')"
+            >
+              <i class="ri-apps-2-line" aria-hidden="true" />
+              <code>{{ demoConfig.appKey }}</code>
             </div>
           </template>
           <FcSidebarNav
@@ -422,6 +457,52 @@ useKeyboardShortcut('mod+k', () => openCommandPalette())
     font-weight: 700;
     color: var(--app-text);
   }
+}
+
+/* 当前应用徽标(C4,2026-09-24):对照 AWS Account/Region 徽标 */
+.app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 12px 12px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  &:hover {
+    background: var(--el-color-primary-light-8);
+    border-color: var(--el-color-primary);
+  }
+  i { font-size: 14px; flex-shrink: 0; }
+}
+
+.app-badge__label {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.app-badge__value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color);
+  padding: 1px 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-badge--compact {
+  margin: 0 12px 12px;
+  padding: 4px 10px;
+  font-size: 11px;
 }
 
 /* Sidebar footer (用户/通知区) */

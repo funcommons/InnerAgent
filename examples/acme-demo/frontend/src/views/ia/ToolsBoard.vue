@@ -9,7 +9,7 @@
  *   createdBy 来自 act token,channel=agent。
  * 底部为 InnerAgent webhook 事件流(运行终态回调,X-IA-Delivery 幂等)。
  */
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FcButton, FcSection, FcSectionHeader, FcSelect, FcTag, toast } from '@/components/sdk'
 import type { SelectOption } from '@/components/sdk'
@@ -31,6 +31,22 @@ const PRIORITY_OPTIONS: SelectOption[] = ['low', 'normal', 'high'].map((v) => ({
 const tickets = ref<Ticket[]>([])
 const events = ref<WebhookEvent[]>([])
 let timer: ReturnType<typeof setInterval> | null = null
+
+// §B2 工单 filter(2026-09-24):全部 / Agent / 直建
+type ChannelFilter = 'all' | 'agent' | 'direct'
+const channelFilter = ref<ChannelFilter>('all')
+const filteredTickets = computed(() => {
+  if (channelFilter.value === 'all') return tickets.value
+  return tickets.value.filter((t) => t.channel === channelFilter.value)
+})
+
+// §B2 事件流自动刷新开关(AWS 控制台风格;默认暂停,免 demo 现场误以为实时)
+const autoRefresh = ref(false)
+function restartAutoRefresh() {
+  if (timer) { clearInterval(timer); timer = null }
+  if (autoRefresh.value) timer = setInterval(refresh, 5000)
+}
+watch(autoRefresh, restartAutoRefresh)
 
 async function submit() {
   if (!form.title.trim()) return
@@ -127,9 +143,39 @@ function priorityTagType(priority: string): 'info' | 'warning' | 'danger' {
         </div>
       </div>
 
+      <!-- §B1 L5 兜底路径:确认流可能卡在剧本,本页表单直建可直达(2026-09-24) -->
+      <div class="confirm-flow-hint" data-testid="confirm-flow-hint" role="note">
+        <i class="ri-information-line" aria-hidden="true" />
+        <span>{{ t('ia.tools.confirm-flow-hint') }}</span>
+      </div>
+
       <div class="ticket-list" data-testid="ticket-list">
-        <p v-if="tickets.length === 0" class="empty">{{ t('ia.tools.list-empty') }}</p>
-        <div v-for="row in tickets" :key="row.ticketId" class="ticket-row">
+        <!-- §B2 工单 filter tab:AWS 控制台风格 -->
+        <div class="filter-tabs" data-testid="ticket-filter-tabs" role="tablist">
+          <button
+            type="button"
+            class="filter-tab"
+            :class="{ 'is-active': channelFilter === 'all' }"
+            data-testid="filter-all"
+            @click="channelFilter = 'all'"
+          >{{ t('ia.tools.filter-all') }} ({{ tickets.length }})</button>
+          <button
+            type="button"
+            class="filter-tab"
+            :class="{ 'is-active': channelFilter === 'agent' }"
+            data-testid="filter-agent"
+            @click="channelFilter = 'agent'"
+          >{{ t('ia.tools.filter-agent') }} ({{ tickets.filter((x) => x.channel === 'agent').length }})</button>
+          <button
+            type="button"
+            class="filter-tab"
+            :class="{ 'is-active': channelFilter === 'direct' }"
+            data-testid="filter-direct"
+            @click="channelFilter = 'direct'"
+          >{{ t('ia.tools.filter-direct') }} ({{ tickets.filter((x) => x.channel === 'direct').length }})</button>
+        </div>
+        <p v-if="filteredTickets.length === 0" class="empty">{{ t('ia.tools.list-empty') }}</p>
+        <div v-for="row in filteredTickets" :key="row.ticketId" class="ticket-row">
           <div class="ticket-head">
             <code class="ticket-id">{{ row.ticketId }}</code>
             <FcTag :type="priorityTagType(row.priority)">{{ row.priority }}</FcTag>
@@ -145,7 +191,14 @@ function priorityTagType(priority: string): 'info' | 'warning' | 'danger' {
     </FcSection>
 
     <FcSection>
-      <FcSectionHeader :title="t('ia.tools.webhook-title')" :subtitle="t('ia.tools.webhook-subtitle')" />
+      <FcSectionHeader :title="t('ia.tools.webhook-title')" :subtitle="t('ia.tools.webhook-subtitle')">
+        <template #actions>
+          <label class="auto-refresh-toggle" data-testid="auto-refresh-toggle">
+            <input v-model="autoRefresh" type="checkbox" />
+            <span>{{ t('ia.tools.auto-refresh') }}</span>
+          </label>
+        </template>
+      </FcSectionHeader>
       <p v-if="events.length === 0" class="empty" data-testid="webhook-empty">
         {{ t('ia.tools.webhook-empty') }}
       </p>
@@ -162,6 +215,64 @@ function priorityTagType(priority: string): 'info' | 'warning' | 'danger' {
 </template>
 
 <style scoped lang="scss">
+/* §B1 L5 兜底 banner(2026-09-24):平铺写法避 sass 1.104 嵌套歧义 */
+.confirm-flow-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 8px;
+}
+
+.confirm-flow-hint i {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* §B2 工单 filter tab */
+.filter-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.filter-tab {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.filter-tab:hover {
+  color: var(--el-color-primary);
+}
+.filter-tab.is-active {
+  color: var(--el-color-primary);
+  border-bottom-color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+/* §B2 事件流自动刷新 toggle */
+.auto-refresh-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.auto-refresh-toggle input {
+  cursor: pointer;
+}
 .ia-tools {
   display: flex;
   flex-direction: column;

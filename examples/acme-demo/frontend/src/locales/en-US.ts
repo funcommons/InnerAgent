@@ -93,6 +93,7 @@ export default {
   },
   app: {
     name: 'Visual Unified Scaffold',
+    'current-app': 'Current App',
   },
   api: {
     'request-failed': 'Request failed',
@@ -556,6 +557,7 @@ export default {
       'config-missing': 'Failed to load public demo config: is the demo backend up on :9300?',
       'handshake-log': 'Handshake / event log',
       'log-empty': 'IA_TOKEN / IA_READY / IA_EVENT entries appear here after mounting',
+      'copy-last-reply': 'Copy last reply',
       // §D2 send-key convention: SDK placeholder says "Enter newline, Ctrl+Enter send"; demo guidance is "click the Send button".
       'send-hint': 'Send: Enter = newline; click the "Send" button to submit (SDK built-in input).',
       // Empty-state guidance: "what should I say?" 5-scenario quick prompts.

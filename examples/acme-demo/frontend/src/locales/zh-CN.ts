@@ -93,6 +93,7 @@ export default {
   },
   app: {
     name: '视觉统一手脚架',
+    'current-app': '当前应用',
   },
   api: {
     'request-failed': '请求失败',
@@ -556,6 +557,7 @@ export default {
       'config-missing': '后端公开配置拉取失败:请确认演示后端已启动(:9300)',
       'handshake-log': '握手 / 事件日志',
       'log-empty': '挂载后此处展示 IA_TOKEN / IA_READY / IA_EVENT 流水',
+      'copy-last-reply': '复制最后回复',
       // §D2 发送口径统一:SDK placeholder 写「Enter 换行,Ctrl+Enter 发送」,演示口径是「点发送按钮」——host 显式提示
       'send-hint': '发送方式:回车=换行;点「发送」按钮提交(SDK 内置输入框)',
       // 空态引导:5 个场景"可一句话试"快捷区,演示员常问「我该说什么」——点 chip 跳场景画陈列并展开剧本

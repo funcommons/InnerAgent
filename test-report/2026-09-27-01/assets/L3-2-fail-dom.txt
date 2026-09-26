@@ -1,0 +1,85 @@
+ACME 接入演示
+接入流程总览
+场景画廊
+InnerAgent 管理台
+InnerAgent 嵌入
+工具调用演示
+开发示例
+返回官网
+A
+alice
+这些场景 Agent 还没开通?先跑种子库开通脚本,一键全部就绪:
+zsh examples/acme-demo/seeds/provision.sh
+场景画廊
+
+5 个仿真场景 Agent,开箱即演 InnerAgent 的桥工具 / 确认流 / KB / Skill / 子 Agent 全能力
+
+客服工单助手
+ticket-assistant
+
+建单查单一句话:MCP 宿主桥工具 + 写操作确认卡 + SLA 语气。
+
+MCP 宿主桥
+确认流(WRITE)
+工单查询
+怎么演示
+开始对话
+相关文档
+企业知识问答
+knowledge-qa
+
+只答知识库有的:mini KB 检索注入、[KB:id] 引用溯源、无命中不编造。
+
+KB 检索
+引用溯源
+无命中不注入
+怎么演示
+开始对话
+相关文档
+报告撰写助手
+report-writer
+
+Skill 按需注入:激活 report-style 前后对比,规范写作模板立现。
+
+Skill 注入
+结构化模板
+怎么演示
+开始对话
+相关文档
+运维数据主管
+ops-analyst
+
+查数交给子 Agent:级联编排 + 事件层级 + 只读数据查询工具。
+
+MCP 宿主桥
+子 Agent
+事件层级
+数据查询工具
+怎么演示
+开始对话
+相关文档
+全栈演示官
+master-demo
+
+一次对话串起确认流 + KB + Skill + 子 Agent,收尾全家桶。
+
+MCP 宿主桥
+确认流(WRITE)
+KB 检索
+引用溯源
+Skill 注入
+子 Agent
+怎么演示
+开始对话
+相关文档
+能力 × 场景矩阵
+
+行 = 平台能力,列 = 演示场景;勾 = 该场景的对话可感知此能力
+
+场景 ╲ 能力	客服工单助手	企业知识问答	报告撰写助手	运维数据主管	全栈演示官
+MCP 宿主桥	✓	✗	✗	✓	✓
+确认流(WRITE)	✓	✗	✗	✗	✓
+KB 检索	✗	✓	✗	✗	✓
+引用溯源	✗	✓	✗	✗	✓
+Skill 注入	✗	✗	✓	✗	✓
+子 Agent	✗	✗	✗	✓	✓

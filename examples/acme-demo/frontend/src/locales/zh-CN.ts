@@ -392,7 +392,7 @@ export default {
     hero: {
       badge: '应用内嵌智能体微服务',
       title: '让你的用户,用一句话操控应用',
-      subtitle: 'InnerAgent 只服务宿主应用:后端用 @IaTool 把业务能力开放成 MCP 工具,前端引入 JS SDK 嵌入对话界面;双级令牌、确认流与审计脱敏开箱即用。',
+      subtitle: 'InnerAgent 只服务宿主应用:后端用 ＠IaTool 把业务能力开放成 MCP 工具,前端引入 JS SDK 嵌入对话界面;双级令牌、确认流与审计脱敏开箱即用。',
       'cta-docs': '查看文档',
       'cta-demo': '进入 Demo',
       'hero-note': '极简接入:开一个内部 MCP 服务 + 引入 SDK,不改业务代码即可获得 Agent 能力。',
@@ -408,7 +408,7 @@ export default {
         },
         'mcp-hub': {
           title: 'MCP 工具中枢',
-          desc: '宿主方法加 @IaTool 注解即成 MCP 工具,经 /ia-mcp 桥暴露;平台侧注册登记、指纹轮询感知清单。',
+          desc: '宿主方法加 ＠IaTool 注解即成 MCP 工具,经 /ia-mcp 桥暴露;平台侧注册登记、指纹轮询感知清单。',
         },
         'confirm-flow': {
           title: '确认流',
@@ -443,7 +443,7 @@ export default {
       'host-frontend': '宿主前端',
       'host-frontend-desc': 'JS SDK + <inneragent-chat>',
       'host-backend': '宿主后端',
-      'host-backend-desc': 'embed token 签发 · @IaTool 工具',
+      'host-backend-desc': 'embed token 签发 · ＠IaTool 工具',
       bridge: 'starter 桥',
       'bridge-desc': '/ia-mcp · X-IA-Act 验签',
       'ia-core': '运行内核',
@@ -488,7 +488,7 @@ export default {
       compare: {
         view: ['视角', '第三方宿主应用:自有登录态、后端与业务工具', 'InnerAgent 自带纯静态联调页'],
         token: ['embed token', '宿主后端真签(RS256 私钥)', '依赖 local profile 匿名演示头'],
-        tools: ['工具', '宿主 @IaTool 业务工具经 /ia-mcp 桥暴露', '无宿主工具'],
+        tools: ['工具', '宿主 ＠IaTool 业务工具经 /ia-mcp 桥暴露', '无宿主工具'],
         usage: ['用途', '接入方照抄的实现骨架', 'server 侧快速冒烟'],
       },
     },
@@ -516,7 +516,7 @@ export default {
       'step-1-desc': '管理面注册应用并登记宿主 RSA 公钥(signKeyFingerprint 核对),工具经 /ia-mcp 周期性被感知',
       'step-2': '② 引依赖 + 桥配置',
       'step-2-desc': 'starter 自动装配 /ia-mcp 桥与 X-IA-Act 验签;act.audiences 必须与管理面 endpointUrl 一致',
-      'step-3': '③ 写宿主工具 @IaTool',
+      'step-3': '③ 写宿主工具 ＠IaTool',
       'step-3-desc': '宿主业务能力(建单/查单)以注解暴露;WRITE 先确认,READ 自动执行',
       'step-4': '④ 签发 embed token',
       'step-4-desc': '宿主私钥签 RS256(iss=appKey、sub=数字用户 ID、exp 12h、无 aud),公钥登记给 InnerAgent',

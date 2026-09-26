@@ -1,0 +1,14 @@
+ACME 接入演示
+当前应用
+acme-demo
+接入流程总览
+场景画廊
+InnerAgent 管理台
+InnerAgent 嵌入
+工具调用演示
+开发示例
+返回官网
+A
+alice
+管理能力(Skill / 知识库 / MCP / Agent 定义 / 模型 / 用量 / 审计)属 InnerAgent 域,由 InnerAgent 管理台提供;管理员账号 admin / Admin#12345(独立会话,不做 SSO)。
+新窗口打开

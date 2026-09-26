@@ -1,0 +1,44 @@
+InnerAgent
+应用内嵌智能体微服务
+产品
+Demo
+文档
+体验台
+EN
+进入控制台
+API 体验台
+
+公开体验宿主接入链路:演示登录 → 签发 embed token → claims 可视化与过期倒计时。
+
+演示登录
+签发 embed token
+claims 解读
+用户名(宿主用户标识)
+签发 token
+
+演示登录:任意用户名即通过;生产环境 embed token 只签给真实鉴权后的用户(接入指南 §2-⑤)。
+
+签发失败
+
+签发失败,请稍后重试。
+
+HTTP 500
+
+签发 token
+InnerAgent
+
+应用内嵌智能体微服务
+
+产品
+产品首页
+API 体验台
+进入控制台
+资源
+文档中心
+快速开始
+前端嵌入
+GitHub
+
+由 InnerAgent 驱动 · 开源内核移植自 AgentScope Java
+
+本站为 InnerAgent 第三方接入演示(ACME 宿主视角),非生产环境。

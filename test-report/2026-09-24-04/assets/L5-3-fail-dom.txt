@@ -1,0 +1,72 @@
+ACME 接入演示
+当前应用
+acme-demo
+接入流程总览
+场景画廊
+InnerAgent 管理台
+InnerAgent 嵌入
+工具调用演示
+开发示例
+返回官网
+A
+alice
+工具调用演示
+
+两条建单通道混排:宿主表单直建(direct);对助手说「建一张工单」经 InnerAgent 确认后走 /ia-mcp 桥(agent)
+
+在「嵌入演示」页对助手说:帮我建一张工单,标题… → 确认卡批准 → create_ticket 经桥执行,下方列表实时出现 channel=agent 的记录。
+优先级
+normal
+提交工单
+ia.tools.confirm-flow-hint
+SLA 承诺(按优先级):high 首响 30min · 方案 4h;normal 首响 2h · 闭环 24h;low 1 工作日
+ia.tools.filter-all (4)
+ia.tools.filter-agent (0)
+ia.tools.filter-direct (4)
+T-1004
+normal
+宿主直建
+2h 首响
+创建者: 10086
+
+直连回归工单B
+
+ToolsBoard 表单直建
+
+T-1003
+normal
+宿主直建
+2h 首响
+创建者: 10086
+
+直连回归工单B
+
+ToolsBoard 表单直建
+
+T-1002
+normal
+宿主直建
+2h 首响
+创建者: 10086
+
+直连回归工单B
+
+ToolsBoard 表单直建
+
+T-1001
+normal
+宿主直建
+2h 首响
+创建者: 10086
+
+直连回归工单B
+
+ToolsBoard 表单直建
+
+Webhook 事件流
+
+运行终态回调(run.finished/failed/cancelled),X-IA-Delivery 幂等去重
+
+ia.tools.auto-refresh
+
+暂无事件(尚未收到 InnerAgent 投递;可先在管理面 config/test 连通性测试)

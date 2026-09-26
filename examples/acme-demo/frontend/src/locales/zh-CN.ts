@@ -138,7 +138,7 @@ export default {
     'site-docs': '文档中心',
     playground: 'API 体验台',
     'back-to-site': '返回官网',
-    'dev-index': '开发示例',
+    'dev-index': 'SDK 开发示例',
     'ia-overview': '接入流程总览',
     'ia-agents': '场景画廊',
     'ia-admin': 'InnerAgent 管理台',

@@ -138,7 +138,7 @@ export default {
     'site-docs': 'Docs',
     playground: 'API Playground',
     'back-to-site': 'Back to site',
-    'dev-index': 'Dev Examples',
+    'dev-index': 'SDK Dev Examples',
     'ia-overview': 'Integration Overview',
     'ia-agents': 'Scenario Gallery',
     'ia-admin': 'InnerAgent Admin Console',

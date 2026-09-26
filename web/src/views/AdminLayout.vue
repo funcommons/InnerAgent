@@ -36,6 +36,40 @@ const navs = [
   { path: '/webhooks', title: 'Webhook', icon: Connection },
 ]
 
+/**
+ * [C1 · P3 2026-09-27] 导航分组显性化(§C1):语义分组(集成中心/数据洞察/
+ * 运行治理)此前只存在于面包屑,侧栏 12 项平铺看不出结构——按面包屑口径
+ * 分三组渲染(⌘K 命令面板另批,不在本项)。
+ */
+const navGroups: { title: string; items: typeof navs }[] = [
+  {
+    title: '集成中心',
+    items: navs.filter((n) =>
+      ['/apps', '/tools', '/definitions', '/mcp-servers', '/skills', '/kb']
+          .includes(n.path)),
+  },
+  {
+    title: '数据洞察',
+    items: navs.filter((n) => ['/usage', '/feedbacks'].includes(n.path)),
+  },
+  {
+    title: '运行治理',
+    items: navs.filter((n) =>
+      ['/audit', '/models', '/circuit', '/webhooks'].includes(n.path)),
+  },
+]
+
+/**
+ * [C2 · P3 2026-09-27] 页面级「当前应用」徽标(§C2):Skill/知识库/用量/反馈
+ * 四个应用级视图随顶栏切换器加载,页面本身不再回显当前应用——截屏/汇报时
+ * 失焦。在应用级路由的主区顶部常驻回显(聚合视角路由不渲染)。
+ */
+const APP_SCOPED_PATHS = ['/skills', '/kb', '/usage', '/feedbacks']
+const showAppScopeBadge = computed(() => APP_SCOPED_PATHS.includes(activePath.value))
+const currentAppName = computed(() =>
+  appContext.apps.find((app) => app.id === appContext.currentAppId)?.name
+  ?? '')
+
 const activePath = computed(() => `/${String(route.path).split('/')[1]}`)
 
 onMounted(() => {
@@ -59,10 +93,16 @@ async function handleLogout() {
     <el-aside width="220px" class="admin-aside">
       <div class="admin-brand">InnerAgent 管理站</div>
       <el-menu :default-active="activePath" router class="admin-menu">
-        <el-menu-item v-for="nav in navs" :key="nav.path" :index="nav.path">
-          <el-icon><component :is="nav.icon" /></el-icon>
-          <span>{{ nav.title }}</span>
-        </el-menu-item>
+        <el-menu-item-group
+          v-for="group in navGroups"
+          :key="group.title"
+          :title="group.title"
+        >
+          <el-menu-item v-for="nav in group.items" :key="nav.path" :index="nav.path">
+            <el-icon><component :is="nav.icon" /></el-icon>
+            <span>{{ nav.title }}</span>
+          </el-menu-item>
+        </el-menu-item-group>
       </el-menu>
     </el-aside>
     <el-container>
@@ -89,6 +129,14 @@ async function handleLogout() {
         </div>
       </el-header>
       <el-main class="admin-main">
+        <div
+          v-if="showAppScopeBadge"
+          class="app-scope-badge"
+          data-testid="app-scope-badge"
+        >
+          当前应用:<b>{{ currentAppName || appContext.currentAppId }}</b>
+          <span class="app-scope-badge__id">(id={{ appContext.currentAppId }})</span>
+        </div>
         <router-view />
       </el-main>
     </el-container>
@@ -136,5 +184,20 @@ async function handleLogout() {
 }
 .admin-main {
   background: #f5f7fa;
+}
+.app-scope-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 999px;
+}
+.app-scope-badge__id {
+  color: var(--el-text-color-secondary);
 }
 </style>

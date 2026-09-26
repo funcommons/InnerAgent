@@ -81,8 +81,12 @@ const loginPageStyle = computed(() => {
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 
+// [A4 · P3 2026-09-27] 记住上次演示账号(GitHub/Vercel 登录页范式):
+// 登录成功写入 localStorage,再次进入预填默认值
+const LAST_USERNAME_KEY = 'ia-demo-last-username'
+
 const form = reactive({
-  username: '',
+  username: localStorage.getItem(LAST_USERNAME_KEY) ?? '',
 })
 
 // 演示轻登录: 用户名即宿主用户标识(见 store/user.ts;生产须替换为真实鉴权)
@@ -103,6 +107,7 @@ async function handleLogin() {
   loading.value = true
   try {
     await userStore.login(form.username)
+    localStorage.setItem(LAST_USERNAME_KEY, form.username)
     ElMessage.success(t('auth.login-success'))
     const redirect = (route.query.redirect as string) || '/ia/overview'
     router.replace(redirect)

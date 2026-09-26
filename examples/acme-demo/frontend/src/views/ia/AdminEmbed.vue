@@ -8,12 +8,41 @@
  * demo 控制台以 iframe 整站嵌入管理台,默认落 Agent 定义页;
  * 管理台独立管理员登录(不做 SSO:宿主用户 ≠ 平台管理员,身份分离更真实)。
  */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { IA_ADMIN_CONSOLE_URL } from '@/api/ia'
 
 defineOptions({ name: 'IaAdminEmbed' })
 
 const { t } = useI18n()
+const route = useRoute()
+
+/**
+ * [D4/D5 · P3 2026-09-27] 管理台深链(§D4 覆盖表「管理台 · ××」行直达):
+ * `/ia/admin?page=tools|usage|…` 白名单映射到管理台路由,iframe 与
+ * 「新窗口打开」同步落对应页;缺省/非法值回落定义页(既有口径不变)。
+ */
+const ADMIN_PAGE_ROUTES: Record<string, string> = {
+  apps: '/apps',
+  tools: '/tools',
+  definitions: '/definitions',
+  'mcp-servers': '/mcp-servers',
+  skills: '/skills',
+  kb: '/kb',
+  audit: '/audit',
+  models: '/models',
+  usage: '/usage',
+  feedbacks: '/feedbacks',
+  circuit: '/circuit',
+  webhooks: '/webhooks',
+}
+
+const adminPath = computed(() => {
+  const page = String(route.query.page ?? '')
+  return ADMIN_PAGE_ROUTES[page] ?? '/definitions'
+})
+const consoleUrl = computed(() => IA_ADMIN_CONSOLE_URL + adminPath.value)
 </script>
 
 <template>
@@ -22,7 +51,7 @@ const { t } = useI18n()
       <span class="ia-admin-embed__hint">{{ t('ia.adminEmbed.hint') }}</span>
       <a
         class="ia-admin-embed__new-tab"
-        :href="IA_ADMIN_CONSOLE_URL + '/definitions'"
+        :href="consoleUrl"
         target="_blank"
         rel="noopener"
         data-testid="ia-admin-new-tab"
@@ -32,7 +61,7 @@ const { t } = useI18n()
     </div>
     <iframe
       class="ia-admin-embed__frame"
-      :src="IA_ADMIN_CONSOLE_URL + '/definitions'"
+      :src="consoleUrl"
       :title="t('ia.adminEmbed.frame-title')"
       data-testid="ia-admin-frame"
     />

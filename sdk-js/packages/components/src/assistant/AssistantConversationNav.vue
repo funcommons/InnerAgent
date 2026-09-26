@@ -122,6 +122,7 @@ function select(conversationId: string): void {
         size="sm"
         circle
         :title="t('assistant.new-conversation')"
+        :aria-label="t('assistant.new-conversation')"
         data-testid="assistant-new-conversation"
         @click="store.startNewConversation()"
       >
@@ -192,6 +193,8 @@ function select(conversationId: string): void {
           type="button"
           class="assistant-nav__delete fc-button-ghost"
           :title="isRunningStatus(store.conversationStates[conversation.conversationId]?.status)
+            ? t('assistant.running-delete-disabled') : t('assistant.delete-conversation')"
+          :aria-label="isRunningStatus(store.conversationStates[conversation.conversationId]?.status)
             ? t('assistant.running-delete-disabled') : t('assistant.delete-conversation')"
           :disabled="isRunningStatus(store.conversationStates[conversation.conversationId]?.status)"
           :data-testid="`assistant-delete-${conversation.conversationId}`"

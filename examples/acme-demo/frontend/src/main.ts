@@ -11,6 +11,7 @@ import i18n from './locales'
 
 import './styles/index.scss'
 import { transformImageUrl, handleError, logger } from './utils'
+import { installClientLogTelemetry } from './utils/clientLog'
 import { setUserStoreGetter } from './api/request'
 import { useUserStore } from './store/user'
 import { useOemStore } from './store/oem'
@@ -86,4 +87,9 @@ setUserStoreGetter(() => useUserStore())
 // OEM config.brand/theme 通过 initialBrand/initialTheme prop 传给 Provider 作为兜底默认.
 const oemStore = useOemStore()
 oemStore.apply()
+
+// [E2 · P3 2026-09-27] 控制台错误遥测:演示现场问题可回放(§E2)。
+// 注意放在 OEM apply 之后,遥测 URL 已是最终地址。
+installClientLogTelemetry()
+
 app.mount('#app')

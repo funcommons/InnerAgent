@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.inneragent.platform.common.BusinessException;
 import com.inneragent.platform.config.AgentScopeV2Properties;
+import com.inneragent.platform.context.AppContext;
 import com.inneragent.model.entity.AiModel;
 import com.inneragent.model.config.AiModelService;
 import com.inneragent.agent.kernel.AgentScopeModelFactory;
@@ -279,11 +280,22 @@ public final class AgentExecutionFactory {
                 event.createdAt());
     }
 
-    /** Rehydrates only an exact, currently available no-tool kernel; other states fail closed. */
-    public Mono<AgentKernelSpec> resolve(AgentKernelSnapshot snapshot) {
+    /**
+     * Rehydrates only an exact, currently available no-tool kernel; other states fail closed.
+     *
+     * <p>解析在 {@code modelBlocking} 调度线程上执行,ThreadLocal AppContext 不随
+     * {@code subscribeOn} 迁移——必须显式携带 run 的 appId 重建上下文,否则定义
+     * 解析(AiAgentService)与工具目录 restore(AgentKernelSpecFactory/Registry)
+     * 按缺省应用过滤,跨应用 run 的恢复一律 RUN_CONFIG_UNAVAILABLE。
+     */
+    public Mono<AgentKernelSpec> resolve(AgentKernelSnapshot snapshot, long appId) {
         AgentKernelSnapshot safeSnapshot = Objects.requireNonNull(
                 snapshot, "snapshot must not be null");
-        return Mono.fromCallable(() -> resolveBlocking(safeSnapshot))
+        if (appId <= 0) {
+            throw new IllegalArgumentException("appId must be positive");
+        }
+        return Mono.fromCallable(() -> AppContext.runInApp(
+                        appId, () -> resolveBlocking(safeSnapshot)))
                 .subscribeOn(schedulers.modelBlocking());
     }
 

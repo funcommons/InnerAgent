@@ -150,7 +150,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             ResumeAgentExecutionCommand safeCommand = Objects.requireNonNull(
                     command, "command must not be null");
             requireResumeSnapshot(safeCommand);
-            return executionFactory.resolve(safeCommand.kernelSnapshot())
+            return executionFactory.resolve(
+                            safeCommand.kernelSnapshot(), safeCommand.run().appId())
                     .flatMap(spec -> startResolved(
                             safeCommand.run().runId(),
                             safeCommand.run().newOwnerInstanceId(),

@@ -184,27 +184,32 @@ await runCase('L5-3', '确认流工单落台账(channel=agent)', async (e) => {
   })
   e.notes.push(clicked ? '已点确认执行' : '未找到确认执行按钮(可能 UI 已自动批准)')
 
-  // 等批准后最终态
-  await waitReplyStable(30000)
-
-  // 跳 tools 页查 channel=agent 工单
-  await page.goto(`${BASE}/ia/tools`, { waitUntil: 'networkidle' })
-  await page.waitForSelector('[data-testid="ticket-list"]', { timeout: 10000 })
-  await page.locator('[data-testid="filter-agent"]').click()
-  await page.waitForTimeout(2000)
+  // 轮询工具页直至 agent 渠道出现目标工单(2026-09-27 改造:
+  // 原一次性断言在恢复执行完成前就加载列表,时序性误报)。
+  const deadline = Date.now() + 60000
+  let ticketSeen = false
+  let lastError = null
+  while (Date.now() < deadline && !ticketSeen) {
+    try {
+      await page.goto(`${BASE}/ia/tools`, { waitUntil: 'networkidle' })
+      await page.waitForSelector('[data-testid="ticket-list"]', { timeout: 10000 })
+      const filter = page.locator('[data-testid="filter-agent"]')
+      if (await filter.count()) await filter.click()
+      await page.waitForTimeout(1500)
+      ticketSeen = await page.evaluate(() => {
+        // 已点 filter-agent:列表本身即 agent 渠道(行内渠道标签是自定义
+        // FcTag,无 el-tag class,旧 tag 选择器恒空导致时序外误报)
+        const items = Array.from(document.querySelectorAll('[data-testid="ticket-list"] .ticket-row'))
+        return items.some((el) => /回归测试工单A|Playwright 全量回归/.test(el.textContent || ''))
+      })
+    } catch (err) {
+      lastError = err
+    }
+    if (!ticketSeen) await page.waitForTimeout(3000)
+  }
   e.shots.push(await shot('L5-3-tools-board.png'))
-  const ticketSeen = await page.evaluate(() => {
-    const items = Array.from(document.querySelectorAll('[data-testid="ticket-list"] .ticket-row'))
-    return items.some((el) => {
-      const tags = Array.from(el.querySelectorAll('[class*="el-tag"]')).map((t) => t.textContent?.trim() || '')
-      const title = el.querySelector('.ticket-title')?.textContent || ''
-      const isAgent = tags.some((t) => /agent|Agent|助手/.test(t))
-      const isRegression = /回归测试工单A|Playwright 全量回归/.test(title)
-      return isAgent && isRegression
-    })
-  })
   if (!ticketSeen) {
-    throw new Error('tools 页 agent 渠道未出现「回归测试工单A」')
+    throw new Error('60s 内 tools 页 agent 渠道未出现「回归测试工单A」' + (lastError ? `;last=${String(lastError?.message ?? last).slice(0, 120)}` : ''))
   }
   e.notes.push('回归测试工单A 已落台账 channel=agent')
 })

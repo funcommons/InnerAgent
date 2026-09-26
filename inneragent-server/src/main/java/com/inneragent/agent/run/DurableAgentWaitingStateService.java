@@ -732,7 +732,13 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             throw new IllegalStateException(
                     "Persisted WAITING run has no valid paused sequence");
         }
+        Long appId = run.getAppId();
+        if (appId == null || appId <= 0) {
+            throw new IllegalStateException(
+                    "Persisted WAITING run has no valid app identity");
+        }
         return new ResumedAgentRun(
+                appId,
                 run.getRunId(),
                 run.getConversationId(),
                 run.getAgentStateSessionId(),

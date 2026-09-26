@@ -5,6 +5,7 @@ import com.inneragent.platform.enums.ai.AgentRunStatus;
 import com.inneragent.platform.repository.ai.AgentRunRepository;
 import com.inneragent.agent.runtime.AgentRuntimeSchedulers;
 import com.inneragent.agent.run.model.ExecutionStopReason;
+import com.inneragent.platform.context.AppContext;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -99,8 +100,25 @@ public final class RunLeaseGuard {
                                 .then());
     }
 
+    /**
+     * by-runId 的租约读/写是全局定位的系统路径(L5-3 复盘,2026-09-27):
+     * 恢复执行链的订阅点处于 runAsSystem 模式,调度器上下文传播让 journal
+     * 线程同样无(有效)AppContext,MyBatis 拦截器会注入 {@code app_id=1}
+     * 使 countValidOwnedLease 恒 0 → 恢复回合内工具调用一律被误判
+     * OwnerFencedException(工具执行不达桥)。按 §8.11-1 与
+     * {@link DurableAgentWaitingStateService} 同款包 runAsSystem。
+     */
     private <T> Mono<T> journal(java.util.concurrent.Callable<T> operation) {
-        return Mono.fromCallable(operation).subscribeOn(schedulers.journal());
+        return Mono.fromCallable(() -> AppContext.runAsSystem(() -> {
+            try {
+                return operation.call();
+            } catch (RuntimeException failure) {
+                throw failure;
+            } catch (Exception checkedFailure) {
+                throw new IllegalStateException(
+                        "Run lease operation failed", checkedFailure);
+            }
+        })).subscribeOn(schedulers.journal());
     }
 
     private OwnerIdentity owner(

@@ -410,6 +410,7 @@ class AgentScopePipelineRunServiceTests {
                 .runId("failed-run")
                 .conversationId("conversation-1")
                 .userId(42L)
+                .appId(34L)
                 .projectId(9L)
                 .agentType("ai_assistant_agent")
                 .agentStateSessionId("afv:v2:conversation-1:ai_assistant_agent")
@@ -421,7 +422,8 @@ class AgentScopePipelineRunServiceTests {
 
         when(queries.requireAuthorizedRun("failed-run", 42L))
                 .thenReturn(Mono.just(previous));
-        when(executionFactory.resolve(any(AgentKernelSnapshot.class))).thenReturn(Mono.just(spec));
+        when(executionFactory.resolve(any(AgentKernelSnapshot.class), anyLong()))
+                .thenReturn(Mono.just(spec));
         when(persistedMessages.listByConversation("conversation-1")).thenReturn(List.of());
         when(spec.agentDefinitionStableKey()).thenReturn("ai_assistant_agent");
         when(identity.value()).thenReturn("node-2");

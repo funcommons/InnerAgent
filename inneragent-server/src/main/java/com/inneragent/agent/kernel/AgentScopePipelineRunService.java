@@ -227,7 +227,7 @@ public final class AgentScopePipelineRunService {
                     String stateSessionId = requireText(
                             previous.getAgentStateSessionId(),
                             "previous.agentStateSessionId");
-                    return executionFactory.resolve(snapshot)
+                    return executionFactory.resolve(snapshot, requireAppId(previous))
                             .onErrorMap(
                                     RunConfigUnavailableException.class,
                                     unavailable -> new BusinessException(
@@ -779,6 +779,15 @@ public final class AgentScopePipelineRunService {
             throw new IllegalArgumentException(field + " must not be blank");
         }
         return normalized;
+    }
+
+    /** 续跑解析必须在 run 所属应用上下文内执行(内核 spec restore 按 app 过滤)。 */
+    private static long requireAppId(AgentRun run) {
+        Long appId = run == null ? null : run.getAppId();
+        if (appId == null || appId <= 0) {
+            throw new IllegalStateException("Persisted run has no valid app identity");
+        }
+        return appId;
     }
 
     private record PreparedRun(

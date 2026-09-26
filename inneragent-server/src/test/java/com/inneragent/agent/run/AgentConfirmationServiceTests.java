@@ -150,6 +150,7 @@ class AgentConfirmationServiceTests {
                 List.of(),
                 "test"));
         ResumedAgentRun resumed = new ResumedAgentRun(
+                34,
                 "run-1",
                 "conversation-1",
                 "session-1",
@@ -306,6 +307,7 @@ class AgentConfirmationServiceTests {
                 List.of(),
                 "test"));
         return new ResumedAgentRun(
+                34,
                 "run-1",
                 "conversation-1",
                 "session-1",

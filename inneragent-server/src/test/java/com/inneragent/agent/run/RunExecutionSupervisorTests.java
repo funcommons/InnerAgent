@@ -381,6 +381,7 @@ class RunExecutionSupervisorTests {
         Fixture fixture = fixture();
         StartedAgentRun started = fixture.command.run();
         ResumedAgentRun resumed = new ResumedAgentRun(
+                34,
                 started.runId(),
                 started.conversationId(),
                 started.agentStateSessionId(),
@@ -393,7 +394,7 @@ class RunExecutionSupervisorTests {
                 started.deadline());
         AgentScopeRuntimeContextRequest runtime = runtime(
                 started.runId(), started.ownerInstanceId(), 2, started.deadline());
-        when(fixture.executionFactory.resolve(started.kernelSnapshot()))
+        when(fixture.executionFactory.resolve(started.kernelSnapshot(), 34L))
                 .thenReturn(Mono.error(new RunConfigUnavailableException("missing model")));
 
         StepVerifier.create(fixture.supervisor.resume(new ResumeAgentExecutionCommand(

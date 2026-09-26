@@ -9,6 +9,9 @@ import com.inneragent.agent.kernel.AgentScopeHarnessInvoker;
 import com.inneragent.agent.context.AgentScopeRuntimeContextFactory;
 import com.inneragent.agent.permission.ToolExecutionMode;
 import com.inneragent.agent.runtime.AgentRuntimeSchedulers;
+import com.inneragent.agent.run.kernel.AgentKernelSnapshot;
+import com.inneragent.agent.run.kernel.AgentKernelSnapshotPayload;
+import com.inneragent.agent.run.kernel.CanonicalAgentKernelSnapshotBuilder;
 import com.inneragent.agent.run.model.PendingConfirmation;
 import com.inneragent.model.config.AiModelService;
 import com.inneragent.platform.config.AgentScopeV2Properties;
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -157,6 +161,86 @@ class AgentExecutionFactoryTests {
                 legacy, AiChatStreamRespVO.class);
         assertThat(legacyProjected.getPendingToolCalls()).hasSize(1);
         assertThat(legacyProjected.getPendingToolCalls().get(0).getScope()).isNull();
+    }
+
+    /**
+     * 守卫(L5-3 回归,2026-09-27):{@code resolve} 的内核 restore 在
+     * {@code modelBlocking} 调度线程上执行,ThreadLocal AppContext 不随
+     * {@code subscribeOn} 迁移——必须显式携带 run 的 appId 重建上下文。
+     * 历史缺陷:跨应用 run 确认流恢复时按缺省应用(1)解析定义与工具目录,
+     * 「Agent 类型不存在」→ RUN_CONFIG_UNAVAILABLE,工具执行不达桥。
+     */
+    @Test
+    void resolveRunsKernelRestoreUnderExplicitAppContext() throws Exception {
+        AiModelService modelService = mock(AiModelService.class);
+        AgentScopeModelFactory modelFactory = mock(AgentScopeModelFactory.class);
+        AgentKernelSpecFactory specFactory = mock(AgentKernelSpecFactory.class);
+        com.inneragent.model.entity.AiModel model =
+                mock(com.inneragent.model.entity.AiModel.class);
+        org.mockito.Mockito.when(model.getStatus()).thenReturn(1);
+        org.mockito.Mockito.when(modelService.getById(19L)).thenReturn(model);
+        String modelFingerprint = "a".repeat(64);
+        org.mockito.Mockito.when(modelFactory.modelConfigFingerprint(model))
+                .thenReturn(modelFingerprint);
+        AtomicReference<Long> restoreSawAppId = new AtomicReference<>();
+        org.mockito.Mockito.when(specFactory.restore(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    restoreSawAppId.set(
+                            com.inneragent.platform.context.AppContext.currentOrDefault());
+                    throw new RuntimeException("restore-interrupted-for-guard");
+                });
+
+        AgentKernelSnapshotPayload payload = new AgentKernelSnapshotPayload(
+                2,
+                "ticket-assistant",
+                "ticket-assistant",
+                "工单助手",
+                "system prompt",
+                Map.of(),
+                5,
+                "19",
+                CanonicalAgentKernelSnapshotBuilder.modelConfigVersion(modelFingerprint),
+                "anthropic",
+                "MiniMax-M3",
+                objectMapper.createObjectNode(),
+                List.of(),
+                "test");
+        String canonicalJson = objectMapper.writeValueAsString(Map.of("guard", true));
+        byte[] canonicalBytes = canonicalJson.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String fingerprint = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(canonicalBytes));
+        AgentKernelSnapshot snapshot = new AgentKernelSnapshot(
+                payload, canonicalJson, fingerprint);
+
+        AgentExecutionFactory factory = new AgentExecutionFactory(
+                mock(AgentScopeHarnessInvoker.class),
+                mock(AgentScopeRuntimeContextFactory.class),
+                mock(AgentScopeEventMapper.class),
+                modelService,
+                modelFactory,
+                new AgentRuntimeSchedulers(
+                        new com.inneragent.platform.config.AgentScopeRuntimeProperties()),
+                mock(AiModelMetadataResolver.class),
+                objectMapper,
+                specFactory,
+                new AgentScopeV2Properties());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> factory.resolve(snapshot, 0L))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> factory.resolve(snapshot, 34L).block())
+                    .isInstanceOf(RuntimeException.class);
+        } finally {
+            org.assertj.core.api.Assertions.assertThat(restoreSawAppId.get())
+                    .as("内核 restore 必须在 run 所属应用上下文内执行")
+                    .isEqualTo(34L);
+        }
     }
 
     private JsonNode parsePending(String pendingToolCallsJson) {

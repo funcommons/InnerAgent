@@ -216,6 +216,19 @@ public final class AgentConfirmationService {
         }
     }
 
+    /**
+     * 恢复执行装配(L5-3 复盘定案,2026-09-27):续跑输入走 AgentScope 原生
+     * 确认恢复协议——{@link Msg#METADATA_CONFIRM_RESULTS} 携带 ConfirmResult
+     * 列表,由 harness 在「已持久化会话状态(含 ASKING 挂起调用)」上
+     * applyConfirmResults → resumeAgent,批准工具经内核 Toolkit 正常执行,
+     * 工具事件/投影/业务计数全走正规运行面。
+     *
+     * <p>平台代执行(注入 assistant tool_use + tool_result)已被实测否决:
+     * 挂起状态在确认等待期经 handleInterrupt 确定性落库,恢复时必命中
+     * asking 分支;注入消息不带 ConfirmResults 元数据会直接触发
+     * 「paused for human-in-the-loop」终态,且绕开工具事件面造成投影失真。
+     * (Git 历史留档:AgentConfirmedToolExecutor 于本轮短暂引入后移除。)
+     */
     private Mono<Void> launchResume(ResumedAgentRun resumed, Msg resumeMessage) {
         AgentKernelSnapshot snapshot = snapshot(resumed);
         ToolExecutionMode toolExecutionMode = ToolExecutionMode.parse(

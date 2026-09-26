@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 public record ResumedAgentRun(
+        long appId,
         String runId,
         String conversationId,
         String sessionId,
@@ -16,6 +17,9 @@ public record ResumedAgentRun(
         Instant deadline) {
 
     public ResumedAgentRun {
+        if (appId <= 0) {
+            throw new IllegalArgumentException("appId must be positive");
+        }
         requireText(runId, "runId");
         requireText(conversationId, "conversationId");
         requireText(sessionId, "sessionId");

@@ -3,10 +3,10 @@
     "id": "L5-1",
     "title": "建单意图触发确认卡(确认流退出触发器已生效)",
     "status": "PASS",
-    "ms": 16207,
+    "ms": 14292,
     "notes": [
-      "首轮长度 388 字符;尾部:  我立即提交; 或补充描述后再提交。  下一步:等待您确认。  mock-text MiniMax M3 默认（按工具设定） 每次询问 总是允许 完全访问 发送",
-      "第二轮长度 487 字符;尾部: icket 等待确认 等待确认 · 剩余 23 小时 59 分  约束范围已注入本次运行  拒绝 允许 mock-text MiniMax M3 默认（按工具设定） 每次询问 总是允许 完全访问 停止"
+      "首轮长度 283 字符;尾部: high 优先级承诺 30 分钟内响应、4 小时内给出方案。  mock-text MiniMax M3 默认（按工具设定） 每次询问 总是允许 完全访问 发送",
+      "第二轮长度 403 字符;尾部: icket 等待确认 等待确认 · 剩余 23 小时 59 分  约束范围已注入本次运行  拒绝 允许 mock-text MiniMax M3 默认（按工具设定） 每次询问 总是允许 完全访问 停止"
     ],
     "shots": [
       "l5-assets/L5-1-after-first-turn.png",
@@ -44,14 +44,14 @@
   {
     "id": "L5-3",
     "title": "确认流工单落台账(channel=agent)",
-    "status": "FAIL",
-    "ms": 8709,
+    "status": "PASS",
+    "ms": 2211,
     "notes": [
-      "已点确认执行"
+      "已点确认执行",
+      "回归测试工单A 已落台账 channel=agent"
     ],
     "shots": [
-      "l5-assets/L5-3-tools-board.png",
-      "l5-assets/L5-3-fail.png"
+      "l5-assets/L5-3-tools-board.png"
     ],
     "consoleErrors": [
       {
@@ -77,27 +77,8 @@
       {
         "type": "console.error",
         "text": "Message compilation error: Unexpected empty linked key\n1  |  ③ 写宿主工具 @IaTool\n   |           ^^^^^^"
-      },
-      {
-        "type": "console.error",
-        "text": "Failed to load resource: the server responded with a status of 500 ()"
-      },
-      {
-        "type": "console.error",
-        "text": "[Unhandled Rejection] Error: Pending tool confirmation changed after submission failure\n    at http://localhost:9203/src/vendor/inneragent/inneragent-chat.js:1904:19\n    at L (http://localhost:9203/src/vendor/inneragent/inneragent-chat.js:1520:12)\n    at ot (http://localhost:9203/src/vendor/innerage"
-      },
-      {
-        "type": "pageerror",
-        "text": "Error: Pending tool confirmation changed after submission failure"
       }
     ],
-    "httpErrors": [
-      {
-        "status": 500,
-        "url": "http://localhost:18090/ia/api/v1/runs/9fa7ac7e22ee4247833c3b6ddd03ee57/confirm"
-      }
-    ],
-    "error": "tools 页 agent 渠道未出现「回归测试工单A」",
-    "dump": "l5-assets/L5-3-fail-dom.txt"
+    "httpErrors": []
   }
 ]

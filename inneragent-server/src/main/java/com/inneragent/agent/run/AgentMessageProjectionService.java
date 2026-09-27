@@ -14,6 +14,7 @@ import com.inneragent.agent.mapper.AgentMessageMapper;
 import com.inneragent.agent.mapper.AgentRunMapper;
 import com.inneragent.agent.conversation.AgentMessageService;
 import com.inneragent.agent.runtime.AgentRuntimeSchedulers;
+import com.inneragent.platform.context.AppContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -124,9 +125,13 @@ public class AgentMessageProjectionService {
      * 口径);租户缺失的历史行走系统模式(跳过租户注入)。
      */
     private <T> T inRowScope(AgentRun row, java.util.function.Supplier<T> action) {
+        // [§9.6-1 2026-09-27] runInAppScoped(非 runInApp):外层订阅链可能携带
+        // runAsSystem 的 IGNORE 标记(调度器传播),runInApp 只设 APP_ID 不清
+        // IGNORE → ignoreTable() 整体跳过注入/过滤 → 投影 INSERT 落缺省应用
+        // (实测 38 行/14 run)、锁读丢 app 过滤。
         java.util.function.Supplier<T> scoped =
                 row.getAppId() != null
-                        ? () -> com.inneragent.platform.context.AppContext.runInApp(
+                        ? () -> com.inneragent.platform.context.AppContext.runInAppScoped(
                                 row.getAppId(), action)
                         : action;
         return row.getTenantId() != null
@@ -466,6 +471,16 @@ public class AgentMessageProjectionService {
         AgentMessage existing = messageMapper.selectByProjectionKey(projectionKey);
         if (existing != null) {
             requireSameProjection(existing, candidate);
+            return;
+        }
+        // [§9.6-1 修复 2026-09-27] 投影 INSERT 的 app_id 列由拦截器按线程上下文
+        // 注入;终态投影在脱离订阅链的 journal 线程上执行(无有效 AppContext),
+        // 历史实测把确认恢复回合的消息行写成缺省应用(38 行/14 run)。按 runId
+        // 全局定位约束(§8.11-1)以 run 所属应用显式重建上下文。
+        Long appId = run.getAppId();
+        if (appId != null && appId > 0) {
+            AppContext.runInAppScoped(appId, () ->
+                    messageService.saveProjectedMessage(run.getConversationId(), candidate));
             return;
         }
         messageService.saveProjectedMessage(run.getConversationId(), candidate);

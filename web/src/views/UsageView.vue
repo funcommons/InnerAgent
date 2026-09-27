@@ -5,17 +5,21 @@
  * + 聚合表格分页。聚合口径:COMPLETED/FAILED/CANCELLED 终态调用,token 合计仅
  * COMPLETED(FAILED 行 token 列为空);汇总卡单页拉 100 行聚合,超出如实标注截断。
  */
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaListPage from '@/components/IaListPage.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
+import IaFreshness from '@/components/IaFreshness.vue'
 import { useUsageStore } from '@/stores/usage'
 import { useAppContextStore } from '@/stores/appContext'
 
 const store = useUsageStore()
 const appContext = useAppContextStore()
+// [E4 · P3 2026-09-27] 数据新鲜度口径统一:记录最近一次查询完成时间
+const fetchedAt = ref<string | null>(null)
+const refreshing = ref(false)
 
 onMounted(() => {
   void store.load()
@@ -44,15 +48,21 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-function refreshAll() {
-  void store.search()
-  void store.loadOverview()
+async function refreshAll() {
+  refreshing.value = true
+  try {
+    await Promise.all([store.search(), store.loadOverview()])
+    fetchedAt.value = new Date().toISOString()
+  } finally {
+    refreshing.value = false
+  }
 }
 </script>
 
 <template>
   <IaPageContainer subtitle="模型调用用量:聚合口径=终态调用(COMPLETED/FAILED/CANCELLED),token 合计仅 COMPLETED">
     <template #action>
+      <IaFreshness :at="fetchedAt" :loading="refreshing" @refresh="refreshAll" />
       <el-button :icon="Refresh" @click="refreshAll">查询</el-button>
     </template>
 

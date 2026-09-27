@@ -5,9 +5,10 @@
   "type": "module",
   "description": "InnerAgent E2E 测试基建(Playwright;只测不改产品代码)",
   "scripts": {
+    "report": "playwright show-report",
     "test": "playwright test",
-    "test:ui-alive": "playwright test --project=chromium",
-    "report": "playwright show-report"
+    "test:demo-regression": "playwright test -c playwright.demo.config.ts",
+    "test:ui-alive": "playwright test --project=chromium"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0"

@@ -275,17 +275,13 @@ async function findConfirmButton() {
   return null
 }
 
-let baselineMaxTicketId = 0
+// [2026-09-27] 工单标题带时间戳:L5-3 标题匹配即天然新鲜度断言
+// (演示后台工单计数器在重启后会重置,数字比对跨重启不可靠)
+const REG_TICKET_TITLE = `回归测试工单A-${new Date().toISOString().slice(5, 16).replace(/[-T:]/g, '')}`
 
 await runCase('L5-1', '确认流(WRITE 工具)', '建单意图触发确认卡(WRITE 先确认)', async (e) => {
-  // 新鲜度基线(2026-09-27):记录台账当前最大工单号,L5-3 断言出现更大编号
-  await page.goto(BASE + '/ia/tools')
-  await page.waitForSelector('[data-testid="ticket-list"]', { timeout: 10000 })
-  const beforeText = await page.locator('[data-testid="ticket-list"]').innerText()
-  baselineMaxTicketId = Math.max(0, ...[...beforeText.matchAll(/T-(\d{3,})/g)]
-      .map((m) => Number(m[1])))
   await mountWC('ticket-assistant')
-  await sendChat('帮我建一张工单:标题=回归测试工单A,描述=Playwright 全量回归创建,优先级=high')
+  await sendChat(`帮我建一张工单:标题=${REG_TICKET_TITLE},描述=Playwright 全量回归创建,优先级=high`)
 
   const confirmInUi = async () => {
     // 确认卡:只认「允许/批准」类按钮(2026-09-27 修复:此前 byClass 匹配到
@@ -330,13 +326,11 @@ await runCase('L5-3', '确认流(WRITE 工具)', '确认流工单落台账(chann
   await page.goto(BASE + '/ia/tools')
   await page.waitForSelector('[data-testid="ticket-list"]', { timeout: 10000 })
   const listText = await page.locator('[data-testid="ticket-list"]').innerText()
-  const currentIds = [...listText.matchAll(/T-(\d{3,})/g)].map((m) => Number(m[1]))
-  const freshId = currentIds.length ? Math.max(...currentIds) : 0
-  if (freshId <= baselineMaxTicketId) {
-    throw new Error(`台账无新工单(基线 T-${baselineMaxTicketId},当前最大 T-${freshId};跨轮假阳性防护)`)
+  if (!listText.includes(REG_TICKET_TITLE)) {
+    throw new Error(`台账未见本 round 工单「${REG_TICKET_TITLE}」(标题唯一,无跨轮假阳性)`)
   }
-  e.notes.push(`台账新增工单 T-${freshId}(基线 T-${baselineMaxTicketId})`)
   if (!listText.includes('Agent') && !listText.includes('agent')) throw new Error('未见 agent 渠道标记')
+  e.notes.push(`台账含本 round 工单「${REG_TICKET_TITLE}」`)
   e.shots.push(await shot('L5-3-ticket-agent.png'))
 })
 

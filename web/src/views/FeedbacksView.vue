@@ -6,16 +6,21 @@
  * COMPLETED÷(COMPLETED+FAILED),CANCELLED 单列观察;口径见
  * AdminUsageController swagger 注释/docs 灰度与指标大盘 B4)。
  */
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import IaEmpty from '@/components/IaEmpty.vue'
 import IaListPage from '@/components/IaListPage.vue'
 import IaPageContainer from '@/components/IaPageContainer.vue'
 import IaPagination from '@/components/IaPagination.vue'
 import IaTime from '@/components/IaTime.vue'
+import IaFreshness from '@/components/IaFreshness.vue'
 import { useFeedbacksStore } from '@/stores/feedbacks'
 import { useAppContextStore } from '@/stores/appContext'
 import type { IaFeedback } from '@/api/types'
+
+// [E4 · P3 2026-09-27] 数据新鲜度口径统一
+const fetchedAt = ref<string | null>(null)
+const refreshing = ref(false)
 
 const store = useFeedbacksStore()
 const appContext = useAppContextStore()
@@ -47,15 +52,21 @@ function anchors(row: IaFeedback): Array<{ label: string; value: string | null }
   ]
 }
 
-function refreshAll() {
-  void store.search()
-  void store.loadNorthStar()
+async function refreshAll() {
+  refreshing.value = true
+  try {
+    await Promise.all([store.search(), store.loadNorthStar()])
+    fetchedAt.value = new Date().toISOString()
+  } finally {
+    refreshing.value = false
+  }
 }
 </script>
 
 <template>
   <IaPageContainer subtitle="宿主用户反馈明细:重复反馈按覆盖计(展示最近覆盖时间);管理面跨用户视图">
     <template #action>
+      <IaFreshness :at="fetchedAt" :loading="refreshing" @refresh="refreshAll" />
       <el-button :icon="Refresh" @click="refreshAll">查询</el-button>
     </template>
 

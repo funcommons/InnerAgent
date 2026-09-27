@@ -92,6 +92,30 @@ public final class AppContext {
         });
     }
 
+    /**
+     * 行级作用域执行（§9.6-1，2026-09-27）：与 {@link #runInApp(Long, Supplier)}
+     * 的差别在于同时解除系统模式。外层调度链可能携带 runAsSystem 的 IGNORE
+     * 标记（调度器上下文传播还原），此时 {@code ignoreTable()} 直接跳过
+     * app 注入/过滤——INSERT 落 DDL 缺省应用（=1）、SELECT 丢 app 过滤；
+     * 行级写入必须以行归属重建完整上下文。两状态均按进入前值还原。
+     */
+    public static <T> T runInAppScoped(Long appId, Supplier<T> action) {
+        Long previousApp = APP_ID.get();
+        Boolean previousIgnore = IGNORE.get();
+        APP_ID.set(appId);
+        IGNORE.set(Boolean.FALSE);
+        try {
+            return action.get();
+        } finally {
+            if (previousApp != null) {
+                APP_ID.set(previousApp);
+            } else {
+                APP_ID.remove();
+            }
+            IGNORE.set(previousIgnore);
+        }
+    }
+
     public static <T> T runInApp(Long appId, Supplier<T> action) {
         Long previous = APP_ID.get();
         APP_ID.set(appId);

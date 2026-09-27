@@ -8,11 +8,12 @@
  * 反馈四个应用级视图随选中应用加载(各视图 watch 并重查);定义/工具等
  * 聚合视角视图不受影响。
  */
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Monitor, Coin, Document, Cpu, Lightning, Connection, Tickets, SwitchButton, Link, MagicStick, Reading, TrendCharts, ChatDotRound } from '@element-plus/icons-vue'
 import IaEnvBadge from '@/components/IaEnvBadge.vue'
+import CommandPalette from '@/components/CommandPalette.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAppContextStore } from '@/stores/appContext'
 
@@ -20,6 +21,41 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const appContext = useAppContextStore()
+
+// [C1 · P3 2026-09-27] ⌘K 命令面板开关
+const cmdkOpen = ref(false)
+
+// [D10 · P3 2026-09-27] 管理台暗黑模式:Element Plus 官方 dark css-vars +
+// localStorage 持久化,首次进入跟随系统偏好
+const THEME_KEY = 'ia-admin-theme'
+
+function storedTheme(): string | null {
+  try {
+    return localStorage.getItem(THEME_KEY)
+  } catch {
+    return null
+  }
+}
+
+const dark = ref(storedTheme()
+    ? storedTheme() === 'dark'
+    : Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches))
+
+function applyTheme() {
+  document.documentElement.classList.toggle('dark', dark.value)
+}
+
+function toggleDark() {
+  dark.value = !dark.value
+  try {
+    localStorage.setItem(THEME_KEY, dark.value ? 'dark' : 'light')
+  } catch {
+    /* 测试/隐私模式无 storage:仅本次会话生效 */
+  }
+  applyTheme()
+}
+
+applyTheme()
 
 const navs = [
   { path: '/apps', title: '应用管理', icon: Monitor },
@@ -125,10 +161,22 @@ async function handleLogout() {
             />
           </el-select>
           <IaEnvBadge />
+          <el-button
+            text
+            data-testid="admin-theme-toggle"
+            :title="dark ? '切换亮色' : '切换暗黑'"
+            @click="toggleDark"
+          >
+            {{ dark ? '☀' : '☾' }}
+          </el-button>
+          <el-button text data-testid="admin-cmdk-open" @click="cmdkOpen = true">
+            ⌘K
+          </el-button>
           <el-button text :icon="SwitchButton" @click="handleLogout">退出登录</el-button>
         </div>
       </el-header>
       <el-main class="admin-main">
+        <CommandPalette v-model:open="cmdkOpen" :groups="navGroups" />
         <div
           v-if="showAppScopeBadge"
           class="app-scope-badge"

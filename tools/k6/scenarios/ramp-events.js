@@ -102,7 +102,9 @@ export function handleSummary(data) {
   const m = data.metrics;
   const p95 = (name) => (m[name] && m[name].values ? Math.round(m[name].values['p(95)']) : null);
   const rate = (name) => (m[name] && m[name].values ? m[name].values.rate : null);
-  const cnt = (name) => (m[name] && m[name].values ? m[name].values.count : null);
+  // Rate 指标导出形态是 {passes, fails, value}(无 count):passes=记 true 次数
+  const rateCount = (name) => (m[name] && m[name].values
+    ? (m[name].values.passes || 0) + (m[name].values.fails || 0) : 0);
 
   // 稀释折算(口径见文件头):加权窗口 = 0.5·W + H + 0.5·D(线性爬坡/泄坡)
   const wMs = parseDuration(WARMUP);
@@ -114,8 +116,9 @@ export function handleSummary(data) {
   const holdEquivalent = observedRate !== null && totalMs > 0
     ? observedRate * (totalMs / weightedMs)
     : null;
-  const iterations = cnt('ia_run_finished_rate') || 0;
-  const finished = Math.round((rate('ia_run_finished_rate') || 0) * iterations);
+  const iterations = rateCount('ia_run_finished_rate');
+  const finished = m.ia_run_finished_rate && m.ia_run_finished_rate.values
+    ? (m.ia_run_finished_rate.values.passes || 0) : 0;
   const verdict = holdEquivalent === null
     ? 'N/A'
     : (holdEquivalent >= 0.9 * TARGET_EVENTS_PER_SEC

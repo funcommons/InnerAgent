@@ -8,6 +8,11 @@
 -- 规则与 e2e/demo-regression.driver.mjs 的六条话术一一对应,本文件是
 -- mockScript 的单一事实源(MockAiProvider 规则式形态见
 -- MockAiProvider#parsePlan;捕获组 $1..$9 注入工具入参与回复文案)。
+-- 另有一条「几点」规则(k6 契约,非 e2e 话术):默认消息「现在几点了?」
+-- 触发内置只读工具 get_current_time —— idle-sessions 场景靠它在 ALWAYS_ASK
+-- 下进入 WAITING_CONFIRMATION 挂起(1000 空闲会话,验收 7);压测场景则
+-- 让每运行事件数贴近设计估计(≈8/运行)。k6 侧由 run.sh calibrate 把
+-- deltaMs 调到压测节拍(IA_MOCK_DELTA_MS,默认 800),CI 保持 60 快速出字。
 -- 注意:规则对象必须挂在 config 的 "mockScript" 键下
 -- (AiProviderContext.getConfig().get("mockScript");裸 rules 对象不生效)。
 --
@@ -45,6 +50,12 @@ SET config = $json${
       {
         "match": "报告|总结|销售|回款",
         "reply": "Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。"
+      },
+      {
+        "match": "现在几点|几点了",
+        "tool": "get_current_time",
+        "args": {},
+        "reply": "已通过内置工具查询当前时间,结果见上方工具调用记录(内置只读工具 get_current_time)。"
       }
     ],
     "default": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"

@@ -99,10 +99,12 @@ export function handleSummary(data) {
   const m = data.metrics;
   const p95 = (name) => (m[name] && m[name].values ? Math.round(m[name].values['p(95)']) : null);
   const rate = (name) => (m[name] && m[name].values ? m[name].values.rate : null);
-  const cnt = (name) => (m[name] && m[name].values ? m[name].values.count : null);
-  // Rate 指标:count = 记点次数(=运行数),rate = 1 的占比 → 完成数 ≈ rate×count
-  const iterations = cnt('ia_run_finished_rate') || 0;
-  const finished = Math.round((rate('ia_run_finished_rate') || 0) * iterations);
+  // Rate 指标导出形态是 {passes, fails, value}(无 count):passes=记 true 次数
+  const rateCount = (name) => (m[name] && m[name].values
+    ? (m[name].values.passes || 0) + (m[name].values.fails || 0) : 0);
+  const iterations = rateCount('ia_run_finished_rate');
+  const finished = m.ia_run_finished_rate && m.ia_run_finished_rate.values
+    ? (m.ia_run_finished_rate.values.passes || 0) : 0;
   const failed = iterations - finished;
   const totals = {
     iterations,

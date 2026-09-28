@@ -47,6 +47,10 @@ REDIS_CONTAINER="${REDIS_CONTAINER:-inneragent-redis}"
 SCENARIOS="${SCENARIOS:-smoke}"
 IA_CALIBRATE="${IA_CALIBRATE:-1}"
 IA_MOCK_MAX_CONCURRENCY="${IA_MOCK_MAX_CONCURRENCY:-1000}"
+# 压测出字节拍:种子里 deltaMs=60(CI 快速出字口径);压测须 800(验收节拍,
+# 事件率的主要决定因素 —— 2026-09-28 实录:60 使事件率 ~3× 于设计点,透传
+# P95 失真)。calibrate 统一改到本值,容量报告须记录取值。
+IA_MOCK_DELTA_MS="${IA_MOCK_DELTA_MS:-800}"
 PORTS_MODE="${PORTS_MODE:-stacked}"
 
 log() { echo "[ia-k6] $*"; }
@@ -145,6 +149,12 @@ calibrate() {
     "UPDATE ia_ai_model SET max_concurrency = ${IA_MOCK_MAX_CONCURRENCY}
        WHERE code = 'mock-text' AND deleted = false;" \
     || log "WARN: 校准 UPDATE 失败(吞吐场景可能受模型并发闸限制)"
+  log "校准 mock 模型 deltaMs → ${IA_MOCK_DELTA_MS}(种子为 60=CI 口径;压测节拍见 run.sh 头注)"
+  docker exec "$PG_CONTAINER" psql -U inneragent -d inneragent -c \
+    "UPDATE ia_ai_model
+        SET config = replace(config, '\"deltaMs\": 60', '\"deltaMs\": ${IA_MOCK_DELTA_MS}')
+      WHERE code = 'mock-text' AND deleted = false;" \
+    || log "WARN: deltaMs 校准失败(事件率将 ~3× 于设计点,透传 P95 失真)"
 }
 
 # ── [4/5] 场景与快照 ──────────────────────────────────────────────────────
@@ -242,7 +252,7 @@ run_all() {
   {
     echo "base_url=$IA_BASE_URL"
     echo "db_port=$DB_PORT redis_port=$REDIS_PORT ports_mode=$PORTS_MODE"
-    echo "mock_max_concurrency=$IA_MOCK_MAX_CONCURRENCY calibrate=$IA_CALIBRATE"
+    echo "mock_max_concurrency=$IA_MOCK_MAX_CONCURRENCY mock_deltaMs=$IA_MOCK_DELTA_MS calibrate=$IA_CALIBRATE"
     echo "scenarios=$SCENARIOS"
     env | grep -E "^IA_(STEADY|IDLE|RAMP|THRESHOLD|DEMO_USER)" | sort || true
   } > "$RESULT_DIR/env.txt"

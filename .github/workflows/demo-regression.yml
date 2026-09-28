@@ -79,6 +79,11 @@ jobs:
           cd inneragent-server
           mvn -B -q -DskipTests package
 
+      - name: 安装 starter 到本地 maven 仓库(demo 后端依赖 com.inneragent:inneragent-spring-boot-starter)
+        run: |
+          cd inneragent-starter
+          mvn -B -q -DskipTests install
+
       - name: 启动 InnerAgent 主服务(18090;启动 env 三件套见 计划.md §0/§8.9)
         run: |
           cd inneragent-server
@@ -123,7 +128,7 @@ jobs:
           cd examples/acme-demo/backend
           IA_SERVER_BASE=http://localhost:18090 \
           IA_APP_KEY=acme-demo \
-          IA_SIGN_PRIVATE_KEY="$(cat ../../seeds/.local/host.key)" \
+          IA_SIGN_PRIVATE_KEY="$(cat ../seeds/.local/host.key)" \
           IA_WEBHOOK_SECRET=whsec-acme-demo-seed \
           IA_ADMIN_KEY=test-key \
           nohup mvn -B -q -DskipTests spring-boot:run > /tmp/acme-backend.log 2>&1 &

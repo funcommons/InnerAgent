@@ -13,10 +13,10 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| conversationId | long | 否 | 空=新建会话 |
+| conversationId | string | 否 | 空=新建会话 |
 | message | string | 是 | 用户消息 |
 | agentType | string | 是 | Agent 类型(如 `demo`) |
-| toolExecutionMode | enum | 否 | `DEFAULT`(默认)/ `ALWAYS_ASK` |
+| toolExecutionMode | enum | 否 | `DEFAULT`(默认)/ `ALWAYS_ASK` / `ALWAYS_ALLOW` / `FULL_ACCESS`(后两者为显式豁免档) |
 | enabledSkills | array | 否 | 启用技能列表 |
 | modelId | long | 否 | 指定模型;缺省按类型默认解析 |
 
@@ -36,7 +36,9 @@
 
 ### GET /ia/api/v1/runs/{runId} —— 运行状态
 
-返回运行单据(状态机:`RUNNING`/`WAITING_CONFIRMATION`/`DONE`/`ERROR`/`CANCELLED`)。
+返回运行单据(`status` 取值:`RUNNING`/`WAITING_CONFIRMATION`/`WAITING_EXTERNAL`/
+`CANCEL_REQUESTED`/`COMPLETED`/`FAILED`/`CANCELLED`,后三者为终态;SSE 侧终态事件
+`DONE`/`ERROR`/`CANCELLED` 分别对应 `COMPLETED`/`FAILED`/`CANCELLED`)。
 轮询形态客户端用此端点;行级隔离:非本人运行 404。
 
 ### GET /ia/api/v1/runs/running —— 运行中列表
@@ -46,6 +48,8 @@
 ### POST /ia/api/v1/runs/{runId}/cancel —— 取消运行
 
 取消后事件流以 `CANCELLED` 终态收尾;已完成运行返回业务错误码。
+另有兜底形态 `POST /ia/api/v1/runs/cancel?conversationId=<id>`:仅持会话 id 时按会话
+解析活动根运行并取消(SDK 乐观会话契约;无活动运行时 404)。
 
 ## 确认流
 
@@ -55,9 +59,20 @@ WRITE 工具/`ALWAYS_ASK` 场景,运行挂起并广播确认事件;前端组件�
 确认/拒绝后运行继续/终止,原 SSE 连接(或重连)收到后续事件。确认有超时
 (默认 24h),过期按过期语义收尾。
 
-### POST /ia/api/v1/runs/confirmations/expire —— 确认过期(平台/宿主侧)
+### POST /ia/api/v1/runs/{runId}/confirm —— 批准或拒绝等待中的工具调用
 
-请求体含 `runId`/`replyId`;幂等,过期已终态的确认返回业务码。
+请求体(`ToolConfirmationReqVO`):`replyId`(挂起回复 id)+ `decisions` 数组,每项
+`{ "toolCallId": "...", "approved": true|false }`。`runId` 以路径参数为准。
+每次决策落审计(`decision=allowed/denied`,`decisionSource=live-confirm`)。
+
+### POST /ia/api/v1/runs/{runId}/confirm/expire —— 结束已超时的确认
+
+请求体(`ToolConfirmationExpiryReqVO`):`replyId`(`runId` 取自路径)。幂等;过期
+已终态的确认返回业务码。平台/宿主侧定时任务可调用。
+
+### POST /ia/api/v1/runs/{runId}/continue —— 继续失败或已取消的运行(SSE)
+
+响应同为 SSE 事件流,从原运行续跑。
 
 ## 管理面(`/ia/api/v1/admin/*`,头 `X-IA-Admin-Key`)
 

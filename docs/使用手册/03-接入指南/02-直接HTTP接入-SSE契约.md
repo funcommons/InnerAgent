@@ -55,6 +55,12 @@ data: {"outputType":"CONTENT","createdAt":1730000000000,"content":"...",...}
 | `DONE`(附 usage) | 正常结束 | ✅ |
 | `ERROR` / `CANCELLED` | 失败/取消 | ✅ |
 
+> 上表为接入方最常处理的取值。服务端 `outputType` 全集另含 `REASONING`、`TOOL_CALL`、
+> `TOOL_FINISHED`、`SUB_AGENT_FINISHED`、`USER_CONFIRM_RESULT`(确认结果回执)——
+> 客户端按未知类型忽略即可,不要因此中断流。
+>
+> `createdAt` 由 Jackson 序列化,可能为 epoch 毫秒数值或 ISO-8601 字符串,解析时两种形态都要兼容。
+
 收到终态后服务端关闭流。**客户端处理规则**:
 
 1. 逐帧解析 `data` JSON,按 `outputType` 分发渲染;
@@ -87,4 +93,4 @@ Last-Event-ID: <runId>:<lastSeq>
 
 ## 相关
 
-- 错误码与重连语义:[04-API 参考/02](../04-API%20参考/02-错误码与重连语义.md)
+- 错误码与重连语义:[04-API 参考/02](../04-API参考/02-错误码与重连语义.md)

@@ -39,7 +39,8 @@ inneragent:
 ```java
 @IaTool(name = "create_ticket",
         description = "在 ACME 宿主系统中创建一张工单",
-        riskLevel = RiskLevel.WRITE)          // READ=读类,WRITE=写类(强制确认)
+        riskLevel = ToolRiskLevel.WRITE)      // com.inneragent.starter.ToolRiskLevel
+                                              // READ=读类,WRITE=写类(默认值,强制确认)
 public Ticket createTicket(
         @IaToolParam(description = "工单标题") String title,
         @IaToolParam(description = "优先级") String priority,
@@ -54,20 +55,22 @@ public Ticket createTicket(
   调用准确率;
 - `IaActClaims` 注入发起用户的真实身份 —— 工具内部**必须**以其做数据权限过滤,
   不要信任模型转述的用户标识;
-- 风险分级:`READ` 类在 `DEFAULT` 模式自动放行;`WRITE` 类一律推用户确认卡
-  (平台级语义,宿主不可关闭);
+- 风险分级:`READ` 类在 `DEFAULT` 模式自动放行;`WRITE` 类推用户确认卡(平台级语义,
+  宿主不可关闭;`@IaTool` 的 `riskLevel` 缺省即 `WRITE`,宁严勿松);
 - 命名规范见仓库《工具设计规范.md》。
 
 ## 4. 签发 embed token(宿主登录态 → 平台身份)
 
 ```java
-// EmbedTokenService 形态(见 acme-demo EmbedTokenSigner)
-String token = embedTokenSigner.sign(userId, Duration.ofMinutes(30));
-// 返回给已登录的前端;前端以 Authorization: Bearer <token> 调平台
+// 形态参考 acme-demo EmbedTokenSigner:TTL 由配置给出,非方法入参
+SignedToken signed = embedTokenSigner.sign(userId, tenantId);   // → record(token, expiresIn)
+String token = signed.token();   // 返回给已登录的前端;前端以 Authorization: Bearer <token> 调平台
 ```
 
-三要点:**私钥只在宿主后端**;token 短时效(建议 ≤30min,过期由宿主续签);
-claims 里的用户标识 = 平台侧行级隔离的 userId。
+三要点:**私钥只在宿主后端**;token 短时效(TTL 由宿主配置,acme-demo 为
+`ia.embed-ttl-seconds` / 环境变量 `IA_EMBED_TTL_SECONDS`,默认 43200s=12h;
+生产建议收紧到 ≤30min 并由宿主续签);claims 里的用户标识(`sub`)= 平台侧行级
+隔离的 `userId`。
 
 ## 5. Webhook 订阅(可选但推荐)
 

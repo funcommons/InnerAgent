@@ -24,22 +24,29 @@ SDK 仓库:`sdk-js/`(monorepo):
 
 ```ts
 import { init } from '@inneragent/sdk-core';
+import { registerInnerAgentChat } from '@inneragent/sdk-components';
 
 init({
-  baseUrl: 'http://localhost:18090/ia',   // 平台地址
+  appKey: 'acme-demo',                    // 与管理面 appKey 一致(必填)
+  baseURL: 'http://localhost:18090/ia/api/v1',  // 缺省 '/ia/api/v1'
+  agentType: 'demo',                      // Agent 类型经 init 传入,不是标签属性
   tokenGetter: async () => {              // 三要点之一:异步取 token
-    const r = await fetch('/api/ia/embed-token', { method: 'POST' });
+    const r = await fetch('/api/ia/embed-token');   // demo 宿主端点为 GET
     return (await r.json()).token;        // 由宿主后端签发(私钥在后端)
   },
 });
+
+registerInnerAgentChat();                 // 注册 <inneragent-chat>(幂等)
 ```
 
 ```html
-<inneragent-chat agent-type="demo"></inneragent-chat>
+<!-- 标签属性: view="chat"(默认)| "history" | "config"、project-id -->
+<inneragent-chat view="chat"></inneragent-chat>
 ```
 
 `tokenGetter` 三要点:**异步**(首次与过期续签都走它)、**每次调用取新值**
-（组件不缓存过期 token)、**错误要抛出**(组件显示连接态而不是静默卡死)。
+（组件不缓存过期 token;SDK 收到 401 会再次调用)、**错误要抛出**
+（组件显示连接态而不是静默卡死)。
 
 ## 3. iframe + postMessage 模式
 

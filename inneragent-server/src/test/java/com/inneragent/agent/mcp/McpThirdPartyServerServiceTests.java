@@ -66,7 +66,7 @@ class McpThirdPartyServerServiceTests {
 
     private static McpThirdPartyServerSupport.Upsert upsert(String serverKey) {
         return new McpThirdPartyServerSupport.Upsert(
-                serverKey, "CRM 线索", "https://crm.example.com/mcp",
+                serverKey, "CRM 线索", "https://198.51.100.10/mcp",
                 null, null, "X-Api-Key", "secret-value", 45, true);
     }
 
@@ -92,14 +92,14 @@ class McpThirdPartyServerServiceTests {
     @DisplayName("OAUTH 鉴权策略:配置即 501(枚举位保留,流程 P4 后续批次)")
     void oauthRejectedWith501() {
         assertThatThrownBy(() -> appService.register(new McpThirdPartyServerSupport.Upsert(
-                "crm", "CRM", "https://crm.example.com/mcp",
+                "crm", "CRM", "https://198.51.100.10/mcp",
                 null, "oauth", null, null, null, true)))
                 .isInstanceOfSatisfying(BusinessException.class, e -> {
                     assertThat(e.getCode()).isEqualTo(501);
                     assertThat(e.getMessage()).contains("CIMD");
                 });
         assertThatThrownBy(() -> userService.register(1L, 10001L, new McpThirdPartyServerSupport.Upsert(
-                "crm", "CRM", "https://crm.example.com/mcp",
+                "crm", "CRM", "https://198.51.100.10/mcp",
                 null, "OAUTH", null, null, null, true)))
                 .isInstanceOfSatisfying(BusinessException.class, e ->
                         assertThat(e.getCode()).isEqualTo(501));
@@ -109,15 +109,15 @@ class McpThirdPartyServerServiceTests {
     @DisplayName("transport 仅 streamable-http;STATIC_HEADER 缺头名/头值拒绝")
     void transportAndStaticHeaderValidation() {
         assertThatThrownBy(() -> appService.register(new McpThirdPartyServerSupport.Upsert(
-                "crm", "CRM", "https://crm.example.com/mcp",
+                "crm", "CRM", "https://198.51.100.10/mcp",
                 "sse", null, null, null, null, true)))
                 .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> appService.register(new McpThirdPartyServerSupport.Upsert(
-                "crm", "CRM", "https://crm.example.com/mcp",
+                "crm", "CRM", "https://198.51.100.10/mcp",
                 null, "STATIC_HEADER", null, "secret", null, true)))
                 .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> appService.register(new McpThirdPartyServerSupport.Upsert(
-                "crm", "CRM", "https://crm.example.com/mcp",
+                "crm", "CRM", "https://198.51.100.10/mcp",
                 null, "STATIC_HEADER", "X-Api-Key", null, null, true)))
                 .isInstanceOf(BusinessException.class);
     }
@@ -251,7 +251,7 @@ class McpThirdPartyServerServiceTests {
     private static McpThirdPartyServerSupport.Upsert upsertWithCredentials(
             String serverKey, String credentials) {
         return new McpThirdPartyServerSupport.Upsert(
-                serverKey, "CRM 线索", "https://crm.example.com/mcp",
+                serverKey, "CRM 线索", "https://198.51.100.10/mcp",
                 null, null, "X-Api-Key", credentials, 45, true);
     }
 
@@ -327,7 +327,7 @@ class McpThirdPartyServerServiceTests {
     @DisplayName("启停/更新/删除均触发失效;invalidator 缺席时静默跳过")
     void invalidationHooks() {
         McpServerConfig existing = McpServerConfig.builder()
-                .appId(1L).serverKey("crm").endpointUrl("https://crm.example.com/mcp")
+                .appId(1L).serverKey("crm").endpointUrl("https://198.51.100.10/mcp")
                 .transport("streamable-http").authType("STATIC_HEADER")
                 .headerName("X-Api-Key").credentials("old").timeoutSeconds(30).enabled(true)
                 .build();

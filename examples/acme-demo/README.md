@@ -79,7 +79,7 @@ IA_ADMIN_KEY=<你的 IA_ADMIN_KEY> \
 mvn spring-boot:run
 ```
 
-- 启动日志应有 starter 桥的注册行(3 个宿主工具 @ /ia-mcp);
+- 启动日志应有 starter 桥的注册行(4 个宿主工具 @ /ia-mcp);
 - Swagger 调试页:<http://localhost:9300/swagger-ui.html>。
 
 ### 3. 宿主前端(Node 20.19+/22.12+,pnpm)

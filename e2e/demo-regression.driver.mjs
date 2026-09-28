@@ -119,7 +119,9 @@ async function sendChat(text) {
 // ============================================================
 await runCase('L0-1', '站点框架', '首页可达且渲染品牌区', async (e) => {
   await page.goto(BASE + '/')
-  await page.waitForLoadState('domcontentloaded')
+  // CI 冷启动加固(2026-09-28,run 36398364351 白屏):Vite dev 下 SPA 挂载
+  // 晚于 domcontentloaded,立即读 innerText 是空串 —— 轮询等品牌文案真实渲染
+  await page.waitForFunction(() => /ACME|InnerAgent/i.test(document.body.innerText), null, { timeout: 15000 })
   const text = await page.locator('body').innerText()
   if (!/ACME|InnerAgent/i.test(text)) throw new Error('首页未见品牌文案')
   e.shots.push(await shot('L0-1-home.png'))

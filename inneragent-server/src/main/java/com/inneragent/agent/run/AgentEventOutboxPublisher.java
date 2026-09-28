@@ -35,6 +35,14 @@ public class AgentEventOutboxPublisher {
     private static final long MIN_RETRY_MILLIS = 100;
     private static final long MAX_RETRY_MILLIS = 30_000;
 
+    /**
+     * [O-1] 批内 Redis 唤醒的并发度。Lettuce 反应式连接对未决命令在同一
+     * TCP 连接上天然按 pipeline 复用,flatMap 并发订阅即等效批量发布——
+     * 单批 200 行的唤醒从 200 次串行往返收敛为 ~2 波并发往返。上限同时
+     * 约束单批在途命令数,避免积压洪峰打满 Redis 连接。
+     */
+    private static final int WAKEUP_PIPELINE_CONCURRENCY = 128;
+
     private final AgentEventMapper eventMapper;
     private final AgentRunMapper runMapper;
     private final PlatformTransactionManager transactionManager;
@@ -49,34 +57,108 @@ public class AgentEventOutboxPublisher {
                 metrics, "metrics must not be null");
     }
 
+    /**
+     * [O-1] 批量发布三段式:认领(单条批量 UPDATE)→ 批内唤醒并行派发
+     * (Lettuce pipeline)→ 整批一次 UPDATE ack;失败个体回退逐条退避,
+     * 单事件失败不拖死整批。语义与旧逐条路径一致(at-least-once、
+     * 30s 租约守卫、退避与脱敏),批内主要往返从 O(n) 降到 O(常数)。
+     */
     public Mono<Void> publishBatch(String owner, int limit) {
         String claimToken = claimToken(owner);
         int safeLimit = requireLimit(limit);
         return Mono.fromCallable(() -> claim(claimToken, safeLimit))
                 .subscribeOn(schedulers.journal())
-                .flatMapMany(Flux::fromIterable)
-                .concatMap(event -> publishOne(claimToken, event))
+                .flatMap(claimed -> publishClaimed(claimToken, claimed))
                 .then(refreshBacklog());
     }
 
-    private Mono<Void> publishOne(String claimToken, AgentEvent event) {
-        return signals.publishWakeup(event.getRunId(), event.getSequenceNo())
-                .then(markPublished(event.getId(), claimToken))
-                .flatMap(marked -> marked
+    private Mono<Void> publishClaimed(String claimToken, List<AgentEvent> claimed) {
+        if (claimed.isEmpty()) {
+            return Mono.empty();
+        }
+        return dispatchWakeups(claimed)
+                .flatMap(outcomes -> settle(claimToken, outcomes))
+                .then();
+    }
+
+    /** 批内唤醒并行派发;逐事件错误隔离为 {@link WakeupOutcome}。 */
+    private Mono<List<WakeupOutcome>> dispatchWakeups(List<AgentEvent> claimed) {
+        return Flux.fromIterable(claimed)
+                .flatMap(this::dispatchWakeup, WAKEUP_PIPELINE_CONCURRENCY)
+                .collectList();
+    }
+
+    private Mono<WakeupOutcome> dispatchWakeup(AgentEvent event) {
+        // defer:runId/sequence 校验同步抛出时也退化为单事件失败,不中断整批
+        return Mono.defer(() ->
+                        signals.publishWakeup(event.getRunId(), event.getSequenceNo()))
+                .thenReturn(new WakeupOutcome(event, null))
+                .onErrorResume(failure ->
+                        Mono.just(new WakeupOutcome(event, failure)));
+    }
+
+    private Mono<Void> settle(String claimToken, List<WakeupOutcome> outcomes) {
+        List<AgentEvent> published = outcomes.stream()
+                .filter(WakeupOutcome::succeeded)
+                .map(WakeupOutcome::event)
+                .toList();
+        List<WakeupOutcome> failed = outcomes.stream()
+                .filter(outcome -> !outcome.succeeded())
+                .toList();
+        return acknowledgePublished(claimToken, published)
+                .then(releaseFailedWakeups(claimToken, failed));
+    }
+
+    /** 成功路径一次 UPDATE ... IN;返回行数不足(租约被抢)时回退逐条判定。 */
+    private Mono<Void> acknowledgePublished(
+            String claimToken, List<AgentEvent> published) {
+        if (published.isEmpty()) {
+            return Mono.empty();
+        }
+        return Mono.fromCallable(() -> eventMapper.markPublishedBatch(
+                        claimToken, eventIds(published)))
+                .subscribeOn(schedulers.journal())
+                .flatMap(updated -> updated == published.size()
                         ? Mono.<Void>empty()
-                        : Mono.error(new OutboxClaimLostException(event.getId())))
-                .onErrorResume(failure -> releaseForRetry(
-                                event, claimToken, failure)
-                        .doOnNext(released -> logPublishFailure(
-                                event.getId(), failure, released))
-                        .onErrorResume(releaseFailure -> {
-                            log.error(
-                                    "Agent outbox retry release failed: eventId={}, type={}",
-                                    event.getId(),
-                                    releaseFailure.getClass().getSimpleName());
-                            return Mono.empty();
-                        })
-                        .then());
+                        : acknowledgeIndividually(claimToken, published))
+                .then();
+    }
+
+    /** 旧逐条 ack 路径:仅在批量返回行数不符时触发。 */
+    private Mono<Void> acknowledgeIndividually(
+            String claimToken, List<AgentEvent> published) {
+        return Flux.fromIterable(published)
+                .concatMap(event -> markPublished(event.getId(), claimToken)
+                        .flatMap(marked -> marked
+                                ? Mono.<Void>empty()
+                                : Mono.error(
+                                        new OutboxClaimLostException(event.getId())))
+                        .onErrorResume(failure ->
+                                releaseForRetryAndLog(event, claimToken, failure)))
+                .then();
+    }
+
+    private Mono<Void> releaseFailedWakeups(
+            String claimToken, List<WakeupOutcome> failed) {
+        return Flux.fromIterable(failed)
+                .concatMap(outcome -> releaseForRetryAndLog(
+                        outcome.event(), claimToken, outcome.failure()))
+                .then();
+    }
+
+    private Mono<Void> releaseForRetryAndLog(
+            AgentEvent event, String claimToken, Throwable failure) {
+        return releaseForRetry(event, claimToken, failure)
+                .doOnNext(released -> logPublishFailure(
+                        event.getId(), failure, released))
+                .onErrorResume(releaseFailure -> {
+                    log.error(
+                            "Agent outbox retry release failed: eventId={}, type={}",
+                            event.getId(),
+                            releaseFailure.getClass().getSimpleName());
+                    return Mono.empty();
+                })
+                .then();
     }
 
     private List<AgentEvent> claim(String claimToken, int limit) {
@@ -101,14 +183,21 @@ public class AgentEventOutboxPublisher {
             candidates.addAll(eventMapper.selectExpiredPublishCandidatesForUpdate(
                     databaseNow, remaining));
         }
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
         LocalDateTime claimUntil = databaseNow.plus(CLAIM_LEASE);
+        // [O-1] 行已在同事务内 FOR UPDATE 锁定,一次 UPDATE ... IN 完成整批
+        // 认领;守卫与旧逐行 UPDATE 一致,行数不符即回滚(防御分支)。
+        List<Long> candidateIds = eventIds(candidates);
+        int claimedCount = eventMapper.claimPublishCandidatesBatch(
+                claimToken, claimUntil, databaseNow, candidateIds);
+        if (claimedCount != candidates.size()) {
+            throw new IllegalStateException(
+                    "Agent outbox claim changed while its row was locked: claimed="
+                            + claimedCount + ", expected=" + candidates.size());
+        }
         for (AgentEvent event : candidates) {
-            if (eventMapper.claimPublishCandidate(
-                    event.getId(), claimToken, claimUntil, databaseNow) != 1) {
-                throw new IllegalStateException(
-                        "Agent outbox claim changed while its row was locked: "
-                                + event.getId());
-            }
             event.setPublishStatus("CLAIMED");
             event.setPublishClaimOwner(claimToken);
             event.setPublishClaimUntil(claimUntil);
@@ -199,6 +288,18 @@ public class AgentEventOutboxPublisher {
                     "limit must be between 1 and " + MAX_BATCH_SIZE);
         }
         return limit;
+    }
+
+    private static List<Long> eventIds(List<AgentEvent> events) {
+        return events.stream().map(AgentEvent::getId).toList();
+    }
+
+    /** 单事件唤醒结果:成功为 null failure;失败携带异常供逐条退避回退。 */
+    private record WakeupOutcome(AgentEvent event, Throwable failure) {
+
+        boolean succeeded() {
+            return failure == null;
+        }
     }
 
     private static final class OutboxClaimLostException extends IllegalStateException {

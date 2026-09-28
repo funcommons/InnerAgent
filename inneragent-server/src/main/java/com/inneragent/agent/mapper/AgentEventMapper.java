@@ -76,6 +76,39 @@ public interface AgentEventMapper extends BaseMapper<AgentEvent> {
             @Param("claimUntil") LocalDateTime claimUntil,
             @Param("now") LocalDateTime now);
 
+    /**
+     * [O-1] 批量认领:调用方已在同一事务内以 FOR UPDATE SKIP LOCKED 锁定
+     * 候选行,守卫与 {@link #claimPublishCandidate} 完全一致,单条
+     * UPDATE ... IN 完成整批认领(每批 O(n) 次往返 → O(1) 次)。
+     *
+     * @return 实际认领行数;与候选数不符说明行在锁外被改动,调用方必须回滚
+     */
+    @Update("""
+            <script>
+            UPDATE ia_agent_event
+            SET publish_status = 'CLAIMED',
+                publish_claim_owner = #{claimOwner},
+                publish_claim_until = #{claimUntil},
+                publish_attempts = publish_attempts + 1,
+                next_publish_attempt_at = NULL
+            WHERE publish_required = TRUE
+              AND id IN
+              <foreach collection="eventIds" item="eventId" open="(" separator="," close=")">#{eventId}</foreach>
+              AND (
+                    (publish_status = 'PENDING'
+                     AND (next_publish_attempt_at IS NULL
+                          OR next_publish_attempt_at &lt;= #{now}))
+                 OR (publish_status = 'CLAIMED'
+                     AND publish_claim_until &lt;= #{now})
+              )
+            </script>
+            """)
+    int claimPublishCandidatesBatch(
+            @Param("claimOwner") String claimOwner,
+            @Param("claimUntil") LocalDateTime claimUntil,
+            @Param("now") LocalDateTime now,
+            @Param("eventIds") List<Long> eventIds);
+
     @Update("""
             UPDATE ia_agent_event
             SET publish_status = 'PUBLISHED',
@@ -92,6 +125,32 @@ public interface AgentEventMapper extends BaseMapper<AgentEvent> {
     int markPublished(
             @Param("eventId") long eventId,
             @Param("claimOwner") String claimOwner);
+
+    /**
+     * [O-1] 批量 ack:守卫与 {@link #markPublished} 完全一致(认领令牌匹配
+     * 且 30s 租约未过期),整批成功唤醒后一次 UPDATE ... IN 完成。
+     *
+     * @return 实际更新行数;少于入参数量说明有事件租约被抢,调用方回退逐条判定
+     */
+    @Update("""
+            <script>
+            UPDATE ia_agent_event
+            SET publish_status = 'PUBLISHED',
+                redis_published_at = (clock_timestamp() AT TIME ZONE 'UTC'),
+                publish_claim_owner = NULL,
+                publish_claim_until = NULL,
+                next_publish_attempt_at = NULL,
+                last_publish_error = NULL
+            WHERE publish_status = 'CLAIMED'
+              AND publish_claim_owner = #{claimOwner}
+              AND publish_claim_until > (clock_timestamp() AT TIME ZONE 'UTC')
+              AND id IN
+              <foreach collection="eventIds" item="eventId" open="(" separator="," close=")">#{eventId}</foreach>
+            </script>
+            """)
+    int markPublishedBatch(
+            @Param("claimOwner") String claimOwner,
+            @Param("eventIds") List<Long> eventIds);
 
     @Update("""
             UPDATE ia_agent_event

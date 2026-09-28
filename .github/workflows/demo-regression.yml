@@ -1,0 +1,173 @@
+# =============================================================================
+# demo-regression — acme-demo 24 用例全量回归(CI canned mock 模型)
+#
+# 2026-09-28,计划.md §10(driver 转正的最后一公里,§9.7-2 销账):
+#   - e2e/specs-demo/demo-regression.wrapper.spec.ts 单测驱动
+#     e2e/demo-regression.driver.mjs(单一事实源),按仓库根 results.json 断言;
+#   - 六服务在本 job 内拉起(PG/Redis 走 services,其余后台进程);
+#   - 模型用 mock-text 规则式脚本(provision.sh ACME_SEED_MOCK_MODEL=1 →
+#     seeds/mock-model-script.sql),不依赖任何真实 LLM;
+#   - 恢复/复跑要点见 seeds/mock-model-script.sql 头注释与 计划.md §0。
+# =============================================================================
+
+name: demo-regression
+
+on:
+  schedule:
+    - cron: '25 18 * * *' # UTC 18:25 = 北京 02:25,避开整点高峰
+  workflow_dispatch:
+
+concurrency:
+  group: demo-regression
+  cancel-in-progress: true
+
+jobs:
+  demo-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        ports:
+          - '35432:5432'
+        env:
+          POSTGRES_USER: inneragent
+          POSTGRES_PASSWORD: inneragent
+          POSTGRES_DB: inneragent
+        options: >-
+          --health-cmd "pg_isready -U inneragent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - '36379:6379'
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 安装 pnpm 与 psql 客户端
+        run: |
+          npm i -g pnpm@9
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: 构建管理台 web(dist,gateway 静态服务对象)
+        run: |
+          cd web
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: 构建 InnerAgent 主服务 jar(含 MockAiProvider 规则式脚本)
+        run: |
+          cd inneragent-server
+          mvn -B -q -DskipTests package
+
+      - name: 启动 InnerAgent 主服务(18090;启动 env 三件套见 计划.md §0/§8.9)
+        run: |
+          cd inneragent-server
+          IA_ADMIN_KEY=test-key \
+          IA_ADMIN_BOOTSTRAP_USERNAME=admin \
+          IA_ADMIN_BOOTSTRAP_PASSWORD='Admin#12345' \
+          IA_DB_PORT=35432 IA_REDIS_PORT=36379 \
+          IA_CORS_ALLOWED_ORIGINS=http://localhost:9203,http://localhost:18081 \
+          nohup java -jar target/inneragent-server-0.1.0-SNAPSHOT.jar > /tmp/ia-server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:18090/.well-known/jwks.json >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:18090/.well-known/jwks.json >/dev/null \
+            || { tail -100 /tmp/ia-server.log; exit 1; }
+
+      - name: 启动管理台网关(18081 = 静态 web/dist + /ia 反代)
+        run: |
+          node e2e/gateway.mjs > /tmp/ia-gateway.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:18081 >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:18081 >/dev/null || { tail -50 /tmp/ia-gateway.log; exit 1; }
+
+      - name: provisioning(acme-demo 五场景)+ 播种 canned mock 模型
+        run: zsh examples/acme-demo/seeds/provision.sh
+        env:
+          IA_BASE_URL: http://localhost:18090
+          IA_ADMIN_KEY: test-key
+          ACME_SEED_MOCK_MODEL: '1'
+          ACME_PG_CONTAINER: 'inneragent-postgres' # services 容器名与本地一致即可复用 seeds SQL
+
+      - name: 启动 demo 后端(9300;签名私钥来自 provision 生成的 seeds/.local/host.key)
+        run: |
+          cd examples/acme-demo/backend
+          IA_SERVER_BASE=http://localhost:18090 \
+          IA_APP_KEY=acme-demo \
+          IA_SIGN_PRIVATE_KEY="$(cat ../../seeds/.local/host.key)" \
+          IA_WEBHOOK_SECRET=whsec-acme-demo-seed \
+          IA_ADMIN_KEY=test-key \
+          nohup mvn -B -q -DskipTests spring-boot:run > /tmp/acme-backend.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -sf http://localhost:9300/api/demo/config >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:9300/api/demo/config >/dev/null \
+            || { tail -100 /tmp/acme-backend.log; exit 1; }
+
+      - name: 启动 demo 前端(9203,Vite dev)
+        run: |
+          cd examples/acme-demo/frontend
+          pnpm install --frozen-lockfile
+          nohup pnpm dev > /tmp/acme-frontend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:9203 >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:9203 >/dev/null \
+            || { tail -50 /tmp/acme-frontend.log; exit 1; }
+
+      - name: 启动三方 MCP echo(9401)
+        run: |
+          node examples/acme-demo/seeds/mcp-third-party/server.mjs > /tmp/acme-echo.log 2>&1 &
+          sleep 2
+
+      - name: e2e 依赖(npm ci + playwright chromium)
+        run: |
+          cd e2e
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: demo 全量回归(24 用例,canned mock)
+        run: |
+          cd e2e
+          npm run test:demo-regression
+
+      - name: 上传回归产物(无论成败)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-regression-artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            results.json
+            assets/
+            /tmp/ia-server.log
+            /tmp/ia-gateway.log
+            /tmp/acme-backend.log
+            /tmp/acme-frontend.log
+            /tmp/acme-echo.log

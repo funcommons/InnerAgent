@@ -352,6 +352,20 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# [opt] CI canned mock 模型(ACME_SEED_MOCK_MODEL=1 启用;2026-09-28 计划.md §10)
+# mock-text 行由 V4__demo_seed.sql 预置;此处经 psql 写入规则脚本并设为默认。
+# 恢复真实模型默认位:seeds/mock-model-restore.sql
+if [[ "${ACME_SEED_MOCK_MODEL:-0}" == "1" ]]; then
+  step "[opt] CI canned mock 模型播种(mock-text 规则脚本 + 默认位)"
+  PG_CONTAINER="${ACME_PG_CONTAINER:-inneragent-postgres}"
+  docker exec -i "$PG_CONTAINER" \
+    psql -U "${ACME_PG_USER:-inneragent}" -d "${ACME_PG_DB:-inneragent}" -v ON_ERROR_STOP=1 \
+    < "$SEEDS_DIR/mock-model-script.sql" \
+    || fail "mock 模型播种失败(容器 $PG_CONTAINER 是否在跑?)"
+  ok "mock-text 已设为默认对话模型(rules 单一事实源: mock-model-script.sql)"
+fi
+
+# ---------------------------------------------------------------------------
 step "能力矩阵小结(5 场景 × 能力)"
 cat <<'MATRIX'
   场景 agentType        桥工具(WRITE 确认)   KB 检索   Skill 注入   子 Agent 编排

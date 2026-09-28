@@ -142,6 +142,141 @@ class MockAiProviderTests {
     }
 
     // ------------------------------------------------------------------
+    // [adapt] CI-canned 规则式形态(mockScript.rules;2026-09-28)
+    // ------------------------------------------------------------------
+
+    @Test
+    void rulesFormMatchesUserTextAndCallsToolWithCapturedArgs() {
+        ChatModelBase model = model(Map.of(
+                "deltaMs", 0,
+                "rules", List.of(Map.of(
+                        "match", "帮我建一张工单:标题=(.+?),描述=(.+?),优先级=(\\w+)",
+                        "tool", "create_ticket",
+                        "args", Map.of("title", "$1", "description", "$2", "priority", "$3"),
+                        "reply", "工单「$1」已创建成功:优先级=$3。")),
+                "default", "我是 ACME 演示助手(mock 脚本模型)。"));
+        List<ToolSchema> toolkit = tools("get_current_time", "create_ticket");
+
+        // 第 1 轮:命中规则,按捕获组注入工具入参
+        List<ChatResponse> first = model.stream(
+                List.of(userTextMessage("帮我建一张工单:标题=T-9,描述=d,优先级=high")),
+                toolkit, options()).collectList().block();
+        ToolUseBlock call = soleToolCall(first);
+        assertThat(call.getName()).isEqualTo("create_ticket");
+        assertThat(call.getInput())
+                .containsEntry("title", "T-9")
+                .containsEntry("description", "d")
+                .containsEntry("priority", "high");
+
+        // 第 2 轮(工具结果在用户消息之后):同规则进入回复段,捕获替换生效
+        List<ChatResponse> second = model.stream(
+                List.of(
+                        userTextMessage("帮我建一张工单:标题=T-9,描述=d,优先级=high"),
+                        toolResultMessage("{\"status\":\"success\"}")),
+                toolkit, options()).collectList().block();
+        assertThat(allText(second)).contains("工单「T-9」已创建成功:优先级=high。");
+        assertThat(second.getLast().getFinishReason()).isEqualTo("stop");
+    }
+
+    @Test
+    void rulesFormFallsBackToDefaultReplyWhenNoRuleMatches() {
+        ChatModelBase model = model(Map.of(
+                "deltaMs", 0,
+                "rules", List.of(Map.of("match", "建一张工单", "reply", "工单")),
+                "default", "我是 ACME 演示助手,可处理工单与知识库问答。"));
+
+        List<ChatResponse> responses = model.stream(
+                List.of(userTextMessage("你好,请介绍一下自己。")),
+                tools("get_current_time"), options()).collectList().block();
+
+        assertThat(allText(responses)).contains("我是 ACME 演示助手");
+        assertThat(responses.getLast().getFinishReason()).isEqualTo("stop");
+    }
+
+    @Test
+    void rulesFormEmitsCannedCitationForKbScenario() {
+        ChatModelBase model = model(Map.of(
+                "deltaMs", 0,
+                "rules", List.of(Map.of(
+                        "match", "年假",
+                        "reply", "按《员工手册》:年假 5 天起。[KB:demo-kb-annual-leave]")),
+                "default", "默认回复"));
+
+        List<ChatResponse> responses = model.stream(
+                List.of(userTextMessage("年假有几天?")),
+                tools("kb_search"), options()).collectList().block();
+
+        assertThat(allText(responses)).contains("[KB:");
+    }
+
+    @Test
+    void rulesFormResolvesMcpFqnToolBySuffix() {
+        // 宿主桥/MCP 工具在 toolkit 中是 mcp__<appKey>__<name> FQN;规则写裸名
+        ChatModelBase model = model(Map.of(
+                "deltaMs", 0,
+                "rules", List.of(Map.of(
+                        "match", "帮我建一张工单:标题=(.+?)，",
+                        "tool", "create_ticket",
+                        "args", Map.of("title", "$1"),
+                        "reply", "工单「$1」已创建成功。")),
+                "default", "默认回复"));
+
+        List<ChatResponse> first = model.stream(
+                List.of(userTextMessage("帮我建一张工单:标题=T-9，描述=d")),
+                tools("mcp__acme-demo__create_ticket", "get_current_time"),
+                options()).collectList().block();
+
+        ToolUseBlock call = soleToolCall(first);
+        assertThat(call.getName()).isEqualTo("mcp__acme-demo__create_ticket");
+        assertThat(call.getInput()).containsEntry("title", "T-9");
+    }
+
+    @Test
+    void rulesFormSkipsToolPhaseWhenToolMissingFromToolkit() {
+        ChatModelBase model = model(Map.of(
+                "deltaMs", 0,
+                "rules", List.of(Map.of(
+                        "match", "建一张工单",
+                        "tool", "not_registered_tool",
+                        "reply", "工单通道暂不可用,请稍后再试。")),
+                "default", "默认回复"));
+
+        List<ChatResponse> responses = model.stream(
+                List.of(userTextMessage("帮我建一张工单:标题=T")),
+                tools("create_ticket"), options()).collectList().block();
+
+        assertThat(responses.getLast().getFinishReason()).isEqualTo("stop");
+        assertThat(allText(responses)).contains("工单通道暂不可用");
+    }
+
+    @Test
+    void rulesFormSkipsBlankConfirmMetadataMessageOnResume() {
+        // 确认恢复链路:confirm 元数据消息(role=user,无文本)不改变
+        // 「最后一条用户文本」定位,恢复后仍命中原规则并进入回复段
+        ChatModelBase model = model(Map.of(
+                "deltaMs", 0,
+                "rules", List.of(Map.of(
+                        "match", "帮我建一张工单:标题=(.+?)，",
+                        "tool", "create_ticket",
+                        "args", Map.of("title", "$1"),
+                        "reply", "工单「$1」已创建成功。")),
+                "default", "默认回复"));
+        Msg userText = userTextMessage("帮我建一张工单:标题=T-9，描述=d");
+        List<ChatResponse> first = model.stream(
+                List.of(userText), tools("create_ticket"), options()).collectList().block();
+        assertThat(soleToolCall(first).getName()).isEqualTo("create_ticket");
+
+        List<ChatResponse> resumed = model.stream(
+                List.of(
+                        userText,
+                        toolResultMessage("{\"status\":\"success\"}"),
+                        blankUserMessage()),
+                tools("create_ticket"), options()).collectList().block();
+
+        assertThat(allText(resumed)).contains("工单「T-9」已创建成功");
+    }
+
+    // ------------------------------------------------------------------
     // parseScript 配置形态
     // ------------------------------------------------------------------
 
@@ -201,6 +336,15 @@ class MockAiProviderTests {
 
     private static Msg userMessage() {
         return Msg.builder().textContent("现在几点了?").build();
+    }
+
+    private static Msg userTextMessage(String text) {
+        return Msg.builder().textContent(text).build();
+    }
+
+    /** 确认恢复链路注入的 confirm 元数据消息:role=user 且无文本。 */
+    private static Msg blankUserMessage() {
+        return Msg.builder().role(io.agentscope.core.message.MsgRole.USER).content(List.of()).build();
     }
 
     private static Msg toolResultMessage(String json) {

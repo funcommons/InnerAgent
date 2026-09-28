@@ -5,6 +5,7 @@ import cn.hutool.json.JSONUtil;
 import com.inneragent.server.controller.vo.RemoteModelVO;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
@@ -23,10 +24,13 @@ import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * <strong>Mock 模型提供商(platform 常量 {@code mock})——仅用于 P0 冒烟与测试,生产环境禁用!</strong>
@@ -50,6 +54,14 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>启用方式(无需任何开关):{@code ia_model_api_config.platform='mock'} 且
  * {@code text_protocol='mock'},并挂接一条 {@code ia_ai_model} 记录(见
  * {@code V4__demo_seed.sql});模型请求协议解析为 {@code mock} 即命中本 Provider。
+ *
+ * <p>[adapt] CI-canned(2026-09-28):规则式脚本——{@code mockScript} 取
+ * {@code {"rules":[{"match":"正则","tool":"工具","args":{…},"reply":"固定回复"},…],
+ * "default":"兜底回复","deltaMs":60}} 对象形态时,按「最后一条用户文本」顺序
+ * 匹配规则:先(可选)发起工具调用({@code $1..$9} 注入捕获组),工具结果
+ * 回灌后流式输出 {@code reply};全部未命中走 {@code default}。demo 全量回归
+ * 的 CI 化(24 用例不依赖真实模型)由此驱动,规则与 driver 话术一一对应
+ * (见 {@code examples/acme-demo/seeds/mock-model-script.sql})。
  *
  * <p>风险提示:mock 模型的回复是脚本固定文案,不是真实模型推理结果。演示部署若把它
  * 配成默认对话模型,用户可能误以为在和一个真模型对话——因此生产环境严禁保留该配置,
@@ -75,6 +87,13 @@ public class MockAiProvider implements AiProvider {
     static final String SCRIPT_TOOL_FIELD = "tool";
     static final String SCRIPT_ARGS_FIELD = "args";
     static final String SCRIPT_ROUNDS_FIELD = "rounds";
+
+    /** [adapt] CI-canned(2026-09-28):规则式脚本的子键(mockScript 对象形态)。 */
+    static final String SCRIPT_RULES_FIELD = "rules";
+    static final String SCRIPT_MATCH_FIELD = "match";
+    static final String SCRIPT_REPLY_FIELD = "reply";
+    static final String SCRIPT_DEFAULT_FIELD = "default";
+    static final String SCRIPT_DELTA_MS_FIELD = "deltaMs";
 
     /** 脚本会主动调用的内置工具名(legacy 形态;无脚本配置时保持 P0 行为)。 */
     private static final String TIME_TOOL = "get_current_time";
@@ -129,10 +148,13 @@ public class MockAiProvider implements AiProvider {
 
     @Override
     public ChatModelBase createAgentScopeModel(AiProviderContext context) {
+        Object rawScript = context == null ? null : context.getConfig().get(SCRIPT_CONFIG_KEY);
+        // 规则式对象形态优先(命中即不进 legacy/轮次脚本解析,二者互斥)
+        MockScriptPlan plan = parsePlan(rawScript);
         return new MockChatModelBase(
                 resolveModelName(context),
-                parseScript(context == null ? null : context.getConfig()
-                        .get(SCRIPT_CONFIG_KEY)));
+                plan == null ? parseScript(rawScript) : null,
+                plan);
     }
 
     @Override
@@ -226,19 +248,94 @@ public class MockAiProvider implements AiProvider {
     }
 
     /**
+     * [adapt] CI-canned(2026-09-28):规则式脚本单条——正则命中「最后一条用户文本」
+     * 后,先(可选)按 {@code tool+args} 发起工具调用(正则捕获组可经 {@code $1..$9}
+     * 注入确定性入参),工具结果回灌后的下一轮调用流式输出 {@code reply}
+     * (同样支持捕获替换)。
+     */
+    record MockRule(Pattern match, ScriptedCall toolCall, String reply) {
+    }
+
+    /**
+     * [adapt] CI-canned(2026-09-28):规则式脚本整体——{@code mockScript} 的
+     * {@code {"rules":[{"match":..,"tool":..,"args":..,"reply":..},…],
+     * "default":"…","deltaMs":60}} 对象形态。规则按声明序匹配、命中即止;
+     * 全部未命中走 {@code default}(缺省回落 legacy 文案)。CI 的 demo 全量
+     * 回归依赖它在不依赖真实模型的前提下满足 L4–L8 全部断言
+     * (规则即 seeds/mock-model-script.sql 的单一事实源)。
+     */
+    record MockScriptPlan(List<MockRule> rules, String defaultReply, Duration deltaInterval) {
+
+        MockScriptPlan {
+            rules = rules == null ? List.of() : List.copyOf(rules);
+        }
+    }
+
+    /**
+     * 解析 {@code mockScript} 的规则式对象形态;非该形态(或缺 rules/规则全无效)
+     * 返回 {@code null} 交回 legacy/轮次脚本解析,不阻断运行。
+     */
+    MockScriptPlan parsePlan(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)
+                || map.get(SCRIPT_ROUNDS_FIELD) != null
+                || map.get(SCRIPT_TOOL_FIELD) != null
+                || !(map.get(SCRIPT_RULES_FIELD) instanceof List<?> items)
+                || items.isEmpty()) {
+            // 非「规则式对象」形态(legacy rounds/tool 形态或其他)→ 交回 parseScript
+            return null;
+        }
+        List<MockRule> rules = new ArrayList<>();
+        for (Object item : items) {
+            if (!(item instanceof Map<?, ?> rule)) {
+                continue;
+            }
+            if (!(rule.get(SCRIPT_MATCH_FIELD) instanceof String expr) || expr.isBlank()) {
+                log.warn("[mock] 规则缺 match 正则,跳过: {}", rule);
+                continue;
+            }
+            ScriptedCall toolCall = null;
+            if (rule.get(SCRIPT_TOOL_FIELD) instanceof String toolName && !toolName.isBlank()) {
+                toolCall = ScriptedCall.of(toolName.trim(), argsOf(rule.get(SCRIPT_ARGS_FIELD)));
+            }
+            String reply = rule.get(SCRIPT_REPLY_FIELD) instanceof String text && !text.isBlank()
+                    ? text
+                    : null;
+            rules.add(new MockRule(Pattern.compile(expr), toolCall, reply));
+        }
+        if (rules.isEmpty()) {
+            log.warn("[mock] mockScript.rules 无有效规则,回退 legacy 解析: {}", raw);
+            return null;
+        }
+        String defaultReply = map.get(SCRIPT_DEFAULT_FIELD) instanceof String text && !text.isBlank()
+                ? text
+                : null;
+        Duration delta = map.get(SCRIPT_DELTA_MS_FIELD) instanceof Number millis && millis.longValue() >= 0
+                ? Duration.ofMillis(millis.longValue())
+                : DELTA_INTERVAL;
+        return new MockScriptPlan(rules, defaultReply, delta);
+    }
+
+    /**
      * 确定性脚本化的 AgentScope 模型:按脚本发起工具调用,看到工具结果后流式输出
-     * 固定模板文案。无状态、线程安全、完全确定性。脚本为空(null)时保持
-     * legacy 形态:get_current_time 优先,结果回灌后按固定模板收尾。
+     * 固定模板文案。无状态、线程安全、完全确定性。三种互斥形态:
+     * <ol>
+     *   <li>规则式({@code plan != null},CI-canned):按用户话术正则匹配;</li>
+     *   <li>轮次脚本({@code script 非空}):按工具结果个数推进;</li>
+     *   <li>legacy({@code script == null && plan == null}):get_current_time。</li>
+     * </ol>
      */
     private final class MockChatModelBase extends ChatModelBase {
 
         private final String modelName;
         /** [adapt] U1/D2:脚本(可能为 null=legacy);工具名在 toolkit 缺失时按轮跳过。 */
         private final List<ScriptedCall> script;
+        /** [adapt] CI-canned:规则式脚本(非 null 时优先于 {@link #script})。 */
+        private final MockScriptPlan plan;
 
-        private MockChatModelBase(String modelName, List<ScriptedCall> script) {
+        private MockChatModelBase(String modelName, List<ScriptedCall> script, MockScriptPlan plan) {
             this.modelName = Objects.requireNonNull(modelName, "modelName must not be null");
             this.script = script;
+            this.plan = plan;
         }
 
         @Override
@@ -250,6 +347,9 @@ public class MockAiProvider implements AiProvider {
         protected Flux<ChatResponse> doStream(
                 List<Msg> messages, List<ToolSchema> tools, GenerateOptions options) {
             return Flux.defer(() -> {
+                if (plan != null) {
+                    return planFlux(messages, tools);
+                }
                 List<String> toolResults = toolResultTexts(messages);
                 String lastToolResult = toolResults.isEmpty() ? null : toolResults.getLast();
                 if (script == null) {
@@ -287,6 +387,161 @@ public class MockAiProvider implements AiProvider {
                                 .map(ToolSchema::getName).toList());
             }
             return answerFlux(lastToolResult);
+        }
+
+        /**
+         * [adapt] CI-canned:规则式形态——按「最后一条用户文本」顺序匹配规则,
+         * 命中即止。命中规则的本轮工具阶段以「该用户消息之后是否已有工具结果」
+         * 判界(0=先发起脚本工具调用,≥1=流式输出回复);多轮会话中每条新
+         * 用户消息自然重置计数,与轮次脚本的全局计数互不干扰。
+         */
+        private Flux<ChatResponse> planFlux(List<Msg> messages, List<ToolSchema> tools) {
+            UserTurn turn = lastUserTurn(messages);
+            if (turn.text() != null) {
+                for (MockRule rule : plan.rules()) {
+                    Matcher matcher = rule.match().matcher(turn.text());
+                    if (!matcher.find()) {
+                        continue;
+                    }
+                    ScriptedCall call = rule.toolCall();
+                    if (call != null && turn.toolResultsAfterUser() == 0) {
+                        String resolved = resolveToolName(tools, call.toolName());
+                        if (resolved != null) {
+                            return Flux.just(toolCallResponse(
+                                    resolved, substituteArgs(call.args(), matcher)));
+                        }
+                        log.warn("[mock] 规则工具 {} 不在 toolkit,跳过工具调用直接回复;model 可见工具={}",
+                                call.toolName(),
+                                tools == null ? List.of() : tools.stream()
+                                        .map(ToolSchema::getName).toList());
+                    }
+                    if (rule.reply() != null) {
+                        return answerTextFlux(substituteText(rule.reply(), matcher));
+                    }
+                    break;
+                }
+            }
+            return answerTextFlux(plan.defaultReply() != null
+                    ? plan.defaultReply()
+                    : String.join("", FALLBACK_DELTAS));
+        }
+
+        /** 一次模型调用对应的一个「用户轮次」:最后一条非空用户文本 + 其后工具结果数。 */
+        private record UserTurn(String text, int toolResultsAfterUser) {
+        }
+
+        /**
+         * 定位最后一条非空用户文本消息。确认恢复链路注入的 confirm 元数据消息
+         * 文本为空,自动跳过——恢复后仍命中发起工具调用的原规则(工具结果已
+         * 在其后,自然进入回复段)。
+         */
+        private UserTurn lastUserTurn(List<Msg> messages) {
+            if (messages == null || messages.isEmpty()) {
+                return new UserTurn(null, 0);
+            }
+            int lastUserIndex = -1;
+            for (int i = 0; i < messages.size(); i++) {
+                Msg message = messages.get(i);
+                MsgRole role = message.getRole();
+                if ((role == null || role == MsgRole.USER) && !textOf(message).isBlank()) {
+                    lastUserIndex = i;
+                }
+            }
+            if (lastUserIndex < 0) {
+                return new UserTurn(null, 0);
+            }
+            int toolResults = 0;
+            for (int i = lastUserIndex + 1; i < messages.size(); i++) {
+                if (messages.get(i).hasContentBlocks(ToolResultBlock.class)) {
+                    toolResults++;
+                }
+            }
+            return new UserTurn(textOf(messages.get(lastUserIndex)), toolResults);
+        }
+
+        private static String textOf(Msg message) {
+            String text = message.getTextContent();
+            return text == null ? "" : text;
+        }
+
+        /**
+         * 规则工具名解析:精确匹配优先;其次 MCP FQN 后缀
+         * ({@code mcp__<appKey>__<name>} 形态,宿主桥/MCP 工具在 toolkit 中
+         * 携带应用前缀)——规则脚本写裸名即可,发射时解析为 toolkit 真名。
+         */
+        private static String resolveToolName(List<ToolSchema> tools, String name) {
+            if (tools == null) {
+                return null;
+            }
+            for (ToolSchema tool : tools) {
+                if (name.equals(tool.getName())) {
+                    return tool.getName();
+                }
+            }
+            for (ToolSchema tool : tools) {
+                if (tool.getName().endsWith("__" + name)) {
+                    return tool.getName();
+                }
+            }
+            return null;
+        }
+
+        /** 捕获组替换:{@code $1..$9} → 正则捕获组(缺失组保持原样)。 */
+        private static String substituteText(String template, Matcher matcher) {
+            if (template == null || !template.contains("$")) {
+                return template;
+            }
+            String out = template;
+            for (int group = Math.min(matcher.groupCount(), 9); group >= 1; group--) {
+                String captured = matcher.group(group);
+                if (captured != null) {
+                    out = out.replace("$" + group, captured);
+                }
+            }
+            return out;
+        }
+
+        /** 入参捕获替换:仅替换字符串值,其余类型原样透传。 */
+        private static Map<String, Object> substituteArgs(Map<String, Object> args, Matcher matcher) {
+            if (args.isEmpty()) {
+                return args;
+            }
+            Map<String, Object> substituted = new LinkedHashMap<>();
+            args.forEach((key, value) -> substituted.put(
+                    key, value instanceof String text ? substituteText(text, matcher) : value));
+            return substituted;
+        }
+
+        /** 规则/缺省回复的流式输出:按固定长度切块成 delta,末块携带 stop 终态。 */
+        private Flux<ChatResponse> answerTextFlux(String text) {
+            List<String> deltas = splitDeltas(text);
+            String responseId = "mock-resp-" + responseSequence.incrementAndGet();
+            return Flux.range(0, deltas.size())
+                    .map(index -> {
+                        boolean last = index == deltas.size() - 1;
+                        ChatResponse.Builder builder = ChatResponse.builder()
+                                .id(responseId)
+                                .content(List.<ContentBlock>of(TextBlock.builder()
+                                        .text(deltas.get(index))
+                                        .build()));
+                        if (last) {
+                            builder.finishReason("stop")
+                                    .usage(new ChatUsage(MOCK_TOKENS, MOCK_TOKENS, 0d));
+                        }
+                        return builder.build();
+                    })
+                    .delayElements(plan.deltaInterval());
+        }
+
+        private static List<String> splitDeltas(String text) {
+            if (text == null || text.isEmpty()) {
+                return List.of("");
+            }
+            List<String> deltas = new ArrayList<>();
+            for (int i = 0; i < text.length(); i += 40) {
+                deltas.add(text.substring(i, Math.min(text.length(), i + 40)));
+            }
+            return List.copyOf(deltas);
         }
 
         private boolean hasTimeTool(List<ToolSchema> tools) {

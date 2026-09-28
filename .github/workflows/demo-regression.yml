@@ -66,7 +66,7 @@ jobs:
       - name: 安装 pnpm 与 psql 客户端
         run: |
           npm i -g pnpm@11.24.0 # 与本地 lockfile 生成器一致;pnpm 11.x 需 Node ≥22.13
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client zsh
 
       - name: 构建管理台 web(dist,gateway 静态服务对象)
         run: |
@@ -104,13 +104,19 @@ jobs:
           done
           curl -sf http://localhost:18081 >/dev/null || { tail -50 /tmp/ia-gateway.log; exit 1; }
 
-      - name: provisioning(acme-demo 五场景)+ 播种 canned mock 模型
+      - name: provisioning(acme-demo 五场景)
         run: zsh examples/acme-demo/seeds/provision.sh
         env:
           IA_BASE_URL: http://localhost:18090
           IA_ADMIN_KEY: test-key
-          ACME_SEED_MOCK_MODEL: '1'
-          ACME_PG_CONTAINER: 'inneragent-postgres' # services 容器名与本地一致即可复用 seeds SQL
+          # ACME_SEED_MOCK_MODEL 不设:脚本内 docker exec 播种分支在 CI 跳过,改由下一步 psql 直灌
+
+      - name: 播种 canned mock 模型(CI services 容器名不可 docker exec,psql 直灌 35432)
+        run: |
+          PGPASSWORD=inneragent \
+          psql -h localhost -p 35432 -U inneragent -d inneragent \
+            -v ON_ERROR_STOP=1 \
+            -f examples/acme-demo/seeds/mock-model-script.sql
 
       - name: 启动 demo 后端(9300;签名私钥来自 provision 生成的 seeds/.local/host.key)
         run: |

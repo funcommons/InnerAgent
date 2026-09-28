@@ -1,0 +1,26 @@
+ACME 接入演示
+接入流程总览
+场景画廊
+InnerAgent 管理台
+InnerAgent 嵌入
+工具调用演示
+开发示例
+返回官网
+A
+alice
+工具调用演示
+
+两条建单通道混排:宿主表单直建(direct);对助手说「建一张工单」经 InnerAgent 确认后走 /ia-mcp 桥(agent)
+
+在「嵌入演示」页对助手说:帮我建一张工单,标题… → 确认卡批准 → create_ticket 经桥执行,下方列表实时出现 channel=agent 的记录。
+优先级
+normal
+提交工单
+
+暂无工单:先提交一个,或让 InnerAgent 帮你建
+
+Webhook 事件流
+
+运行终态回调(run.finished/failed/cancelled),X-IA-Delivery 幂等去重
+
+暂无事件(尚未收到 InnerAgent 投递;可先在管理面 config/test 连通性测试)

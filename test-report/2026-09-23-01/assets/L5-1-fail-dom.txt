@@ -1,0 +1,36 @@
+ACME 接入演示
+接入流程总览
+场景画廊
+InnerAgent 管理台
+InnerAgent 嵌入
+工具调用演示
+开发示例
+返回官网
+A
+alice
+InnerAgent 嵌入演示
+
+WC 直挂(tokenGetter 指向宿主端点,缓存 + 临期重签);或 iframe postMessage 模式(token 不入 URL,仅消息桥下发)
+
+InnerAgent 服务
+http://localhost:18090
+appKey
+acme-demo
+agentType
+ticket-assistant
+演示场景(Agent)
+客服工单助手
+接入模式
+WC 直挂(推荐)
+挂载
+销毁
+握手 / 事件日志
+01:54:37
+IA_TOKEN
+eyJhbGciOiJSUzI1…
+01:54:17
+IA_TOKEN
+eyJhbGciOiJSUzI1…
+01:54:17
+IA_TOKEN
+eyJhbGciOiJSUzI1…

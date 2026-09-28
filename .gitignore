@@ -12,6 +12,8 @@ dist/
 .env
 .env.local
 data/
+# acme-demo 前端 sdk 数据组件(裸 data/ 规则会吞掉它 —— CI 首跑发现)
+!examples/acme-demo/frontend/src/components/sdk/data/
 
 # InnerAgent 运行期产物
 inneragent-server/.agentscope/

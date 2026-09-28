@@ -12,9 +12,14 @@
  *       xk6 build --with github.com/phymbert/xk6-sse@latest
  *     (k6 官方构建产物可从 GitHub releases 下载 xk6 二进制。)
  *
- * 装载策略:动态 import(而非模块顶层静态 import),失败时给出可执行的
- * 安装指引 —— 这样 `k6 inspect` 与语法校验在无扩展机器上也能通过,
- * 运行期才要求扩展存在。
+ * 装载策略[2026-09-28 改定]:静态 import。
+ *
+ * 历史与实测:本文件原用动态 import(`await import('k6/x/sse')`),让无扩展
+ * 机器的 `k6 inspect`/语法校验也能通过;但 xk6 自定义构建(k6 v1.8.1 +
+ * phymbert/xk6-sse v0.2.0)实测:即使扩展已静态内嵌,动态 import 仍会走
+ * k6 的 provisioning/动态模块子系统并报「dynamic modules not enabled in
+ * the host program」,静态 import 则正常 —— 故改静态。代价:无扩展二进制在
+ * 模块装载期即报 k6 自己的 unknown module 错误;安装指引见 README「依赖」。
  *
  * 扩展 API(xk6-sse,详见其 README):
  *   sse.open(url, params, function (client) {
@@ -27,30 +32,22 @@
  *   - 返回 HTTP Response(可取 status)。
  */
 
-let cached = null;
+import sseModule from 'k6/x/sse';
+
+const cached = sseModule;
 
 /**
- * 装载并缓存 SSE 模块。必须在 VU 上下文内(async default/setup 函数)调用:
+ * 装载并缓存 SSE 模块(静态导入后仅剩兼容性校验;签名保持 async 不变,
+ * 调用方无须感知策略切换):
  *   const sse = await loadSse();
  */
 export async function loadSse() {
-  if (cached) {
-    return cached;
-  }
-  try {
-    cached = await import('k6/x/sse');
-  } catch (e) {
-    throw new Error(
-      '[ia-k6] 无法装载 SSE 模块 k6/x/sse(k6 官方二进制不含 SSE,需社区扩展)。'
-      + '二选一:① 安装 Go 工具链后由 k6 自动装配(automatic extension resolution;'
-      + '部分发行版构建未启用动态模块装载,如报「dynamic modules not enabled」'
-      + '则只能走 ②);'
-      + '② 自定义构建:xk6 build --with github.com/phymbert/xk6-sse@latest。'
-      + '详见 tools/k6/README.md「依赖」。原始错误: ' + e)
-      ;
-  }
   if (!cached || typeof cached.open !== 'function') {
-    throw new Error('[ia-k6] k6/x/sse 装载成功但缺 open() — 扩展版本不兼容?');
+    throw new Error(
+      '[ia-k6] k6/x/sse 不可用或缺 open() —— 需 xk6 自定义构建:'
+      + 'xk6 build --with github.com/phymbert/xk6-sse@latest;'
+      + '详见 tools/k6/README.md「依赖」。')
+      ;
   }
   return cached;
 }

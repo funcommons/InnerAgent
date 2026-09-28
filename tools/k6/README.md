@@ -20,6 +20,8 @@ InnerAgent 性能压测脚本与容量报告骨架。对应验收(**开发计划
 其余依赖:docker(compose 起 PG17+Redis7)、curl、bash;无 server jar 时需 mvn(run.sh 会自动 `mvn -DskipTests package`,1–3 分钟)。
 
 > 实测记录(2026-09-21,本机):Homebrew k6 v2.2.0 构建未启用动态模块装载(`dynamic modules not enabled in the host program`)且未装 Go → 运行期装载 `k6/x/sse` 失败,错误被 `lib/sse-client.js` 捕获并以必然失败的 check 呈现(压测以非零退出码阻断,不会假通过);`k6 inspect` 语法/选项校验不受影响。SSE 场景实跑需按上表准备扩展(此构建形态只能走 xk6 自定义构建)。
+>
+> 实测记录(2026-09-28,本机):① xk6 自定义构建走通 —— `GOPROXY=https://goproxy.cn,direct go install go.k6.io/xk6/cmd/xk6@latest && ~/go/bin/xk6 build --with github.com/phymbert/xk6-sse@latest --output ~/go/bin/k6`(proxy.golang.org 当日 dial timeout,goproxy.cn 可用但需断点重试);② **`lib/sse-client.js` 已从动态 import 改静态 import** —— k6 v1.8.1 上动态 import 即使扩展静态内嵌也撞 provisioning 子系统报同款 `dynamic modules not enabled`,静态 import 实测正常;无扩展机器改为模块装载期报错。PATH 把 `~/go/bin` 放在 brew 前即用新二进制:`PATH="$HOME/go/bin:$PATH" tools/k6/run.sh`。
 
 其他要求:
 

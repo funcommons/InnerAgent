@@ -61,11 +61,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: 安装 pnpm 与 psql 客户端
         run: |
-          npm i -g pnpm@11
+          npm i -g pnpm@11.24.0 # 与本地 lockfile 生成器一致;pnpm 11.x 需 Node ≥22.13
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
       - name: 构建管理台 web(dist,gateway 静态服务对象)

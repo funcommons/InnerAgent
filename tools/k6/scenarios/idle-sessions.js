@@ -105,6 +105,11 @@ export function setup() {
     holdMs,
     steadyFrom: startedAt + rampMs,
     deadline: startedAt + rampMs + holdMs,
+    // 场景结束时刻(ramp+hold+60s 收尾缓冲,与 SCENARIO_SECONDS 同源):
+    // sampleLoop 在 deadline 后必须睡到此刻 —— constant-vus 执行器会在
+    // exec 返回后重新迭代,若即刻返回就是每秒数万次空转
+    // (2026-09-28 实录:3.38M 个 0ms 幻迭代污染 iterations 指标)。
+    endsAt: startedAt + SCENARIO_SECONDS * 1000,
     baseline,
   };
 }
@@ -259,6 +264,10 @@ export function sampleLoop(data) {
     steadyHeapMinBytes: steady.length ? Math.min.apply(null, steady.map((s) => s[1])) : null,
     steadyHeapMaxBytes: steady.length ? Math.max.apply(null, steady.map((s) => s[1])) : null,
   })}`);
+  // 睡到场景收尾,防止执行器重迭代(说明见 setup 返回值 endsAt 注释)
+  while (Date.now() < data.endsAt) {
+    sleep(5);
+  }
 }
 
 export function handleSummary(data) {
@@ -266,7 +275,8 @@ export function handleSummary(data) {
   const slope = growthMetric && growthMetric.values ? growthMetric.values.avg : null;
   const waiting = data.metrics.ia_idle_runs_waiting
     && data.metrics.ia_idle_runs_waiting.values
-    ? Math.round(data.metrics.ia_idle_runs_waiting.values.avg) : null;
+    ? Math.round(data.metrics.ia_idle_runs_waiting.values.value
+      ?? data.metrics.ia_idle_runs_waiting.values.avg ?? 0) : null;
   const slopeLine = slope === null ? 'N/A(样本不足)' : `${(slope / 1024).toFixed(1)} KiB/min`;
   // 判定经验线:稳态期 |增长斜率| ≤ 1 MiB/min 视为无持续增长
   // (GC 锯齿由回归窗 ≥ 保持期全量抹平;更严格口径以容量报告裁量)

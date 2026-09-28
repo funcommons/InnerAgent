@@ -102,6 +102,8 @@ export function handleSummary(data) {
   // Rate 指标导出形态是 {passes, fails, value}(无 count):passes=记 true 次数
   const rateCount = (name) => (m[name] && m[name].values
     ? (m[name].values.passes || 0) + (m[name].values.fails || 0) : 0);
+  // Counter 指标才有 count 字段
+  const cnt = (name) => (m[name] && m[name].values ? m[name].values.count : null);
   const iterations = rateCount('ia_run_finished_rate');
   const finished = m.ia_run_finished_rate && m.ia_run_finished_rate.values
     ? (m.ia_run_finished_rate.values.passes || 0) : 0;

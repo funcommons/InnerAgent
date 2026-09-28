@@ -132,7 +132,7 @@ export function handleSummary(data) {
   // run.sh 会注入 IA_RESULT_DIR;单独跑 k6 时只出 stdout
   const out = { stdout: line };
   if (__ENV.IA_RESULT_DIR) {
-    out[`${__ENV.IA_RESULT_DIR}/steady-30min.ia-summary.json`] = {
+    out[`${__ENV.IA_RESULT_DIR}/steady-30min.ia-summary.json`] = JSON.stringify({
       scenario: 'steady-30min',
       env: BASE_URL,
       totals,
@@ -146,7 +146,7 @@ export function handleSummary(data) {
         eventsPerRunAvg: m.ia_events_per_run && m.ia_events_per_run.values ? m.ia_events_per_run.values.avg : null,
         failedRate: rate('ia_run_failed_rate'),
       },
-    };
+    }, null, 2);
   }
   return out;
 }

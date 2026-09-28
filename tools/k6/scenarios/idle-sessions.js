@@ -287,7 +287,7 @@ export function handleSummary(data) {
 
   const out = { stdout: line };
   if (__ENV.IA_RESULT_DIR) {
-    out[`${__ENV.IA_RESULT_DIR}/idle-sessions.ia-summary.json`] = {
+    out[`${__ENV.IA_RESULT_DIR}/idle-sessions.ia-summary.json`] = JSON.stringify({
       scenario: 'idle-sessions',
       mode: MODE,
       sessions: SESSIONS,
@@ -295,7 +295,7 @@ export function handleSummary(data) {
       runsWaitingAvg: waiting,
       heapGrowthBytesPerMin: slope,
       verdict,
-    };
+    }, null, 2);
   }
   return out;
 }

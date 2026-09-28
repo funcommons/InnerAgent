@@ -140,7 +140,7 @@ export function handleSummary(data) {
 
   const out = { stdout: line };
   if (__ENV.IA_RESULT_DIR) {
-    out[`${__ENV.IA_RESULT_DIR}/ramp-events.ia-summary.json`] = {
+    out[`${__ENV.IA_RESULT_DIR}/ramp-events.ia-summary.json`] = JSON.stringify({
       scenario: 'ramp-events',
       env: BASE_URL,
       arrivalPerSec: ARRIVAL,
@@ -157,7 +157,7 @@ export function handleSummary(data) {
         eventsPerRunAvg: m.ia_events_per_run && m.ia_events_per_run.values ? m.ia_events_per_run.values.avg : null,
       },
       throughputVerdict: verdict,
-    };
+    }, null, 2);
   }
   return out;
 }

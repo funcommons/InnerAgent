@@ -30,7 +30,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
+import java.time.Duration;
 import java.util.List;
 
 import static com.inneragent.platform.security.SecurityUtils.requireCurrentUserId;
@@ -74,11 +76,11 @@ public class AiPipelineController {
     public Flux<ServerSentEvent<AiChatStreamRespVO>> run(
             @RequestBody AiChatReqVO request) {
         long currentUserId = requireCurrentUserId();
-        return runQueries.authorizeConversationForStart(
+        return withKeepAlive(runQueries.authorizeConversationForStart(
                 request.getConversationId(), currentUserId)
                 .thenMany(Flux.defer(() -> pipelineRuns.stream(
                         request, currentUserId)))
-                .map(this::toSse);
+                .map(this::toSse));
     }
 
     @Operation(summary = "继续失败或已取消的 Run（SSE 流式）")
@@ -86,8 +88,8 @@ public class AiPipelineController {
     public Flux<ServerSentEvent<AiChatStreamRespVO>> continueRun(
             @PathVariable String runId) {
         long currentUserId = requireCurrentUserId();
-        return pipelineRuns.streamContinuation(runId, currentUserId)
-                .map(this::toSse);
+        return withKeepAlive(pipelineRuns.streamContinuation(runId, currentUserId)
+                .map(this::toSse));
     }
 
     @Operation(summary = "取消 Run")
@@ -146,7 +148,7 @@ public class AiPipelineController {
         boolean resume = afterSequence != null
                 || (lastEventId != null && !lastEventId.isBlank());
         long appId = com.inneragent.platform.context.AppContext.currentOrDefault();
-        return runQueries.requireAuthorizedRun(runId, currentUserId)
+        return withKeepAlive(runQueries.requireAuthorizedRun(runId, currentUserId)
                 .flatMapMany(run -> {
                     RunCursor cursor = cursorParser.parse(
                             run.getRunId(), afterSequence, lastEventId);
@@ -154,7 +156,7 @@ public class AiPipelineController {
                             cursor.runId(), cursor.afterSequence())
                             .concatMap(event -> runQueries.project(run, event))
                             .map(this::toSse);
-                })
+                }))
                 .doOnComplete(() -> {
                     if (resume && businessMetrics != null) {
                         businessMetrics.reconnect(appId,
@@ -195,6 +197,33 @@ public class AiPipelineController {
                 .flatMap(run -> cancellations.cancel(
                         run.getRunId(), currentUserId))
                 .thenReturn(CommonResult.success(true));
+    }
+
+    /**
+     * SSE 保活注释行（`: keep-alive`，SSE 规范要求解析方忽略注释），30s 一跳，
+     * 流完成即停。
+     *
+     * <p>2026-09-28 修复（O-3 内存泄漏伴生根因）：本服务跑在 Servlet 容器上
+     * （Tomcat/Coyote），半开 SSE 的取消是惰性的 —— 只有下一次写失败才会
+     * 触发 ClientAbortException 并取消响应流。挂起运行（WAITING_CONFIRMATION）
+     * 恰恰长时间无事件可写：客户端断开后容器永不察觉，回放/活尾循环以
+     * 300ms/轮空转 MySQL，永不释放（零流量实测 200 会话 +37.8MB/min）。
+     * 周期性保活写让死连接在 ~2 个间隔内暴露为写失败，响应流连同回放循环
+     * 一并取消、Redis 订阅释放；对真实在线客户端则顺带防上游代理空闲断开。
+     */
+    private Flux<ServerSentEvent<AiChatStreamRespVO>> withKeepAlive(
+            Flux<ServerSentEvent<AiChatStreamRespVO>> body) {
+        Duration interval = Duration.ofSeconds(30);
+        Sinks.One<Boolean> completed = Sinks.one();
+        Flux<ServerSentEvent<AiChatStreamRespVO>> keepAlive =
+                Flux.interval(interval)
+                        .map(ignored -> ServerSentEvent
+                                .<AiChatStreamRespVO>builder()
+                                .comment("keep-alive")
+                                .build())
+                        .takeUntilOther(completed.asMono());
+        return body.doFinally(ignored -> completed.tryEmitValue(Boolean.TRUE))
+                .mergeWith(keepAlive);
     }
 
     private ServerSentEvent<AiChatStreamRespVO> toSse(

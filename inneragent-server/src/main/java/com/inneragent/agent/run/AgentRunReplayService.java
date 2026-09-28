@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -61,6 +62,9 @@ public class AgentRunReplayService {
             ReplayWakeGate gate = new ReplayWakeGate();
             java.util.concurrent.atomic.AtomicBoolean firstSnapshot =
                     new java.util.concurrent.atomic.AtomicBoolean(true);
+            // 终态追平收口信号：由 confirmTerminalTailEmpty 置位，replayLoop 的
+            // takeUntilOther 据此结束整个回放/活尾流。
+            Sinks.One<Boolean> finished = Sinks.one();
             return signals.wakeupsWhenSubscribed(safeRunId)
                     .onErrorResume(failure -> {
                         log.warn(
@@ -72,14 +76,42 @@ public class AgentRunReplayService {
                     .flatMapMany(wakeups -> Flux.using(
                             () -> subscribeWakeups(
                                     safeRunId, wakeups, gate),
-                            ignored -> replayCycle(
+                            ignored -> replayLoop(
                                     safeRunId,
                                     cursor,
                                     deliveredTerminal,
                                     gate,
-                                    firstSnapshot),
+                                    firstSnapshot,
+                                    finished),
                             Disposable::dispose));
         });
+    }
+
+    /**
+     * 回放/活尾循环：每轮都是 {@code defer()} 下的全新订阅，由 {@code repeat()}
+     * 在上一轮 onComplete 后重订阅；终态追平经 {@code finished} 触发
+     * {@code takeUntilOther} 收口。
+     *
+     * <p>2026-09-28 修复（O-3 内存泄漏根修）：此前 afterDrain /
+     * awaitNextCycle 用 flatMapMany 内联递归订阅下一轮 —— 只要流不终止，
+     * 活跃轮的订阅链就持有全部祖先轮的操作器对象（每个 300ms 轮的
+     * MonoDelay、gate lambda 全部留在可达堆里）。1000 个
+     * WAITING_CONFIRMATION 挂起运行零流量下老年代 +86-110MB/min（容量报告
+     * §3.2/§5-O-3），活体堆直方图实证 237,115 个 MonoDelay 与
+     * ReplayWakeGate lambda 同时存活。改为 repeat() 后已完成轮次的整条
+     * 操作器链随订阅释放，活跃保留 O(1)（一轮的链 + 一个 gate waiter）。
+     */
+    private Flux<CommittedAgentEvent> replayLoop(
+            String runId,
+            AtomicLong cursor,
+            AtomicLong deliveredTerminal,
+            ReplayWakeGate gate,
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot,
+            Sinks.One<Boolean> finished) {
+        return Flux.defer(() -> replayCycle(
+                        runId, cursor, deliveredTerminal, gate, firstSnapshot, finished))
+                .repeat()
+                .takeUntilOther(finished.asMono());
     }
 
     private Disposable subscribeWakeups(
@@ -101,7 +133,8 @@ public class AgentRunReplayService {
             AtomicLong cursor,
             AtomicLong deliveredTerminal,
             ReplayWakeGate gate,
-            java.util.concurrent.atomic.AtomicBoolean firstSnapshot) {
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot,
+            Sinks.One<Boolean> finished) {
         return loadSnapshot(runId)
                 .flatMapMany(snapshot -> {
                     if (firstSnapshot.getAndSet(false)
@@ -124,7 +157,8 @@ public class AgentRunReplayService {
                             deliveredTerminal,
                             gate,
                             snapshot,
-                            firstSnapshot)));
+                            firstSnapshot,
+                            finished)));
                 });
     }
 
@@ -160,15 +194,16 @@ public class AgentRunReplayService {
             AtomicLong deliveredTerminal,
             ReplayWakeGate gate,
             ReplaySnapshot drainedSnapshot,
-            java.util.concurrent.atomic.AtomicBoolean firstSnapshot) {
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot,
+            Sinks.One<Boolean> finished) {
         Long terminalSequence = drainedSnapshot.terminalSequence();
         if (terminalSequence != null
                 && deliveredTerminal.get() >= terminalSequence) {
             return confirmTerminalTailEmpty(
-                    runId, cursor, deliveredTerminal, gate, firstSnapshot);
+                    runId, cursor, deliveredTerminal, gate, firstSnapshot, finished);
         }
-        return awaitNextCycle(
-                runId, cursor, deliveredTerminal, gate, firstSnapshot);
+        // 等待唤醒/轮询后本轮结束；repeat() 以全新订阅开启下一轮（不再内联递归）。
+        return awaitNextCycle(gate, cursor);
     }
 
     private Flux<CommittedAgentEvent> confirmTerminalTailEmpty(
@@ -176,7 +211,8 @@ public class AgentRunReplayService {
             AtomicLong cursor,
             AtomicLong deliveredTerminal,
             ReplayWakeGate gate,
-            java.util.concurrent.atomic.AtomicBoolean firstSnapshot) {
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot,
+            Sinks.One<Boolean> finished) {
         return loadSnapshot(runId)
                 .flatMapMany(confirmed -> {
                     acknowledgeCursorTerminal(
@@ -185,27 +221,28 @@ public class AgentRunReplayService {
                     if (terminalSequence != null
                             && deliveredTerminal.get() >= terminalSequence
                             && confirmed.latestSequence() <= cursor.get()) {
+                        finished.tryEmitValue(Boolean.TRUE);
                         return Flux.empty();
                     }
-                    return replayCycle(
-                            runId, cursor, deliveredTerminal, gate, firstSnapshot);
+                    // 终态已投递但尾部仍有新事件：等待后再由 repeat() 续排下一轮。
+                    return awaitNextCycle(gate, cursor);
                 });
     }
 
+    /**
+     * 等待唤醒或轮询间隔，之后本轮 onComplete —— 循环由 replayLoop 的
+     * repeat() 续排。重复唤醒提示（序号不超前）按既有口径计数后丢弃。
+     */
     private Flux<CommittedAgentEvent> awaitNextCycle(
-            String runId,
-            AtomicLong cursor,
-            AtomicLong deliveredTerminal,
-            ReplayWakeGate gate,
-            java.util.concurrent.atomic.AtomicBoolean firstSnapshot) {
+            ReplayWakeGate gate, AtomicLong cursor) {
         return gate.awaitDirtyOrPoll(POLL_INTERVAL)
-                .flatMapMany(sequenceHint -> {
+                .doOnNext(sequenceHint -> {
                     if (sequenceHint > 0 && sequenceHint <= cursor.get()) {
                         metrics.replayDuplicateSuppressed();
                     }
-                    return Flux.defer(() -> replayCycle(
-                            runId, cursor, deliveredTerminal, gate, firstSnapshot));
-                });
+                })
+                .then(Mono.<CommittedAgentEvent>empty())
+                .flux();
     }
 
     /**

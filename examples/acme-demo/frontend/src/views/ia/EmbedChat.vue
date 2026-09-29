@@ -319,19 +319,25 @@ onBeforeUnmount(() => {
     <FcSection>
       <FcSectionHeader :title="t('ia.embed.title')" :subtitle="t('ia.embed.subtitle')" />
 
-      <div class="controls">
-        <div class="field">
+      <!-- 只读连接信息:降权为一条 meta 行(标签+值竖线分隔),与页头同节奏 -->
+      <div class="meta-line">
+        <span class="meta-item">
           <span class="label">{{ t('ia.embed.server') }}</span>
           <code>{{ config?.inneragentBaseUrl || '—' }}</code>
-        </div>
-        <div class="field">
+        </span>
+        <span class="meta-sep" aria-hidden="true" />
+        <span class="meta-item">
           <span class="label">appKey</span>
           <code>{{ config?.appKey || '—' }}</code>
-        </div>
-        <div class="field">
+        </span>
+        <span class="meta-sep" aria-hidden="true" />
+        <span class="meta-item">
           <span class="label">agentType</span>
           <code data-testid="embed-agent-type-current">{{ effectiveAgentType || '—' }}</code>
-        </div>
+        </span>
+      </div>
+
+      <div class="controls">
         <div class="field">
           <span class="label">{{ t('ia.embed.agent-type') }}</span>
           <FcSelect
@@ -441,22 +447,24 @@ onBeforeUnmount(() => {
       <!-- iframe 模式:容器由 createIframeEmbed 接管 -->
       <div v-show="mode === 'iframe'" ref="containerRef" class="ia-frame-container" />
 
-      <FcSection>
-        <FcSectionHeader :title="t('ia.embed.handshake-log')">
-          <template #actions>
-            <!-- §A3 复制最后回复(从 SDK 容器读 innerText;不可读降级日志最新 detail) -->
-            <FcButton
-              size="sm"
-              variant="secondary"
-              data-testid="copy-last-reply"
-              :disabled="logs.length === 0"
-              @click="copyLastReply"
-            >
-              <i class="ri-file-copy-line" aria-hidden="true" />
-              {{ t('ia.embed.copy-last-reply') }}
-            </FcButton>
-          </template>
-        </FcSectionHeader>
+      <!-- 握手/事件日志:降权为可折叠明细块(替代卡中卡嵌套 FcSection) -->
+      <details class="log-panel" data-testid="embed-log-panel" open>
+        <summary class="log-panel__summary">
+          <i class="ri-terminal-box-line" aria-hidden="true" />
+          <span class="log-panel__title">{{ t('ia.embed.handshake-log') }}</span>
+          <span class="log-panel__count">{{ logs.length }}</span>
+          <!-- §A3 复制最后回复(从 SDK 容器读 innerText;不可读降级日志最新 detail) -->
+          <FcButton
+            size="sm"
+            variant="secondary"
+            data-testid="copy-last-reply"
+            :disabled="logs.length === 0"
+            @click.stop="copyLastReply"
+          >
+            <i class="ri-file-copy-line" aria-hidden="true" />
+            {{ t('ia.embed.copy-last-reply') }}
+          </FcButton>
+        </summary>
         <p v-if="logs.length === 0" class="log-empty">{{ t('ia.embed.log-empty') }}</p>
         <ul v-else class="log-list" data-testid="embed-log">
           <li v-for="(l, i) in logs" :key="i" class="log-item">
@@ -465,7 +473,7 @@ onBeforeUnmount(() => {
             <span class="log-detail">{{ l.detail }}</span>
           </li>
         </ul>
-      </FcSection>
+      </details>
     </FcSection>
   </div>
 </template>
@@ -477,12 +485,47 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 
+/* 只读连接信息:降权 meta 行(与页头 subtitle 同节奏,竖线分隔) */
+.meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: -4px 0 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+
+  .label {
+    color: var(--el-text-color-secondary);
+  }
+
+  code {
+    color: var(--el-text-color-regular);
+    word-break: break-all;
+  }
+}
+
+.meta-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--el-border-color);
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px;
-  margin-bottom: 14px;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .field {
@@ -518,8 +561,11 @@ onBeforeUnmount(() => {
 
 .actions {
   display: flex;
+  align-items: center;
   gap: 8px;
-  margin-left: auto;
+  /* 跟随选择器组而不是漂到远端;窄屏换行时自然落到下一行行首 */
+  margin-left: 0;
+  padding-top: 18px;
 }
 
 .error {
@@ -715,6 +761,60 @@ onBeforeUnmount(() => {
   font-size: 10px;
   color: var(--el-text-color-placeholder);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/**
+ * 握手/事件日志:降权为可折叠明细块(替代卡中卡嵌套 FcSection)。
+ * summary 一行 = 标题(小号)+ 条数徽标 + 复制按钮;<details open> 保持
+ * 现有可见性,点击整行可收起。规范物件全部沿用(EP 变量/FcButton/testid)。
+ */
+.log-panel {
+  margin-top: 4px;
+  padding: 10px 14px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-extra-light);
+  border-radius: 10px;
+}
+
+.log-panel__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  > i {
+    font-size: 15px;
+    color: var(--el-text-color-secondary);
+  }
+
+  /* 复制按钮靠右;summary 点击关闭抽屉时按钮不误触发(click.stop 已拦) */
+  [data-testid="copy-last-reply"] {
+    margin-left: auto;
+  }
+}
+
+.log-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+}
+
+.log-panel__count {
+  min-width: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+  background: var(--el-fill-color);
+  border-radius: 999px;
 }
 
 .log-list {

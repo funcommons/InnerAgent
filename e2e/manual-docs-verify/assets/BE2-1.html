@@ -14,7 +14,7 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>BE2-1 <span class="title">最佳实践/02 · 必盯指标存在性</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:19.492Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:19:02.434Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果(手册 §3 表)</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
@@ -29,42 +29,42 @@
 </table>
 <h2>指标原文(相关行)</h2>
 <pre class="mono">fusion_agentscope_runtime_event_backpressure_rejected_total 0.0
-fusion_agentscope_runtime_event_persist_latency_seconds_count 2519
-fusion_agentscope_runtime_event_persist_latency_seconds_sum 9.819032181
-fusion_agentscope_runtime_event_persist_latency_seconds_max 0.025464791
-fusion_agentscope_runtime_event_persisted_total 2519.0
-fusion_agentscope_runtime_event_sequence_allocated_total 2519.0
-fusion_agentscope_runtime_harness_cache_total{result="hit"} 192.0
-fusion_agentscope_runtime_harness_cache_total{result="miss"} 32.0
+fusion_agentscope_runtime_event_persist_latency_seconds_count 2880
+fusion_agentscope_runtime_event_persist_latency_seconds_sum 11.781479516
+fusion_agentscope_runtime_event_persist_latency_seconds_max 0.03490325
+fusion_agentscope_runtime_event_persisted_total 2880.0
+fusion_agentscope_runtime_event_sequence_allocated_total 2880.0
+fusion_agentscope_runtime_harness_cache_total{result="hit"} 212.0
+fusion_agentscope_runtime_harness_cache_total{result="miss"} 43.0
 fusion_agentscope_runtime_harness_capacity_rejected_total 0.0
-fusion_agentscope_runtime_harness_eviction_total 18.0
+fusion_agentscope_runtime_harness_eviction_total 33.0
 fusion_agentscope_runtime_harness_leases_active 0.0
-fusion_agentscope_runtime_outbox_backlog 6.0
-fusion_agentscope_runtime_outbox_retry_total 4813419.0
-fusion_agentscope_runtime_provider_closed_total 224.0
+fusion_agentscope_runtime_outbox_backlog 0.0
+fusion_agentscope_runtime_outbox_retry_total 6327758.0
+fusion_agentscope_runtime_provider_closed_total 255.0
 fusion_agentscope_runtime_provider_terminal_total{status="CANCELLED"} 0.0
-fusion_agentscope_runtime_provider_terminal_total{status="COMPLETED"} 224.0
+fusion_agentscope_runtime_provider_terminal_total{status="COMPLETED"} 255.0
 fusion_agentscope_runtime_provider_terminal_total{status="FAILED"} 0.0
-fusion_agentscope_runtime_replay_delivered_total 1071.0
-fusion_agentscope_runtime_replay_duplicate_suppressed_total 169.0
-fusion_agentscope_runtime_replay_terminal_recovered_total 26.0
+fusion_agentscope_runtime_replay_delivered_total 1221.0
+fusion_agentscope_runtime_replay_duplicate_suppressed_total 184.0
+fusion_agentscope_runtime_replay_terminal_recovered_total 29.0
 fusion_agentscope_runtime_runs_active 0.0
 fusion_agentscope_runtime_runs_owner_lost_total 0.0
-fusion_agentscope_runtime_runs_terminal_total{status="CANCELLED"} 20.0
-fusion_agentscope_runtime_runs_terminal_total{status="COMPLETED"} 165.0
+fusion_agentscope_runtime_runs_terminal_total{status="CANCELLED"} 437.0
+fusion_agentscope_runtime_runs_terminal_total{status="COMPLETED"} 188.0
 fusion_agentscope_runtime_runs_terminal_total{status="FAILED"} 0.0
-fusion_agentscope_runtime_runs_waiting 34.0
+fusion_agentscope_runtime_runs_waiting 37.0
 fusion_agentscope_runtime_state_bulkhead_rejected_total 0.0
 fusion_agentscope_runtime_state_failure_total 0.0
-fusion_agentscope_runtime_state_latency_seconds_count 1717
-fusion_agentscope_runtime_state_latency_seconds_sum 1.221881817
-fusion_agentscope_runtime_state_latency_seconds_max 0.008501
+fusion_agentscope_runtime_state_latency_seconds_count 1950
+fusion_agentscope_runtime_state_latency_seconds_sum 1.447093985
+fusion_agentscope_runtime_state_latency_seconds_max 0.031868417
 fusion_agentscope_runtime_tool_scheduler_violation_total 0.0
-ia_confirmation_total{app="1",decision="approved",source="live-confirm"} 11.0
-ia_confirmation_total{app="1",decision="rejected",source="live-confirm"} 9.0
-ia_confirmation_total{app="34",decision="approved",source="live-confirm"} 5.0
-ia_reconnect_total{app="1",result="resumed"} 18.0
-ia_tool_calls_total{app="1",result="error",tool="mcp__acme-echo__echo"} 2.0
-ia_tool_calls_total{app="1",result="ok",tool="get_current_time"} 40.0
-ia_tool_calls_total{app="34",result="ok",tool="mcp__acme-demo__create_ticket"} 17.0
-jvm_gc_concurrent_phase_time_seconds_count{action="end of concurrent GC pause",cause="No GC",gc="G1 Concurrent GC"} 3658</pre>
+ia_confirmation_total{app="1",decision="approved",source="live-confirm"} 13.0
+ia_confirmation_total{app="1",decision="rejected",source="live-confirm"} 10.0
+ia_confirmation_total{app="34",decision="approved",source="live-confirm"} 7.0
+ia_reconnect_total{app="1",result="resumed"} 20.0
+ia_reconnect_total{app="34",result="resumed"} 1.0
+ia_tool_calls_total{app="1",result="error",tool="mcp__acme-echo__echo"} 3.0
+ia_tool_calls_total{app="1",result="ok",tool="get_current_time"} 46.0
+ia_tool_calls_total{app="34",result="ok",tool="mcp__acme-demo__create_ticket"} 21.0</pre>

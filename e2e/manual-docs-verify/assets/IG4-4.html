@@ -14,11 +14,11 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>IG4-4 <span class="title">接入指南/04 · 注册生效与目录摘除(FQN 工具箱)</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:13.410Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:18:57.401Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
-<tr><td>注册成功</td><td class="ok">PASS</td><td class="mono small">id=42</td></tr>
+<tr><td>注册成功</td><td class="ok">PASS</td><td class="mono small">id=47</td></tr>
 <tr><td>裸名 echo 按工具箱 FQN 后缀(__&lt;name&gt;)解析:确认卡 → 批准 → 调用</td><td class="ok">PASS</td><td class="mono small">toolEvents=mcp__acme-echo__echo,mcp__acme-echo__echo,user_confirmation,mcp__acme-echo__echo,mcp__acme-echo__echo,user_confirmation,mcp__acme-echo__echo ots=TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,</td></tr>
 <tr><td>echo 工具结果回流对话($1 捕获回显)</td><td class="ok">PASS</td><td class="mono small">已回显:手册回归OK。(MCP echo)</td></tr>
 <tr><td>删除成功</td><td class="ok">PASS</td><td class="mono small">status=200</td></tr>

@@ -1,0 +1,79 @@
+[
+  {
+    "id": "IG5-4",
+    "doc": "03-接入指南/05",
+    "title": "回切真实模型:执行 mock-model-restore.sql → MiniMax-M3 恢复默认、mock 退出",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-4.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "default_model 唯一且为 MiniMax-M3(回切成功)",
+            "ok": true,
+            "detail": "defaults=MiniMax-M3"
+          },
+          {
+            "label": "mock-text 已退出默认位",
+            "ok": true,
+            "detail": "MiniMax-M3|t|1 ; mock-text|f|1"
+          }
+        ]
+      },
+      {
+        "h": "回切后 ia_ai_model(code|default|status)",
+        "body": "MiniMax-M3|t|1\nmock-text|f|1"
+      },
+      {
+        "h": "执行的脚本",
+        "body": "examples/acme-demo/seeds/mock-model-restore.sql(手册 03-接入指南/05 §4 口径)"
+      }
+    ],
+    "ms": 866
+  },
+  {
+    "id": "IG5-4b",
+    "doc": "03-接入指南/05",
+    "title": "回切后回归一轮对话(真模型 MiniMax 正常应答至终态)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-4b.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "运行受理",
+            "ok": true,
+            "detail": "200"
+          },
+          {
+            "label": "真模型回复至 DONE",
+            "ok": true,
+            "detail": "CONTENT,TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,CONTENT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "回复非空(非 mock 固定文案路径)",
+            "ok": true,
+            "detail": "我帮您查询一下当前时间。现在是北京时间2026-09-29 16:20(周一)。如有其他需要随时告诉我~"
+          }
+        ]
+      },
+      {
+        "h": "事件序列",
+        "body": "CONTENT,TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,CONTENT,CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "回复(截取)",
+        "body": "我帮您查询一下当前时间。现在是北京时间2026-09-29 16:20(周一)。如有其他需要随时告诉我~"
+      }
+    ],
+    "ms": 5703
+  }
+]

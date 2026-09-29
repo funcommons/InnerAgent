@@ -14,7 +14,7 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>IG2-3 <span class="title">接入指南/02 · 断点续传(replay-then-live)</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:05.208Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:18:50.024Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
@@ -23,20 +23,21 @@
 <tr><td>回放帧 seq 集合 == journal 断点后全部投影 seq(不丢不重)</td><td class="ok">PASS</td><td class="mono small">收到=[9,12,13,18] journal=[9,12,13,18]</td></tr>
 <tr><td>重连收到终态(DONE)</td><td class="ok">PASS</td><td class="mono small">DONE</td></tr>
 <tr><td>afterSequence 参数等价(终态运行回放完即由服务端关流)</td><td class="ok">PASS</td><td class="mono small">4 帧, closed=true</td></tr>
-<tr><td>ia_reconnect_total{result=resumed} 首次真重连后出现(惰性注册)</td><td class="ok">PASS</td><td class="mono small">ia_reconnect_total{app="1",result="resumed"} 18.0</td></tr>
+<tr><td>ia_reconnect_total{result=resumed} 首次真重连后出现(惰性注册)</td><td class="ok">PASS</td><td class="mono small">ia_reconnect_total{app="1",result="resumed"} 20.0</td></tr>
 </table>
-<h2>断开前帧(id=1420ff60fbda4809bff0c7e907b92742:5)</h2>
-<pre class="mono">1420ff60fbda4809bff0c7e907b92742:3 TOOL_CALL_STARTED
-1420ff60fbda4809bff0c7e907b92742:5 TOOL_CALL</pre>
-<h2>重连后帧(Last-Event-ID: 1420ff60fbda4809bff0c7e907b92742:5)</h2>
-<pre class="mono">1420ff60fbda4809bff0c7e907b92742:9 TOOL_FINISHED
-1420ff60fbda4809bff0c7e907b92742:12 CONTENT
-1420ff60fbda4809bff0c7e907b92742:13 CONTENT
-1420ff60fbda4809bff0c7e907b92742:18 DONE</pre>
+<h2>断开前帧(id=406f27679b9747989d9f53ca171113e2:5)</h2>
+<pre class="mono">406f27679b9747989d9f53ca171113e2:3 TOOL_CALL_STARTED
+406f27679b9747989d9f53ca171113e2:5 TOOL_CALL</pre>
+<h2>重连后帧(Last-Event-ID: 406f27679b9747989d9f53ca171113e2:5)</h2>
+<pre class="mono">406f27679b9747989d9f53ca171113e2:9 TOOL_FINISHED
+406f27679b9747989d9f53ca171113e2:12 CONTENT
+406f27679b9747989d9f53ca171113e2:13 CONTENT
+406f27679b9747989d9f53ca171113e2:18 DONE</pre>
 <h2>afterSequence 回放帧</h2>
-<pre class="mono">1420ff60fbda4809bff0c7e907b92742:9 TOOL_FINISHED
-1420ff60fbda4809bff0c7e907b92742:12 CONTENT
-1420ff60fbda4809bff0c7e907b92742:13 CONTENT
-1420ff60fbda4809bff0c7e907b92742:18 DONE</pre>
+<pre class="mono">406f27679b9747989d9f53ca171113e2:9 TOOL_FINISHED
+406f27679b9747989d9f53ca171113e2:12 CONTENT
+406f27679b9747989d9f53ca171113e2:13 CONTENT
+406f27679b9747989d9f53ca171113e2:18 DONE</pre>
 <h2>重连指标</h2>
-<pre class="mono">ia_reconnect_total{app="1",result="resumed"} 18.0</pre>
+<pre class="mono">ia_reconnect_total{app="1",result="resumed"} 20.0
+ia_reconnect_total{app="34",result="resumed"} 1.0</pre>

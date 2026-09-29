@@ -14,15 +14,15 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>AP2-3 <span class="title">API 参考/02 · 幂等语义与时钟</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:21.136Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:19:03.771Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
-<tr><td>两次 POST /runs 产生不同运行(非幂等,重试需先查 /runs/running)</td><td class="ok">PASS</td><td class="mono small">8faed8b27e3e4db0a588761e1bfd7c88 vs 7aab16d345544787a1c5a2af0c7aeb1d</td></tr>
-<tr><td>createdAt 为服务端时钟,与本地偏差 444ms(&lt;5s)</td><td class="ok">PASS</td><td class="mono small">444ms</td></tr>
+<tr><td>两次 POST /runs 产生不同运行(非幂等,重试需先查 /runs/running)</td><td class="ok">PASS</td><td class="mono small">811d09b0ead74c948099498eb1af21f3 vs e15fe2af1db24f8aaa9f2052e2f7c855</td></tr>
+<tr><td>createdAt 为服务端时钟,与本地偏差 295ms(&lt;5s)</td><td class="ok">PASS</td><td class="mono small">295ms</td></tr>
 </table>
 <h2>运行 ID</h2>
-<pre class="mono">run1=8faed8b27e3e4db0a588761e1bfd7c88
-run2=7aab16d345544787a1c5a2af0c7aeb1d</pre>
+<pre class="mono">run1=811d09b0ead74c948099498eb1af21f3
+run2=e15fe2af1db24f8aaa9f2052e2f7c855</pre>
 <h2>时钟偏差</h2>
-<pre class="mono">444ms(手册 §5:同机或 NTP 对齐;本测试与 server 同机)</pre>
+<pre class="mono">295ms(手册 §5:同机或 NTP 对齐;本测试与 server 同机)</pre>

@@ -1,0 +1,387 @@
+[
+  {
+    "id": "IG2-3",
+    "doc": "03-接入指南/02",
+    "title": "断点续传:半途断开 → Last-Event-ID 重连不丢帧;afterSequence 等价;replay-then-live",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG2-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "断开前收到 2 帧",
+            "ok": true,
+            "detail": "got=2"
+          },
+          {
+            "label": "重连首回放帧 seq(9)> 断点 seq(5),且无更早帧重放",
+            "ok": true,
+            "detail": "首帧 seq=9"
+          },
+          {
+            "label": "回放帧 seq 集合 == journal 断点后全部投影 seq(不丢不重)",
+            "ok": true,
+            "detail": "收到=[9,12,13,18] journal=[9,12,13,18]"
+          },
+          {
+            "label": "重连收到终态(DONE)",
+            "ok": true,
+            "detail": "DONE"
+          },
+          {
+            "label": "afterSequence 参数等价(终态运行回放完即由服务端关流)",
+            "ok": true,
+            "detail": "4 帧, closed=true"
+          },
+          {
+            "label": "ia_reconnect_total{result=resumed} 首次真重连后出现(惰性注册)",
+            "ok": true,
+            "detail": "ia_reconnect_total{app=\"1\",result=\"resumed\"} 20.0"
+          }
+        ]
+      },
+      {
+        "h": "断开前帧(id=406f27679b9747989d9f53ca171113e2:5)",
+        "body": "406f27679b9747989d9f53ca171113e2:3 TOOL_CALL_STARTED\n406f27679b9747989d9f53ca171113e2:5 TOOL_CALL"
+      },
+      {
+        "h": "重连后帧(Last-Event-ID: 406f27679b9747989d9f53ca171113e2:5)",
+        "body": "406f27679b9747989d9f53ca171113e2:9 TOOL_FINISHED\n406f27679b9747989d9f53ca171113e2:12 CONTENT\n406f27679b9747989d9f53ca171113e2:13 CONTENT\n406f27679b9747989d9f53ca171113e2:18 DONE"
+      },
+      {
+        "h": "afterSequence 回放帧",
+        "body": "406f27679b9747989d9f53ca171113e2:9 TOOL_FINISHED\n406f27679b9747989d9f53ca171113e2:12 CONTENT\n406f27679b9747989d9f53ca171113e2:13 CONTENT\n406f27679b9747989d9f53ca171113e2:18 DONE"
+      },
+      {
+        "h": "重连指标",
+        "body": "ia_reconnect_total{app=\"1\",result=\"resumed\"} 20.0\nia_reconnect_total{app=\"34\",result=\"resumed\"} 1.0"
+      }
+    ],
+    "ms": 3519
+  },
+  {
+    "id": "BE1-2",
+    "doc": "05-最佳实践/01",
+    "title": "ALWAYS_ASK:读工具也确认;拒绝 → 取消语义收尾且工具未执行",
+    "status": "PASS",
+    "notes": [
+      "文档偏差:最佳实践/01 §5 称「拒绝后运行按取消语义收尾」,实测拒绝后运行继续(模型组织拒绝回复)直至 DONE/COMPLETED,工具未执行 — 修复意见 R-06"
+    ],
+    "evidence": [
+      "assets/BE1-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "ALWAYS_ASK 下内置只读工具也推确认卡",
+            "ok": true,
+            "detail": "USER_CONFIRM_REQUIRED"
+          },
+          {
+            "label": "拒绝(reject)提交受理",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "拒绝后收到 USER_CONFIRM_RESULT 回执",
+            "ok": true,
+            "detail": "USER_CONFIRM_RESULT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "拒绝后运行仍收尾至终态",
+            "ok": true,
+            "detail": "events=USER_CONFIRM_RESULT,CONTENT,CONTENT,DONE status=COMPLETED"
+          },
+          {
+            "label": "拒绝后工具未执行",
+            "ok": true,
+            "detail": "USER_CONFIRM_RESULT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "审计含 denied 决策",
+            "ok": true,
+            "detail": "denied|live-confirm|get_current_time"
+          }
+        ]
+      },
+      {
+        "h": "确认前事件",
+        "body": "3 TOOL_CALL_STARTED\n5 TOOL_CALL\n12 USER_CONFIRMATION_REQUIRED"
+      },
+      {
+        "h": "拒绝后事件",
+        "body": "13 USER_CONFIRM_RESULT\n17 CONTENT\n18 CONTENT\n23 DONE"
+      },
+      {
+        "h": "运行单据终态",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "runId": "3816854cdf99436b96470ef4318a9928",
+            "status": "COMPLETED",
+            "lastSequence": 23,
+            "waitingReplyId": null,
+            "terminalEvent": {
+              "schemaVersion": 1,
+              "runId": "3816854cdf99436b96470ef4318a9928",
+              "sequence": 23,
+              "messageId": "terminal-0931678a382e48c0b9830e2726a51a65",
+              "conversationId": "a4458d45166b44b4872641c624ab7dbc",
+              "outputType": "DONE",
+              "finished": true,
+              "source": "main",
+              "rawEventId": "terminal-0931678a382e48c0b9830e2726a51a65",
+              "rawEventType": "RUN_TERMINAL",
+              "createdAt": "2026-09-29T08:18:50.670Z"
+            }
+          }
+        }
+      },
+      {
+        "h": "审计行(decision/source/fqn)",
+        "body": "denied|live-confirm|get_current_time"
+      }
+    ],
+    "ms": 754
+  },
+  {
+    "id": "BE1-3",
+    "doc": "05-最佳实践/01",
+    "title": "ALWAYS_ALLOW / FULL_ACCESS 显式豁免档:WRITE 工具跳过确认直接执行",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BE1-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "ALWAYS_ALLOW 无确认卡",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "ALWAYS_ALLOW 下 create_ticket 直接执行",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "FULL_ACCESS 无确认卡",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "工单真实创建(回复含 $1 文案)",
+            "ok": true,
+            "detail": "工单「豁免档-ALWAYS_ALLOW」已创建成功:描述=豁免档直通验证,优先级=low。已同步到工具台账(Agent 渠道),可在工具页查看。"
+          }
+        ]
+      },
+      {
+        "h": "ALWAYS_ALLOW 事件序列",
+        "body": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "FULL_ACCESS 事件序列",
+        "body": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "ALWAYS_ALLOW 回复",
+        "body": "工单「豁免档-ALWAYS_ALLOW」已创建成功:描述=豁免档直通验证,优先级=low。已同步到工具台账(Agent 渠道),可在工具页查看。"
+      }
+    ],
+    "ms": 875
+  },
+  {
+    "id": "BE1-5",
+    "doc": "05-最佳实践/01",
+    "title": "审计:decision/decisionSource/toolFqn 落行,不含凭据;FQN=mcp__<serverKey>__<tool>",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BE1-5.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "近 20 分钟有工具决策审计行(内置工具亦计)",
+            "ok": true,
+            "detail": "12 行"
+          },
+          {
+            "label": "tool_fqn 命名 mcp__<serverKey>__<tool> / 内置短名",
+            "ok": true,
+            "detail": "denied|live-confirm|get_current_time|{}"
+          },
+          {
+            "label": "审计不含凭据明文",
+            "ok": true,
+            "detail": "未发现凭据"
+          },
+          {
+            "label": "含 live-confirm 决策源",
+            "ok": true,
+            "detail": "live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm"
+          }
+        ]
+      },
+      {
+        "h": "审计行(decision|decision_source|tool_fqn|params_masked)",
+        "body": "denied|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-demo__create_ticket|{\"title\":\"手册回归工单-081843\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}\nallowed|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-demo__create_ticket|{\"title\":\"手册UI工单-034421\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}\nallowed|live-confirm|mcp__acme-echo__echo|{\"message\":\"手册回归OK。\"}\ndenied|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-demo__create_ticket|{\"title\":\"手册回归工单-034159\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}\nallowed|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-echo__echo|{\"message\":\"手册回归OK。\"}\ndenied|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-demo__create_ticket|{\"title\":\"手册回归工单-033809\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}\nallowed|live-confirm|get_current_time|{}"
+      },
+      {
+        "h": "宿主工具清单来源(ia_tool_registry,source=host_app)",
+        "body": "mcp__acme-demo-host__create_ticket|high\nmcp__acme-demo___test_probe_20260923|low\nmcp__acme-demo__create_ticket|low\nmcp__acme-demo__create_ticket2|low\nmcp__acme-demo__list_tickets|low\nmcp__acme-demo__query_sales|low\nmcp__acme-demo__resolve_scope|low"
+      }
+    ],
+    "ms": 453
+  },
+  {
+    "id": "RF1-1",
+    "doc": "07-参考/01",
+    "title": "事件口径实测:journal 条数 / SSE 投影帧数 / ia_agent_message 条数",
+    "status": "PASS",
+    "notes": [
+      "口径对照:文档 BP2「journal≈10,SSE≈3」/术语表「journal≈11,投影≈2」/限制与配额「journal≈11,SSE 纯回复 3、工具流 6」;实测纯回复 journal=10(投影=3)、SSE=3;工具流 journal=18(投影=6)、SSE=6"
+    ],
+    "evidence": [
+      "assets/RF1-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "纯回复 SSE 投影 = 3 帧(文档口径:纯回复 3 条)",
+            "ok": true,
+            "detail": "实测 3 帧"
+          },
+          {
+            "label": "纯回复 journal 在 8-12 条(文档口径 ≈10-11 条/运行)",
+            "ok": true,
+            "detail": "实测 10 条(其中投影 3)"
+          },
+          {
+            "label": "ia_agent_message 投影 = 2 条(user+assistant)",
+            "ok": true,
+            "detail": "实测 2 条"
+          },
+          {
+            "label": "工具流 journal 投影帧数 == SSE 帧数(6/6;文档口径工具流 6 条)",
+            "ok": true,
+            "detail": "投影=6, sse=6"
+          }
+        ]
+      },
+      {
+        "h": "纯回复运行事件明细",
+        "body": "1|(内部)|AGENT_START\n2|(内部)|MODEL_CALL_START\n3|(内部)|TEXT_BLOCK_START\n4|CONTENT|TEXT_BLOCK_DELTA\n5|CONTENT|TEXT_BLOCK_DELTA\n6|(内部)|TEXT_BLOCK_END\n7|(内部)|MODEL_CALL_END\n8|(内部)|AGENT_RESULT\n9|(内部)|AGENT_END\n10|DONE|RUN_TERMINAL"
+      },
+      {
+        "h": "ia_agent_message",
+        "body": "user|随便聊聊天气。\nassistant|我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」"
+      },
+      {
+        "h": "文档口径对照",
+        "body": "BP2: journal≈10/运行,SSE 投影≈3/运行 | 术语表: journal≈11,投影≈2(user+assistant) | 限制与配额: journal≈11;SSE 纯回复 3/工具流 6"
+      }
+    ],
+    "ms": 1356
+  },
+  {
+    "id": "RF3-1",
+    "doc": "07-参考/03",
+    "title": "outputType 全集:实测集合 vs 手册全集(未知类型忽略语义)",
+    "status": "PASS",
+    "notes": [
+      "实测 outputType=TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,DONE,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT | 手册主表未实测者: RUN_STARTED,TOOL_RESULT,ERROR,CANCELLED | 全集宣称含 REASONING/TOOL_CALL/TOOL_FINISHED/SUB_AGENT_FINISHED/USER_CONFIRM_RESULT"
+    ],
+    "evidence": [
+      "assets/RF3-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "观测汇总",
+        "verdicts": [
+          {
+            "label": "核心类型已实测(CONTENT/DONE)",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,DONE,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT"
+          },
+          {
+            "label": "CANCELLED 在 AP1-3 触发后并入",
+            "ok": true,
+            "detail": "RUN_STARTED,TOOL_RESULT,ERROR,CANCELLED"
+          }
+        ]
+      },
+      {
+        "h": "本轮 API 用例实测到的 outputType",
+        "body": "CONTENT\nDONE\nTOOL_CALL\nTOOL_CALL_STARTED\nTOOL_FINISHED\nUSER_CONFIRMATION_REQUIRED\nUSER_CONFIRM_RESULT"
+      },
+      {
+        "h": "手册宣称(接入指南/02)",
+        "body": "主要取值: RUN_STARTED, CONTENT, TOOL_CALL_STARTED, USER_CONFIRMATION_REQUIRED, TOOL_RESULT, DONE, ERROR, CANCELLED\n另含: REASONING, TOOL_CALL, TOOL_FINISHED, SUB_AGENT_FINISHED, USER_CONFIRM_RESULT\n\n本轮实测缺失(未出现于任何投影事件): RUN_STARTED, TOOL_RESULT, ERROR, CANCELLED\n(历史全库亦无 RUN_STARTED/TOOL_RESULT output_type — 见修复意见 R-02)"
+      }
+    ],
+    "ms": 324
+  },
+  {
+    "id": "RF1-3",
+    "doc": "07-参考/01",
+    "title": "enabledSkills 传入应用激活技能(report-style)运行成功;非法技能名 → 500(术语表示例值勘误)",
+    "status": "PASS",
+    "notes": [
+      "术语表「技能(skill)」示例 report-writer/knowledge-qa 实为 agentType;enabledSkills 实际取应用激活技能(本环境 ia_skill: report-style)— R-09"
+    ],
+    "evidence": [
+      "assets/RF1-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "带 enabledSkills=[report-style](应用激活技能)的运行被受理",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "正常终态",
+            "ok": true,
+            "detail": "CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "非法技能名(report-writer 是 agentType 非技能)→ 500「Skill 不可用」(术语表示例值勘误 — 修复意见 R-09)",
+            "ok": true,
+            "detail": "status=500"
+          }
+        ]
+      },
+      {
+        "h": "report-style 运行事件序列",
+        "body": "CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "非法技能名响应",
+        "body": "status=500(Skill 不可用: report-writer)"
+      },
+      {
+        "h": "本环境技能清单(ia_skill)",
+        "body": "report-style(app_id=34 / app_id=1 各一条,status=active)"
+      }
+    ],
+    "ms": 603
+  }
+]

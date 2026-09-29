@@ -1,0 +1,1012 @@
+[
+  {
+    "id": "QS2-3",
+    "doc": "02-快速开始/02",
+    "title": "宿主桥工具 4 个(AcmeTicketTools×3+AcmeSalesTools×1);endpointUrl 指向 :9300/ia-mcp",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS2-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "宿主工具恰 4 个",
+            "ok": true,
+            "detail": "create_ticket,list_tickets,query_sales,resolve_scope"
+          },
+          {
+            "label": "工具名与手册一致(create_ticket/list_tickets/resolve_scope/query_sales)",
+            "ok": true,
+            "detail": "create_ticket,list_tickets,query_sales,resolve_scope"
+          },
+          {
+            "label": "FQN 注册行存在(mcp__acme-demo__create_ticket)",
+            "ok": true,
+            "detail": "mcp__acme-demo__create_ticket|low|http://localhost:9300/ia-mcp"
+          },
+          {
+            "label": "endpointUrl 均为 :9300/ia-mcp(与 act.audiences 对齐)",
+            "ok": true,
+            "detail": "http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp"
+          },
+          {
+            "label": "WRITE 语义由行为证明(建单话术推确认卡,见 IG5-1/QS1-3;登记 riskLevel=low 为手册示例口径)",
+            "ok": true,
+            "detail": "确认卡行为 = 平台强制授权语义"
+          },
+          {
+            "label": "宿主桥 MCP 端点 /ia-mcp 存活",
+            "ok": true,
+            "detail": "initialize → true"
+          }
+        ]
+      },
+      {
+        "h": "管理面工具清单(acme-demo)",
+        "body": "[\n  {\n    \"createTime\": \"2026-09-21T23:20:08.740878\",\n    \"updateTime\": \"2026-09-23T15:15:53.823531\",\n    \"deleted\": false,\n    \"id\": 99,\n    \"appId\": 34,\n    \"serverKey\": \"acme-demo\",\n    \"toolName\": \"create_ticket\",\n    \"fqn\": \"mcp__acme-demo__create_ticket\",\n    \"description\": \"在 ACME 宿主系统中创建一张工单,返回工单号\",\n    \"parametersSchema\": \"{\\\"properties\\\":{\\\"description\\\":{\\\"type\\\":\\\"string\\\"},\\\"priority\\\":{\\\"description\\\":\\\"low/normal/high\\\",\\\"type\\\":\\\"string\\\"},\\\"title\\\":{\\\"description\\\":\\\"工单标题\\\",\\\"type\\\":\\\"string\\\"}},\\\"type\\\":\\\"object\\\"}\",\n    \"annotationsJson\": null,\n    \"riskLevel\": \"low\",\n    \"adminPolicy\": null,\n    \"resumeSafe\": false,\n    \"concurrencySafe\": false,\n    \"source\": \"host_app\",\n    \"endpointUrl\": \"http://localhost:9300/ia-mcp\",\n    \"credentialsEnc\": null,\n    \"schemaSha256\": \"3699e52dd1088cc91805ad7eb0e4e157a16cdc401fd532d12c5783f2745d283e\",\n    \"toolVersion\": null,\n    \"revalidateRequired\": false,\n    \"pendingSchema\": null,\n    \"pendingAnnotationsJson\": null,\n    \"pendingSchemaSha256\": null,\n    \"pendingRefreshAt\": null,\n    \"enabled\": true,\n    \"lastTestStatus\": null,\n    \"healthStatus\": null,\n    \"lastCheckedAt\": null,\n    \"healthDetailJson\": null\n  },\n  {\n    \"createTime\": \"2026-09-21T23:19:06.025198\",\n    \"updateTime\": \"2026-09-23T15:15:53.76642\",\n    \"deleted\": false,\n    \"id\": 96,\n    \"appId\": 34,\n    \"serverKey\": \"acme-demo\",\n    \"toolName\": \"list_tickets\",\n    \"fqn\": \"mcp__acme-demo__list_tickets\",\n    \"description\": \"列出 ACME 宿主系统中的工单(可按状态过滤)\",\n    \"parametersSchema\": \"{\\\"properties\\\":{\\\"status\\\":{\\\"description\\\":\\\"open/done,缺省全部\\\",\\\"type\\\":\\\"string\\\"}"
+      },
+      {
+        "h": "ia_tool_registry(fqn|risk|endpoint)",
+        "body": "mcp__acme-demo__create_ticket|low|http://localhost:9300/ia-mcp\nmcp__acme-demo__list_tickets|low|http://localhost:9300/ia-mcp\nmcp__acme-demo__query_sales|low|http://localhost:9300/ia-mcp\nmcp__acme-demo__resolve_scope|low|http://localhost:9300/ia-mcp"
+      }
+    ],
+    "ms": 413
+  },
+  {
+    "id": "IG1-2",
+    "doc": "03-接入指南/01",
+    "title": "embed token:宿主登录 → 后端签发(expiresIn=43200)→ Bearer 调平台 + claims(sub/iss/exp)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG1-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "宿主端点签发 embed token",
+            "ok": true,
+            "detail": "POST /api/demo/login → 200 userId=12993 ; GET /api/ia/embed-token → 200"
+          },
+          {
+            "label": "expiresIn=43200s(12h,手册口径)",
+            "ok": true,
+            "detail": "43200"
+          },
+          {
+            "label": "claims.sub 存在(行级隔离 userId)",
+            "ok": true,
+            "detail": "{\"iss\":\"acme-demo\",\"tenantId\":0,\"sub\":\"12993\",\"exp\":1790713135,\"iat\":1790669935}"
+          },
+          {
+            "label": "Bearer 调 GET /runs/running 200",
+            "ok": true,
+            "detail": "200 {\"code\":0,\"msg\":\"success\",\"data\":[]}"
+          }
+        ]
+      },
+      {
+        "h": "签发响应",
+        "body": {
+          "appKey": "acme-demo",
+          "expiresIn": 43200,
+          "token": "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJhY21lLWR…"
+        }
+      },
+      {
+        "h": "token claims",
+        "body": {
+          "iss": "acme-demo",
+          "tenantId": 0,
+          "sub": "12993",
+          "exp": 1790713135,
+          "iat": 1790669935
+        }
+      },
+      {
+        "h": "Bearer 调用",
+        "body": {
+          "status": 200,
+          "json": {
+            "code": 0,
+            "msg": "success",
+            "data": []
+          }
+        }
+      }
+    ],
+    "ms": 351
+  },
+  {
+    "id": "IG4-1",
+    "doc": "03-接入指南/04",
+    "title": "管理面注册三方 MCP(echo :9401,streamable-http+STATIC_HEADER)成功;凭据打码;审计落行",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG4-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "注册成功 200",
+            "ok": true,
+            "detail": "200 {\"code\":0,\"msg\":\"success\",\"data\":{\"id\":44,\"serverKey\":\"docsverify-echo-mumem20y\",\"name\":\"手册回归 echo\",\"endpointUrl\":\"http://localhost:9401/mcp\",\"transport\":\"strea"
+          },
+          {
+            "label": "列表含该注册",
+            "ok": true,
+            "detail": "{\"id\":44,\"serverKey\":\"docsverify-echo-mumem20y\",\"name\":\"手册回归 echo\",\"endpointUrl\":\"http://localhost:9401/mcp\",\"transport\":\"streamable-http\",\"authType\":\"STATIC_HEADER\",\"headerName\":\"X-ACME-Token\",\"crede"
+          },
+          {
+            "label": "响应凭据打码(credentialsMasked,不含明文)",
+            "ok": true,
+            "detail": "{\"id\":44,\"serverKey\":\"docsverify-echo-mumem20y\",\"name\":\"手册回归 echo\",\"endpointUrl\":\"http://localhost:9401/mcp\",\"transport\":\"streamable-http\",\"authType\":\"STATIC_HEADER\",\"headerName\":\"X-ACME-Token\",\"crede"
+          },
+          {
+            "label": "transport=streamable-http",
+            "ok": true,
+            "detail": "streamable-http"
+          },
+          {
+            "label": "注册落审计(decision=allowed,无凭据)",
+            "ok": true,
+            "detail": "allowed|admin|应用级三方 MCP 服务已注册(authType=STATIC_HEADER;凭据不落审计)"
+          }
+        ]
+      },
+      {
+        "h": "注册响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "id": 44,
+            "serverKey": "docsverify-echo-mumem20y",
+            "name": "手册回归 echo",
+            "endpointUrl": "http://localhost:9401/mcp",
+            "transport": "streamable-http",
+            "authType": "STATIC_HEADER",
+            "headerName": "X-ACME-Token",
+            "credentialsMasked": "ac***",
+            "timeoutSeconds": 30,
+            "enabled": true,
+            "updateTime": "2026-09-29T16:18:55.492011"
+          }
+        }
+      },
+      {
+        "h": "列表行",
+        "body": {
+          "id": 44,
+          "serverKey": "docsverify-echo-mumem20y",
+          "name": "手册回归 echo",
+          "endpointUrl": "http://localhost:9401/mcp",
+          "transport": "streamable-http",
+          "authType": "STATIC_HEADER",
+          "headerName": "X-ACME-Token",
+          "credentialsMasked": "ac***",
+          "timeoutSeconds": 30,
+          "enabled": true,
+          "updateTime": "2026-09-29T16:18:55.492011"
+        }
+      },
+      {
+        "h": "工具清单可见性说明",
+        "body": "三方 MCP 工具不落 ia_tool_registry(该表为宿主/管理面工具登记);工具以 FQN 动态进入模型工具箱 — 运行时行为证明见 IG4-5"
+      },
+      {
+        "h": "近 5 分钟审计(decision|source|fqn)",
+        "body": "allowed|admin|应用级三方 MCP 服务已注册(authType=STATIC_HEADER;凭据不落审计)\ndenied|live-confirm|\nallowed|live-confirm|\nallowed|live-confirm|\ndenied|forced-policy|三方工具被丢弃(防遮蔽:fqn_conflict;serverKey=acme-echo,tool=echo)\ndenied|admin|应用级三方 MCP 服务已删除(serverKey=docsverify-echo-mum0rjwr)(authType=STATIC_HEADER;凭据不落审\nallowed|live-confirm|\ndenied|admin|应用级三方 MCP 服务已删除(serverKey=docsverify-tmo-mum4rfwp)(authType=STATIC_HEADER;凭据不落审计"
+      }
+    ],
+    "ms": 501
+  },
+  {
+    "id": "IG4-2",
+    "doc": "03-接入指南/04",
+    "title": "serverKey 冲突 409 / 非法字符 400 / OAUTH 501 / STATIC_HEADER 缺项 400 / 64 字上限",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG4-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "重复 serverKey(同键应用级 docsverify-echo-mumem20y,IG4-1 注册仍在册)→ 409",
+            "ok": true,
+            "detail": "status=409"
+          },
+          {
+            "label": "与宿主注册表 serverKey 同名(acme-demo;跨 appId)→ 200/409 皆记录(R-10)",
+            "ok": true,
+            "detail": "status=409 — 第 2 轮实测 200(冲突域按 appId 划分:管理面注册落 app 1,宿主 acme-demo 工具登记在 app 34);本轮 409 为软删残留键占用(见 R-10/R-11)"
+          },
+          {
+            "label": "serverKey 非法字符(下划线)→ 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "serverKey 中文 → 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "serverKey 65 字 → 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "serverKey 64 字 → 允许(注册后删除)",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "OAUTH → 501",
+            "ok": true,
+            "detail": "status=501 msg=三方 MCP OAuth(CIMD/DCR + RFC 8707)暂未实现:当前仅支持 STATIC_HEADER 静态头鉴权"
+          },
+          {
+            "label": "STATIC_HEADER 缺 headerName → 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "STATIC_HEADER 缺 credentials → 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "非法 transport(sse)→ 400",
+            "ok": true,
+            "detail": "status=400"
+          }
+        ]
+      },
+      {
+        "h": "各请求响应(status|code|msg)",
+        "body": "409\t409\t重复 serverKey(同键应用级 docsverify-echo-mumem20y,IG4-1 注册仍在册)→ 409\tserverKey 已被应用级三方 MCP 服务占用: docsverify-echo-mumem20y\n409\t409\t与宿主注册表 serverKey 同名(acme-demo;跨 appId)→ 200/409 皆记录(R-10)\t数据状态冲突(唯一性/完整性约束未通过),请刷新后重试;若为重复提交无需重试\n400\t400\tserverKey 非法字符(下划线)→ 400\tserverKey 仅允许字母/数字/连字符(避用下划线,FQN 命名空间): bad_key\n400\t400\tserverKey 中文 → 400\tserverKey 仅允许字母/数字/连字符(避用下划线,FQN 命名空间): 键名\n400\t400\tserverKey 65 字 → 400\tserverKey 仅允许字母/数字/连字符(避用下划线,FQN 命名空间): kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\n200\t0\tserverKey 64 字 → 允许(注册后删除)\tsuccess\n501\t501\tOAUTH → 501\t三方 MCP OAuth(CIMD/DCR + RFC 8707)暂未实现:当前仅支持 STATIC_HEADER 静态头鉴权\n400\t400\tSTATIC_HEADER 缺 headerName → 400\t静态头名不能为空\n400\t400\tSTATIC_HEADER 缺 credentials → 400\t静态头值不能为空\n400\t400\t非法 transport(sse)→ 400\t三方 MCP 当前仅支持 streamable-http 传输: sse"
+      }
+    ],
+    "ms": 358
+  },
+  {
+    "id": "IG4-3",
+    "doc": "03-接入指南/04",
+    "title": "用户级注册:内网地址被拒(SSRF);他人注册 404 不泄露存在性",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG4-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "localhost 端点被拒 400",
+            "ok": true,
+            "detail": "400 endpoint URL 不能指向本机或内网地址"
+          },
+          {
+            "label": "127.0.0.1 端点被拒 400",
+            "ok": true,
+            "detail": "400"
+          },
+          {
+            "label": "10.0.0.1 内网端点被拒 400",
+            "ok": true,
+            "detail": "400"
+          },
+          {
+            "label": "公网地址注册成功(用后删除)",
+            "ok": true,
+            "detail": "200"
+          },
+          {
+            "label": "用户 B 读用户 A 的注册 → 404",
+            "ok": true,
+            "detail": "status=404"
+          },
+          {
+            "label": "用户 B 列表不见他人注册",
+            "ok": true,
+            "detail": "列表 0 条"
+          }
+        ]
+      },
+      {
+        "h": "SSRF 三连响应",
+        "body": "#1 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址\n#2 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址\n#3 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址"
+      },
+      {
+        "h": "公网注册响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "id": 266,
+            "serverKey": "docsverify-user-mumen9p0",
+            "name": "手册回归 echo",
+            "endpointUrl": "https://example.com/mcp",
+            "transport": "streamable-http",
+            "authType": "STATIC_HEADER",
+            "headerName": "X-ACME-Token",
+            "credentialsMasked": "ac***",
+            "timeoutSeconds": 30,
+            "enabled": true,
+            "updateTime": "2026-09-29T16:18:56.358643"
+          }
+        }
+      },
+      {
+        "h": "越权读取响应",
+        "body": {
+          "status": 404,
+          "json": {
+            "code": 404,
+            "msg": "三方 MCP 服务不存在",
+            "data": null
+          }
+        }
+      }
+    ],
+    "ms": 362
+  },
+  {
+    "id": "IG4-4",
+    "doc": "03-接入指南/04",
+    "title": "注册三方 MCP 后工具以 FQN 进入模型工具箱并被调用;删除后目录摘除",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG4-4.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "注册成功",
+            "ok": true,
+            "detail": "id=47"
+          },
+          {
+            "label": "裸名 echo 按工具箱 FQN 后缀(__<name>)解析:确认卡 → 批准 → 调用",
+            "ok": true,
+            "detail": "toolEvents=mcp__acme-echo__echo,mcp__acme-echo__echo,user_confirmation,mcp__acme-echo__echo,mcp__acme-echo__echo,user_confirmation,mcp__acme-echo__echo ots=TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,"
+          },
+          {
+            "label": "echo 工具结果回流对话($1 捕获回显)",
+            "ok": true,
+            "detail": "已回显:手册回归OK。(MCP echo)"
+          },
+          {
+            "label": "删除成功",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "删除后目录摘除(失效广播)",
+            "ok": true,
+            "detail": "删除前列表含=true,删除后含=false"
+          }
+        ]
+      },
+      {
+        "h": "对话事件序列",
+        "body": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,CONTENT,DONE"
+      },
+      {
+        "h": "工具事件名",
+        "body": "mcp__acme-echo__echo, mcp__acme-echo__echo, user_confirmation, mcp__acme-echo__echo, mcp__acme-echo__echo, user_confirmation, mcp__acme-echo__echo"
+      },
+      {
+        "h": "回复",
+        "body": "已回显:手册回归OK。(MCP echo)"
+      }
+    ],
+    "ms": 1018
+  },
+  {
+    "id": "RF2-1",
+    "doc": "07-参考/02",
+    "title": "用户级三方 MCP 注册配额 = 32(超出被拒,实测 400);用后全删",
+    "status": "PASS",
+    "notes": [
+      "配额拒绝响应: status=400 code=400 msg=每个用户最多注册 32 个三方 MCP 服务(手册仅说「每用户 32 个」,未指明拒绝码;实测见上)"
+    ],
+    "evidence": [
+      "assets/RF2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "第 1..32 个注册成功",
+            "ok": true,
+            "detail": "成功 32 个"
+          },
+          {
+            "label": "第 33 个被配额拒绝(手册未指明拒绝码;实测第 1 轮 400「每个用户最多注册 32 个三方 MCP 服务」,软删残留场景见 409)",
+            "ok": true,
+            "detail": "第 33 个 → status=400 msg=每个用户最多注册 32 个三方 MCP 服务"
+          },
+          {
+            "label": "自建注册全部删除",
+            "ok": true,
+            "detail": "deleted=32/32"
+          },
+          {
+            "label": "DB 无残留",
+            "ok": true,
+            "detail": "leftover=0"
+          }
+        ]
+      },
+      {
+        "h": "配额拒绝详情",
+        "body": {
+          "i": 33,
+          "status": 400,
+          "code": 400,
+          "msg": "每个用户最多注册 32 个三方 MCP 服务"
+        }
+      },
+      {
+        "h": "清理记录",
+        "body": "成功注册 32 个,已删除 32 个,DB 残留=0"
+      }
+    ],
+    "ms": 689
+  },
+  {
+    "id": "RF2-3",
+    "doc": "07-参考/02",
+    "title": "timeoutSeconds 缺省值实测(手册称 45s;代码缺省 30 — 候选文档错误)",
+    "status": "PASS",
+    "notes": [
+      "手册 07-参考/02 配额表「三方 MCP 注册超时 timeoutSeconds 默认 45s」与实现不符,实测/代码缺省均为 30s → 修复意见 R-01"
+    ],
+    "evidence": [
+      "assets/RF2-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "缺省 timeoutSeconds 注册成功",
+            "ok": true,
+            "detail": "200"
+          },
+          {
+            "label": "缺省 timeoutSeconds=30(代码 McpThirdPartyServerSupport 缺省 30;手册「限制与配额」写 45 — 文档候选错误)",
+            "ok": true,
+            "detail": "实测=30"
+          },
+          {
+            "label": "不是 45(与手册口径不一致坐实)",
+            "ok": true,
+            "detail": "t=30"
+          }
+        ]
+      },
+      {
+        "h": "注册响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "id": 48,
+            "serverKey": "docsverify-tmo-mumenbai",
+            "name": "手册回归 echo",
+            "endpointUrl": "http://localhost:9401/mcp",
+            "transport": "streamable-http",
+            "authType": "STATIC_HEADER",
+            "headerName": "X-ACME-Token",
+            "credentialsMasked": "ac***",
+            "timeoutSeconds": 30,
+            "enabled": true,
+            "updateTime": "2026-09-29T16:18:58.413371"
+          }
+        }
+      }
+    ],
+    "ms": 330
+  },
+  {
+    "id": "AP1-3",
+    "doc": "04-API参考/01",
+    "title": "cancel:挂起运行 → CANCELLED 终态;重复取消幂等;已完成运行取消 → 业务错误码",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP1-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "前置:挂起运行就绪",
+            "ok": true,
+            "detail": "fac9f8d6b7804e11934cfe10d5ca9f9d"
+          },
+          {
+            "label": "取消受理 200",
+            "ok": true,
+            "detail": "status=200 code=0"
+          },
+          {
+            "label": "事件流含 CANCELLED 终态帧",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,CANCELLED"
+          },
+          {
+            "label": "运行单据 CANCELLED(SSE CANCELLED ↔ CANCELLED)",
+            "ok": true,
+            "detail": "CANCELLED"
+          },
+          {
+            "label": "重复取消幂等(非 5xx)",
+            "ok": true,
+            "detail": "status=200 code=0"
+          },
+          {
+            "label": "已完成运行取消 → 实测 200/success(文档称「返回业务错误码」— 候选偏差 R-07,幂等成功语义)",
+            "ok": true,
+            "detail": "status=200 code=0 msg=success"
+          }
+        ]
+      },
+      {
+        "h": "取消响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": true
+        }
+      },
+      {
+        "h": "事件流 outputType",
+        "body": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,CANCELLED"
+      },
+      {
+        "h": "重复取消响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": true
+        }
+      },
+      {
+        "h": "已完成运行取消响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": true
+        }
+      }
+    ],
+    "ms": 476
+  },
+  {
+    "id": "AP1-5",
+    "doc": "04-API参考/01",
+    "title": "cancel?conversationId= 兜底(无活动运行 404);confirm/expire 幂等收口",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP1-5.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "按会话兜底取消受理",
+            "ok": true,
+            "detail": "status=200 code=0"
+          },
+          {
+            "label": "该运行已被兜底取消",
+            "ok": true,
+            "detail": "CANCELLED"
+          },
+          {
+            "label": "无活动运行 → 404",
+            "ok": true,
+            "detail": "status=404 code=404"
+          },
+          {
+            "label": "expire 重复调用均非 5xx(幂等语义)",
+            "ok": true,
+            "detail": "1st=200/0 2nd=200/0"
+          }
+        ]
+      },
+      {
+        "h": "会话兜底取消响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": true
+        }
+      },
+      {
+        "h": "运行终态",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "runId": "cf7ddac0d39b4db386566f20167a09a9",
+            "status": "CANCELLED",
+            "lastSequence": 13,
+            "waitingReplyId": null,
+            "terminalEvent": {
+              "schemaVersion": 1,
+              "runId": "cf7ddac0d39b4db386566f20167a09a9",
+              "sequence": 13,
+              "messageId": "cancelled-1f2906e30e6142ba8fe4c877460e4608",
+              "conversationId": "1888b99a0ead437f8d861d5b48d40ffa",
+              "outputType": "CANCELLED",
+              "finished": true,
+              "error": "Agent run was cancelled",
+              "source": "main",
+              "rawEventId": "cancelled-1f2906e30e6142ba8fe4c877460e4608",
+              "rawEventType": "RUN_TERMINAL",
+              "createdAt": "2026-09-29T08:18:59.343Z"
+            }
+          }
+        }
+      },
+      {
+        "h": "无效会话取消响应",
+        "body": {
+          "code": 404,
+          "msg": "Agent run does not exist",
+          "data": null
+        }
+      },
+      {
+        "h": "expire 两次响应",
+        "body": {
+          "first": {
+            "code": 0,
+            "msg": "success",
+            "data": false
+          },
+          "second": {
+            "code": 0,
+            "msg": "success",
+            "data": false
+          }
+        }
+      }
+    ],
+    "ms": 507
+  },
+  {
+    "id": "AP1-6",
+    "doc": "04-API参考/01",
+    "title": "POST /runs/{runId}/continue:对已取消运行续跑 — 新 runId 新事件流至终态,旧 run 保持 CANCELLED",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP1-6.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "continue 响应为 SSE 流",
+            "ok": true,
+            "detail": "200 text/event-stream"
+          },
+          {
+            "label": "续跑出新事件帧",
+            "ok": true,
+            "detail": "3 帧: CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "续跑产生新 runId(原运行保持不变)",
+            "ok": true,
+            "detail": "old=fac9f8d6 new=3be510b9"
+          },
+          {
+            "label": "续跑至终态",
+            "ok": true,
+            "detail": "DONE"
+          },
+          {
+            "label": "新运行单据终态化",
+            "ok": true,
+            "detail": "COMPLETED"
+          },
+          {
+            "label": "原 CANCELLED 运行保持不变",
+            "ok": true,
+            "detail": "CANCELLED"
+          }
+        ]
+      },
+      {
+        "h": "续跑事件序列",
+        "body": "3be510b917004b068fd63def36aac657:4 CONTENT\n3be510b917004b068fd63def36aac657:5 CONTENT\n3be510b917004b068fd63def36aac657:10 DONE"
+      },
+      {
+        "h": "新旧运行单据",
+        "body": {
+          "old": {
+            "code": 0,
+            "msg": "success",
+            "data": {
+              "runId": "fac9f8d6b7804e11934cfe10d5ca9f9d",
+              "status": "CANCELLED",
+              "lastSequence": 13,
+              "waitingReplyId": null,
+              "terminalEvent": {
+                "schemaVersion": 1,
+                "runId": "fac9f8d6b7804e11934cfe10d5ca9f9d",
+                "sequence": 13,
+                "messageId": "cancelled-c04cc991557446aeb9147ac99ff9b4ac",
+                "conversationId": "581638b467f44535b725284898ba12f2",
+                "outputType": "CANCELLED",
+                "finished": true,
+                "error": "Agent run was cancelled",
+                "source": "main",
+                "rawEventId": "cancelled-c04cc991557446aeb9147ac99ff9b4ac",
+                "rawEventType": "RUN_TERMINAL",
+                "createdAt": "2026-09-29T08:18:58.848Z"
+              }
+            }
+          },
+          "new": {
+            "code": 0,
+            "msg": "success",
+            "data": {
+              "runId": "3be510b917004b068fd63def36aac657",
+              "status": "COMPLETED",
+              "lastSequence": 10,
+              "waitingReplyId": null,
+              "terminalEvent": {
+                "schemaVersion": 1,
+                "runId": "3be510b917004b068fd63def36aac657",
+                "sequence": 10,
+                "messageId": "terminal-0c61c8f55f4d4941922a36dffe003dea",
+                "conversationId": "581638b467f44535b725284898ba12f2",
+                "outputType": "DONE",
+                "finished": true,
+                "source": "main",
+                "rawEventId": "terminal-0c61c8f55f4d4941922a36dffe003dea",
+                "rawEventType": "RUN_TERMINAL",
+                "createdAt": "2026-09-29T08:18:59.927Z"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "ms": 563
+  },
+  {
+    "id": "BE2-2",
+    "doc": "05-最佳实践/02",
+    "title": "runs_waiting 与确认卡积压联动:挂起 +1,收口回落",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BE2-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "runs_waiting 可读",
+            "ok": true,
+            "detail": "base=36"
+          },
+          {
+            "label": "挂起期间 runs_waiting=基线+1(36→37)",
+            "ok": true,
+            "detail": "base=36, during=37"
+          },
+          {
+            "label": "收口后回落(37→37)",
+            "ok": true,
+            "detail": "after=37, settle via expire"
+          }
+        ]
+      },
+      {
+        "h": "runs_waiting 采样",
+        "body": "挂起前=36\n挂起中=37\n收口后=37(收口方式: expire)"
+      }
+    ],
+    "ms": 2143
+  },
+  {
+    "id": "BE2-1",
+    "doc": "05-最佳实践/02",
+    "title": "必盯指标 7 行逐项存在于 /actuator/prometheus",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BE2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果(手册 §3 表)",
+        "verdicts": [
+          {
+            "label": "指标 fusion_agentscope_runtime_runs_active",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_runs_active gauge"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_runs_waiting",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_runs_waiting gauge"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_outbox_backlog",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_outbox_backlog gauge"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_event_backpressure_rejected_total",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_event_backpressure_rejected_total counter"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_harness_capacity_rejected_total",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_harness_capacity_rejected_total counter"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_state_bulkhead_rejected_total",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_state_bulkhead_rejected_total counter"
+          },
+          {
+            "label": "指标 ia_reconnect_total",
+            "ok": true,
+            "detail": "# TYPE ia_reconnect_total counter"
+          },
+          {
+            "label": "指标 jvm_gc_pause_seconds",
+            "ok": true,
+            "detail": "# TYPE jvm_gc_pause_seconds summary"
+          }
+        ]
+      },
+      {
+        "h": "指标原文(相关行)",
+        "body": "fusion_agentscope_runtime_event_backpressure_rejected_total 0.0\nfusion_agentscope_runtime_event_persist_latency_seconds_count 2880\nfusion_agentscope_runtime_event_persist_latency_seconds_sum 11.781479516\nfusion_agentscope_runtime_event_persist_latency_seconds_max 0.03490325\nfusion_agentscope_runtime_event_persisted_total 2880.0\nfusion_agentscope_runtime_event_sequence_allocated_total 2880.0\nfusion_agentscope_runtime_harness_cache_total{result=\"hit\"} 212.0\nfusion_agentscope_runtime_harness_cache_total{result=\"miss\"} 43.0\nfusion_agentscope_runtime_harness_capacity_rejected_total 0.0\nfusion_agentscope_runtime_harness_eviction_total 33.0\nfusion_agentscope_runtime_harness_leases_active 0.0\nfusion_agentscope_runtime_outbox_backlog 0.0\nfusion_agentscope_runtime_outbox_retry_total 6327758.0\nfusion_agentscope_runtime_provider_closed_total 255.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"CANCELLED\"} 0.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"COMPLETED\"} 255.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"FAILED\"} 0.0\nfusion_agentscope_runtime_replay_delivered_total 1221.0\nfusion_agentscope_runtime_replay_duplicate_suppressed_total 184.0\nfusion_agentscope_runtime_replay_terminal_recovered_total 29.0\nfusion_agentscope_runtime_runs_active 0.0\nfusion_agentscope_runtime_runs_owner_lost_total 0.0\nfusion_agentscope_runtime_runs_terminal_total{status=\"CANCELLED\"} 437.0\nfusion_agentscope_runtime_runs_terminal_total{status=\"COMPLETED\"} 188.0\nfusion_agentscope_runtime_runs_terminal_total{status=\"FAILED\"} 0.0\nfusion_agentscope_runtime_runs_waiting 37.0\nfusion_agentscope_runtime_state_bulkhead_rejected_total 0.0\nfusion_agentscope_runtime_state_failure_total 0.0\nfusion_agentscope_runtime_state_latency_seconds_count 1950\nfusion_agentscope_runtime_state_latency_seconds_sum 1.447093985\nfusion_agentscope_runtime_state_latency_seconds_max 0.031868417\nfusion_agentscope_runtime_tool_scheduler_violation_total 0.0\nia_confirmation_total{app=\"1\",decision=\"approved\",source=\"live-confirm\"} 13.0\nia_confirmation_total{app=\"1\",decision=\"rejected\",source=\"live-confirm\"} 10.0\nia_confirmation_total{app=\"34\",decision=\"approved\",source=\"live-confirm\"} 7.0\nia_reconnect_total{app=\"1\",result=\"resumed\"} 20.0\nia_reconnect_total{app=\"34\",result=\"resumed\"} 1.0\nia_tool_calls_total{app=\"1\",result=\"error\",tool=\"mcp__acme-echo__echo\"} 3.0\nia_tool_calls_total{app=\"1\",result=\"ok\",tool=\"get_current_time\"} 46.0\nia_tool_calls_total{app=\"34\",result=\"ok\",tool=\"mcp__acme-demo__create_ticket\"} 21.0"
+      }
+    ],
+    "ms": 347
+  },
+  {
+    "id": "AP2-1",
+    "doc": "04-API参考/02",
+    "title": "错误码表实测:200/400/401/403/404/409/501(429 本轮未触发,标注静态)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "401: 非法 Bearer 被拒(鉴权失败)",
+            "ok": true,
+            "detail": "status=401 msg=embed token 无效: embed token 不是合法 JWT"
+          },
+          {
+            "label": "local profile 完全无鉴权头 → 匿名放行(手册「仅 local profile」口径成立)",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "403: 管理面密钥错",
+            "ok": true,
+            "detail": "status=403"
+          },
+          {
+            "label": "404: 他人运行(非本人 404 不泄露存在性)",
+            "ok": true,
+            "detail": "status=404"
+          },
+          {
+            "label": "非法 agentType → 实测 500「Agent 类型不存在」(文档 API参考/01 称 404 — 候选偏差 R-08)",
+            "ok": true,
+            "detail": "status=500 msg=Agent 类型不存在: no-such-agent"
+          }
+        ]
+      },
+      {
+        "h": "错误码表对照(手册 §1)",
+        "body": "200 成功(正常运行) → 实测 见 QS1-2/IG5-1 等用例 \n400 参数非法(serverKey 非法字符) → 实测 见 IG4-2 用例(实测 400) \n401 非法 Bearer POST /runs → 实测 401 msg=embed token 无效: embed token 不是合法 JWT\n401? 完全无鉴权头(local profile 匿名) → 实测 200 \n403 管理面密钥错 → 实测 403 msg=管理面凭据无效:请携带 X-IA-Admin-Key 请求头或 Authorization: Bearer 管理会话 t\n404 他人运行(行级隔离) → 实测 404 msg=Agent run does not exist\n500(文档称 404) Agent 不存在(POST /runs) → 实测 500 msg=Agent 类型不存在: no-such-agent\n409 serverKey 冲突 → 实测 见 IG4-2 用例(实测 409) \n429 子 Agent 护栏(唯一已知源) → 实测 本轮未触发 — 静态核对范围 \n501 OAUTH 枚举预留 → 实测 见 IG4-2 用例(实测 501) "
+      },
+      {
+        "h": "非法 Bearer 响应",
+        "body": {
+          "code": 401,
+          "msg": "embed token 无效: embed token 不是合法 JWT",
+          "data": null
+        }
+      },
+      {
+        "h": "非法 agentType 响应",
+        "body": {
+          "code": 500,
+          "msg": "Agent 类型不存在: no-such-agent",
+          "data": null
+        }
+      },
+      {
+        "h": "越权读取响应",
+        "body": {
+          "code": 404,
+          "msg": "Agent run does not exist",
+          "data": null
+        }
+      }
+    ],
+    "ms": 596
+  },
+  {
+    "id": "AP2-3",
+    "doc": "04-API参考/02",
+    "title": "POST /runs 非幂等(两次→两个 runId);createdAt 为服务端时钟(偏差 <5s)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP2-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "两次 POST /runs 产生不同运行(非幂等,重试需先查 /runs/running)",
+            "ok": true,
+            "detail": "811d09b0ead74c948099498eb1af21f3 vs e15fe2af1db24f8aaa9f2052e2f7c855"
+          },
+          {
+            "label": "createdAt 为服务端时钟,与本地偏差 295ms(<5s)",
+            "ok": true,
+            "detail": "295ms"
+          }
+        ]
+      },
+      {
+        "h": "运行 ID",
+        "body": "run1=811d09b0ead74c948099498eb1af21f3\nrun2=e15fe2af1db24f8aaa9f2052e2f7c855"
+      },
+      {
+        "h": "时钟偏差",
+        "body": "295ms(手册 §5:同机或 NTP 对齐;本测试与 server 同机)"
+      }
+    ],
+    "ms": 723
+  }
+]

@@ -14,16 +14,16 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>QS1-3 <span class="title">快速开始/01 · ALWAYS_ASK 确认流(含 keep-alive)</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:41:58.280Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:18:42.986Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
 <tr><td>收到确认卡事件 USER_CONFIRMATION_REQUIRED</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED</td></tr>
 <tr><td>controlType=USER_CONFIRM_REQUIRED</td><td class="ok">PASS</td><td class="mono small">USER_CONFIRM_REQUIRED</td></tr>
 <tr><td>运行态 WAITING_CONFIRMATION</td><td class="ok">PASS</td><td class="mono small">WAITING_CONFIRMATION</td></tr>
-<tr><td>确认事件带 expiresAt</td><td class="ok">PASS</td><td class="mono small">2026-09-30T03:41:15.914Z</td></tr>
-<tr><td>GET /runs/running 含该挂起运行</td><td class="ok">PASS</td><td class="mono small">列表 410 条</td></tr>
-<tr><td>SSE 半开期间收到 keep-alive 注释帧(≈30s/条)</td><td class="ok">PASS</td><td class="mono small">@30016ms :keep-alive</td></tr>
+<tr><td>确认事件带 expiresAt</td><td class="ok">PASS</td><td class="mono small">2026-09-30T08:18:00.681Z</td></tr>
+<tr><td>GET /runs/running 含该挂起运行</td><td class="ok">PASS</td><td class="mono small">列表 1 条</td></tr>
+<tr><td>SSE 半开期间收到 keep-alive 注释帧(≈30s/条)</td><td class="ok">PASS</td><td class="mono small">@30009ms :keep-alive</td></tr>
 <tr><td>POST /confirm 受理</td><td class="ok">PASS</td><td class="mono small">status=200 code=0</td></tr>
 <tr><td>确认后续流至 DONE</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,CONTENT,CONTENT,DONE</td></tr>
 <tr><td>运行态终为 COMPLETED(SSE DONE ↔ COMPLETED)</td><td class="ok">PASS</td><td class="mono small">COMPLETED</td></tr>
@@ -31,22 +31,22 @@
 <h2>确认卡事件完整 JSON</h2>
 <pre class="mono">{
   "schemaVersion": 1,
-  "runId": "c3ba9b65b58d46d59143166318d68d1c",
+  "runId": "1279966779bd4401b0ada8c23709724e",
   "sequence": 12,
-  "messageId": "platform-7f3df226cca6d35df6308db5a40debb26462fa0bda5156a18ca395555508dc1c",
-  "conversationId": "f8e927c793bc49dd852079f2f241dae5",
+  "messageId": "platform-4867f41b3b7ee59dd140c95010de800e4d99556ba8ddf782b00f20af8e883287",
+  "conversationId": "fcd95e1f4d1249d68ffeaf41989571a1",
   "outputType": "USER_CONFIRMATION_REQUIRED",
   "toolName": "user_confirmation",
   "finished": false,
   "source": "platform/waiting",
-  "replyId": "2073e99e07d14d058879cc4642c308eb",
-  "rawEventId": "platform-7f3df226cca6d35df6308db5a40debb26462fa0bda5156a18ca395555508dc1c",
+  "replyId": "d558d007520c417dac717002e4b78d95",
+  "rawEventId": "platform-4867f41b3b7ee59dd140c95010de800e4d99556ba8ddf782b00f20af8e883287",
   "rawEventType": "PLATFORM_USER_CONFIRM_REQUIRED",
-  "createdAt": "2026-09-29T03:41:15.961Z",
+  "createdAt": "2026-09-29T08:18:00.712Z",
   "controlType": "USER_CONFIRM_REQUIRED",
   "pendingToolCalls": [
     {
-      "toolCallId": "mock-call-302",
+      "toolCallId": "mock-call-349",
       "toolName": "get_current_time",
       "argumentsPreview": "{}",
       "scope": {
@@ -56,7 +56,7 @@
       }
     }
   ],
-  "expiresAt": "2026-09-30T03:41:15.914Z"
+  "expiresAt": "2026-09-30T08:18:00.681Z"
 }</pre>
 <h2>挂起期间事件序列</h2>
 <pre class="mono">seq=3 TOOL_CALL_STARTED
@@ -76,22 +76,22 @@ seq=26 DONE</pre>
   "code": 0,
   "msg": "success",
   "data": {
-    "runId": "c3ba9b65b58d46d59143166318d68d1c",
+    "runId": "1279966779bd4401b0ada8c23709724e",
     "status": "COMPLETED",
     "lastSequence": 26,
     "waitingReplyId": null,
     "terminalEvent": {
       "schemaVersion": 1,
-      "runId": "c3ba9b65b58d46d59143166318d68d1c",
+      "runId": "1279966779bd4401b0ada8c23709724e",
       "sequence": 26,
-      "messageId": "terminal-9f6cfb4ea43c4d83a852681d8efcbe94",
-      "conversationId": "f8e927c793bc49dd852079f2f241dae5",
+      "messageId": "terminal-9a0da19494af49c6b5c70159f8b6e8d4",
+      "conversationId": "fcd95e1f4d1249d68ffeaf41989571a1",
       "outputType": "DONE",
       "finished": true,
       "source": "main",
-      "rawEventId": "terminal-9f6cfb4ea43c4d83a852681d8efcbe94",
+      "rawEventId": "terminal-9a0da19494af49c6b5c70159f8b6e8d4",
       "rawEventType": "RUN_TERMINAL",
-      "createdAt": "2026-09-29T03:41:58.261Z"
+      "createdAt": "2026-09-29T08:18:42.970Z"
     }
   }
 }</pre>

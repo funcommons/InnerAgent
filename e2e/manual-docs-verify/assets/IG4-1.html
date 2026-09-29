@@ -14,13 +14,13 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>IG4-1 <span class="title">接入指南/04 · 应用级三方 MCP 注册</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:11.424Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:18:55.631Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
-<tr><td>注册成功 200</td><td class="ok">PASS</td><td class="mono small">200 {"code":0,"msg":"success","data":{"id":39,"serverKey":"docsverify-echo-mum4q5o7","name":"手册回归 echo","endpointUrl":"http://localhost:9401/mcp","transport":"strea</td></tr>
-<tr><td>列表含该注册</td><td class="ok">PASS</td><td class="mono small">{"id":39,"serverKey":"docsverify-echo-mum4q5o7","name":"手册回归 echo","endpointUrl":"http://localhost:9401/mcp","transport":"streamable-http","authType":"STATIC_HEADER","headerName":"X-ACME-Token","crede</td></tr>
-<tr><td>响应凭据打码(credentialsMasked,不含明文)</td><td class="ok">PASS</td><td class="mono small">{"id":39,"serverKey":"docsverify-echo-mum4q5o7","name":"手册回归 echo","endpointUrl":"http://localhost:9401/mcp","transport":"streamable-http","authType":"STATIC_HEADER","headerName":"X-ACME-Token","crede</td></tr>
+<tr><td>注册成功 200</td><td class="ok">PASS</td><td class="mono small">200 {"code":0,"msg":"success","data":{"id":44,"serverKey":"docsverify-echo-mumem20y","name":"手册回归 echo","endpointUrl":"http://localhost:9401/mcp","transport":"strea</td></tr>
+<tr><td>列表含该注册</td><td class="ok">PASS</td><td class="mono small">{"id":44,"serverKey":"docsverify-echo-mumem20y","name":"手册回归 echo","endpointUrl":"http://localhost:9401/mcp","transport":"streamable-http","authType":"STATIC_HEADER","headerName":"X-ACME-Token","crede</td></tr>
+<tr><td>响应凭据打码(credentialsMasked,不含明文)</td><td class="ok">PASS</td><td class="mono small">{"id":44,"serverKey":"docsverify-echo-mumem20y","name":"手册回归 echo","endpointUrl":"http://localhost:9401/mcp","transport":"streamable-http","authType":"STATIC_HEADER","headerName":"X-ACME-Token","crede</td></tr>
 <tr><td>transport=streamable-http</td><td class="ok">PASS</td><td class="mono small">streamable-http</td></tr>
 <tr><td>注册落审计(decision=allowed,无凭据)</td><td class="ok">PASS</td><td class="mono small">allowed|admin|应用级三方 MCP 服务已注册(authType=STATIC_HEADER;凭据不落审计)</td></tr>
 </table>
@@ -29,8 +29,8 @@
   "code": 0,
   "msg": "success",
   "data": {
-    "id": 39,
-    "serverKey": "docsverify-echo-mum4q5o7",
+    "id": 44,
+    "serverKey": "docsverify-echo-mumem20y",
     "name": "手册回归 echo",
     "endpointUrl": "http://localhost:9401/mcp",
     "transport": "streamable-http",
@@ -39,13 +39,13 @@
     "credentialsMasked": "ac***",
     "timeoutSeconds": 30,
     "enabled": true,
-    "updateTime": "2026-09-29T11:42:11.261969"
+    "updateTime": "2026-09-29T16:18:55.492011"
   }
 }</pre>
 <h2>列表行</h2>
 <pre class="mono">{
-  "id": 39,
-  "serverKey": "docsverify-echo-mum4q5o7",
+  "id": 44,
+  "serverKey": "docsverify-echo-mumem20y",
   "name": "手册回归 echo",
   "endpointUrl": "http://localhost:9401/mcp",
   "transport": "streamable-http",
@@ -54,7 +54,7 @@
   "credentialsMasked": "ac***",
   "timeoutSeconds": 30,
   "enabled": true,
-  "updateTime": "2026-09-29T11:42:11.261969"
+  "updateTime": "2026-09-29T16:18:55.492011"
 }</pre>
 <h2>工具清单可见性说明</h2>
 <pre class="mono">三方 MCP 工具不落 ia_tool_registry(该表为宿主/管理面工具登记);工具以 FQN 动态进入模型工具箱 — 运行时行为证明见 IG4-5</pre>
@@ -63,7 +63,7 @@
 denied|live-confirm|
 allowed|live-confirm|
 allowed|live-confirm|
-denied|forced-policy|三方工具被丢弃(防遮蔽:name_shadow;serverKey=docsverify-echo-mum0rjwr,tool=echo)
 denied|forced-policy|三方工具被丢弃(防遮蔽:fqn_conflict;serverKey=acme-echo,tool=echo)
-denied|admin|应用级三方 MCP 服务已删除(serverKey=docsverify-tmo-mum4mgjj)(authType=STATIC_HEADER;凭据不落审计
-denied|admin|应用级三方 MCP 服务已删除(serverKey=kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk-mum</pre>
+denied|admin|应用级三方 MCP 服务已删除(serverKey=docsverify-echo-mum0rjwr)(authType=STATIC_HEADER;凭据不落审
+allowed|live-confirm|
+denied|admin|应用级三方 MCP 服务已删除(serverKey=docsverify-tmo-mum4rfwp)(authType=STATIC_HEADER;凭据不落审计</pre>

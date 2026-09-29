@@ -14,14 +14,14 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>IG1-2 <span class="title">接入指南/01 · embed token 签发与使用</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:10.907Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:18:55.143Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
 <tr><td>宿主端点签发 embed token</td><td class="ok">PASS</td><td class="mono small">POST /api/demo/login → 200 userId=12993 ; GET /api/ia/embed-token → 200</td></tr>
 <tr><td>expiresIn=43200s(12h,手册口径)</td><td class="ok">PASS</td><td class="mono small">43200</td></tr>
-<tr><td>claims.sub 存在(行级隔离 userId)</td><td class="ok">PASS</td><td class="mono small">{"iss":"acme-demo","tenantId":0,"sub":"12993","exp":1790696530,"iat":1790653330}</td></tr>
-<tr><td>Bearer 调 GET /runs/running 200</td><td class="ok">PASS</td><td class="mono small">200 {"code":0,"msg":"success","data":[{"runId":"ababcc86ab6d4d908fa7537141b0851f","c</td></tr>
+<tr><td>claims.sub 存在(行级隔离 userId)</td><td class="ok">PASS</td><td class="mono small">{"iss":"acme-demo","tenantId":0,"sub":"12993","exp":1790713135,"iat":1790669935}</td></tr>
+<tr><td>Bearer 调 GET /runs/running 200</td><td class="ok">PASS</td><td class="mono small">200 {"code":0,"msg":"success","data":[]}</td></tr>
 </table>
 <h2>签发响应</h2>
 <pre class="mono">{
@@ -34,8 +34,8 @@
   "iss": "acme-demo",
   "tenantId": 0,
   "sub": "12993",
-  "exp": 1790696530,
-  "iat": 1790653330
+  "exp": 1790713135,
+  "iat": 1790669935
 }</pre>
 <h2>Bearer 调用</h2>
 <pre class="mono">{
@@ -43,62 +43,6 @@
   "json": {
     "code": 0,
     "msg": "success",
-    "data": [
-      {
-        "runId": "ababcc86ab6d4d908fa7537141b0851f",
-        "conversationId": "49ae998fba944842a8ee65f397f2cd2a",
-        "projectId": null,
-        "title": "帮我建一张工单:标题=隔离复现G2,描述=探针,优先级=high",
-        "category": null,
-        "status": "WAITING_CONFIRMATION",
-        "lastSequence": 12,
-        "waitingReplyId": "38f54e42f8ae4817b8cd5b7640ea3f2b",
-        "startedAt": "2026-09-29T03:35:02.499Z"
-      },
-      {
-        "runId": "e8b2fab01c42451e8d5ea94610b1071b",
-        "conversationId": "4639d5c401424991a6df877e2e039edb",
-        "projectId": null,
-        "title": "帮我建一张工单:标题=手册回归工单-033146,描述=3楼打印机卡纸,优先级=high",
-        "category": null,
-        "status": "WAITING_CONFIRMATION",
-        "lastSequence": 12,
-        "waitingReplyId": "38e81a711da14faa80c3f8c7f7e33947",
-        "startedAt": "2026-09-29T03:31:46.504Z"
-      },
-      {
-        "runId": "ea0174e16a3343bea2a315d60526098c",
-        "conversationId": "1d152c12c790403eb24f59a48a8b82e6",
-        "projectId": null,
-        "title": "帮我建一张工单:标题=手册回归工单-032424,描述=3楼打印机卡纸,优先级=high",
-        "category": null,
-        "status": "WAITING_CONFIRMATION",
-        "lastSequence": 12,
-        "waitingReplyId": "3e2b5362c3574ef5a91126e61c404ec4",
-        "startedAt": "2026-09-29T03:24:24.145Z"
-      },
-      {
-        "runId": "b76bbad93511406d9a96b241f9000de0",
-        "conversationId": "99dc249a72e6456198f7a483c37eab8d",
-        "projectId": null,
-        "title": "帮我建一张工单:标题=手册回归工单-031656,描述=3楼打印机卡纸,优先级=high",
-        "category": null,
-        "status": "WAITING_CONFIRMATION",
-        "lastSequence": 12,
-        "waitingReplyId": "444954fb70f648dbb4c0a81c162d85ca",
-        "startedAt": "2026-09-29T03:16:56.310Z"
-      },
-      {
-        "runId": "6586ec1967f64e168cf3776ba276b52d",
-        "conversationId": "2293baf50a994b26bcf278d79d5479de",
-        "projectId": null,
-        "title": "帮我建一张工单:标题=手册回归工单-030914,描述=3楼打印机卡纸,优先级=high",
-        "category": null,
-        "status": "WAITING_CONFIRMATION",
-        "lastSequence": 12,
-        "waitingReplyId": "0d007a0b6c5d475c881e79796df82c93",
-        "startedAt": "2026-09-29T03:09:14.251Z"
-      }
-    ]
+    "data": []
   }
 }</pre>

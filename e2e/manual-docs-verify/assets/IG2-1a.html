@@ -1,0 +1,77 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG2-1a <span class="title">接入指南/02 · SSE 帧结构(真模型基线)</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:17:53.233Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>POST /runs 响应 text/event-stream</td><td class="ok">PASS</td><td class="mono small">200 text/event-stream</td></tr>
+<tr><td>每帧 id 形如 &lt;runId&gt;:&lt;seq&gt;</td><td class="ok">PASS</td><td class="mono small">646c1e0e1a51473e834c3c140ad757e2:3 | 646c1e0e1a51473e834c3c140ad757e2:5 | 646c1e0e1a51473e834c3c140ad757e2:9</td></tr>
+<tr><td>seq 严格递增</td><td class="ok">PASS</td><td class="mono small">3,5,9,12,13,14,19</td></tr>
+<tr><td>全部帧同一 runId</td><td class="ok">PASS</td><td class="mono small">646c1e0e1a51473e834c3c140ad757e2</td></tr>
+<tr><td>event: pipeline-event</td><td class="ok">PASS</td><td class="mono small">pipeline-event</td></tr>
+<tr><td>data 含 outputType</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>createdAt 为 epoch 毫秒或 ISO-8601 之一</td><td class="ok">PASS</td><td class="mono small">string 样例="2026-09-29T08:17:52.881Z"</td></tr>
+<tr><td>存在 CONTENT 帧</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>终态后服务端关流</td><td class="ok">PASS</td><td class="mono small">closedByServer=true, 终态=DONE</td></tr>
+</table>
+<h2>事件流(共 7 帧,outputType 序列)</h2>
+<pre class="mono">@2302ms 646c1e0e1a51473e834c3c140ad757e2:3 TOOL_CALL_STARTED
+@2460ms 646c1e0e1a51473e834c3c140ad757e2:5 TOOL_CALL
+@2485ms 646c1e0e1a51473e834c3c140ad757e2:9 TOOL_FINISHED
+@3304ms 646c1e0e1a51473e834c3c140ad757e2:12 CONTENT
+@3377ms 646c1e0e1a51473e834c3c140ad757e2:13 CONTENT
+@3471ms 646c1e0e1a51473e834c3c140ad757e2:14 CONTENT
+@3640ms 646c1e0e1a51473e834c3c140ad757e2:19 DONE</pre>
+<h2>首帧完整 JSON</h2>
+<pre class="mono">{
+  "schemaVersion": 1,
+  "runId": "646c1e0e1a51473e834c3c140ad757e2",
+  "sequence": 3,
+  "messageId": "f2d8588a63a246afbcca19dc5c992782",
+  "conversationId": "347744dc43de4531a4e5dae0f9d1f82a",
+  "outputType": "TOOL_CALL_STARTED",
+  "toolCalls": [
+    {
+      "id": "call_01a0ec3ddb157098b480afc5",
+      "name": "get_current_time",
+      "arguments": ""
+    }
+  ],
+  "toolCallId": "call_01a0ec3ddb157098b480afc5",
+  "toolName": "get_current_time",
+  "finished": false,
+  "replyId": "9e36e34875e34976ab99cd47c1fc7dd0",
+  "rawEventId": "f2d8588a63a246afbcca19dc5c992782",
+  "rawEventType": "TOOL_CALL_START",
+  "createdAt": "2026-09-29T08:17:51.879Z"
+}</pre>
+<h2>末帧完整 JSON(DONE)</h2>
+<pre class="mono">{
+  "schemaVersion": 1,
+  "runId": "646c1e0e1a51473e834c3c140ad757e2",
+  "sequence": 19,
+  "messageId": "terminal-c375766053a94b58b03b5a79deac85a1",
+  "conversationId": "347744dc43de4531a4e5dae0f9d1f82a",
+  "outputType": "DONE",
+  "finished": true,
+  "source": "main",
+  "rawEventId": "terminal-c375766053a94b58b03b5a79deac85a1",
+  "rawEventType": "RUN_TERMINAL",
+  "createdAt": "2026-09-29T08:17:53.216Z"
+}</pre>
+<h2>reasoningDurationMs 观察</h2>
+<pre class="mono">首条 CONTENT 的 reasoningDurationMs=undefined(手册 §3 称「首条携带」,实测为条件字段 — 修复意见 R-03)</pre>

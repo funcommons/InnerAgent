@@ -1,0 +1,495 @@
+[
+  {
+    "id": "QS1-2",
+    "doc": "02-快速开始/01",
+    "title": "POST /runs(DEFAULT):SSE 流 + demo 内置工具自动放行 + DONE 终态关流",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS1-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "HTTP 200 + text/event-stream",
+            "ok": true,
+            "detail": "200 text/event-stream"
+          },
+          {
+            "label": "收到 SSE 帧",
+            "ok": true,
+            "detail": "6 帧"
+          },
+          {
+            "label": "收到 CONTENT",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "内置工具 get_current_time 被调用(工具事件)",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "DEFAULT 档读工具未弹确认",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "终态 DONE",
+            "ok": true,
+            "detail": "DONE"
+          },
+          {
+            "label": "服务端关闭流",
+            "ok": true,
+            "detail": "closedByServer=true"
+          }
+        ]
+      },
+      {
+        "h": "outputType 序列",
+        "body": "seq=3 TOOL_CALL_STARTED tool=get_current_time\nseq=5 TOOL_CALL tool=get_current_time\nseq=9 TOOL_FINISHED tool=get_current_time\nseq=12 CONTENT\nseq=13 CONTENT\nseq=18 DONE"
+      },
+      {
+        "h": "DONE 帧原文",
+        "body": {
+          "schemaVersion": 1,
+          "runId": "73958c8c99b24c328d74bbd9136acc89",
+          "sequence": 18,
+          "messageId": "terminal-106a21b0e4c149a9b376a34de9ba4044",
+          "conversationId": "2c30ca62c02e45dbbcb40068e5aea053",
+          "outputType": "DONE",
+          "finished": true,
+          "source": "main",
+          "rawEventId": "terminal-106a21b0e4c149a9b376a34de9ba4044",
+          "rawEventType": "RUN_TERMINAL",
+          "createdAt": "2026-09-29T08:18:00.115Z"
+        }
+      }
+    ],
+    "ms": 790
+  },
+  {
+    "id": "QS1-3",
+    "doc": "02-快速开始/01",
+    "title": "ALWAYS_ASK:确认卡事件 + WAITING_CONFIRMATION + 流保持打开(keep-alive)+ 确认后 DONE",
+    "status": "PASS",
+    "notes": [
+      "keep-alive 注释帧 1 条,间隔样例 30009ms"
+    ],
+    "evidence": [
+      "assets/QS1-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "收到确认卡事件 USER_CONFIRMATION_REQUIRED",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED"
+          },
+          {
+            "label": "controlType=USER_CONFIRM_REQUIRED",
+            "ok": true,
+            "detail": "USER_CONFIRM_REQUIRED"
+          },
+          {
+            "label": "运行态 WAITING_CONFIRMATION",
+            "ok": true,
+            "detail": "WAITING_CONFIRMATION"
+          },
+          {
+            "label": "确认事件带 expiresAt",
+            "ok": true,
+            "detail": "2026-09-30T08:18:00.681Z"
+          },
+          {
+            "label": "GET /runs/running 含该挂起运行",
+            "ok": true,
+            "detail": "列表 1 条"
+          },
+          {
+            "label": "SSE 半开期间收到 keep-alive 注释帧(≈30s/条)",
+            "ok": true,
+            "detail": "@30009ms :keep-alive"
+          },
+          {
+            "label": "POST /confirm 受理",
+            "ok": true,
+            "detail": "status=200 code=0"
+          },
+          {
+            "label": "确认后续流至 DONE",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "运行态终为 COMPLETED(SSE DONE ↔ COMPLETED)",
+            "ok": true,
+            "detail": "COMPLETED"
+          }
+        ]
+      },
+      {
+        "h": "确认卡事件完整 JSON",
+        "body": {
+          "schemaVersion": 1,
+          "runId": "1279966779bd4401b0ada8c23709724e",
+          "sequence": 12,
+          "messageId": "platform-4867f41b3b7ee59dd140c95010de800e4d99556ba8ddf782b00f20af8e883287",
+          "conversationId": "fcd95e1f4d1249d68ffeaf41989571a1",
+          "outputType": "USER_CONFIRMATION_REQUIRED",
+          "toolName": "user_confirmation",
+          "finished": false,
+          "source": "platform/waiting",
+          "replyId": "d558d007520c417dac717002e4b78d95",
+          "rawEventId": "platform-4867f41b3b7ee59dd140c95010de800e4d99556ba8ddf782b00f20af8e883287",
+          "rawEventType": "PLATFORM_USER_CONFIRM_REQUIRED",
+          "createdAt": "2026-09-29T08:18:00.712Z",
+          "controlType": "USER_CONFIRM_REQUIRED",
+          "pendingToolCalls": [
+            {
+              "toolCallId": "mock-call-349",
+              "toolName": "get_current_time",
+              "argumentsPreview": "{}",
+              "scope": {
+                "resolved": false,
+                "degraded": true,
+                "summary": "宿主未实现约束范围反查(resolve_scope),本次运行无约束范围上下文"
+              }
+            }
+          ],
+          "expiresAt": "2026-09-30T08:18:00.681Z"
+        }
+      },
+      {
+        "h": "挂起期间事件序列",
+        "body": "seq=3 TOOL_CALL_STARTED\nseq=5 TOOL_CALL\nseq=12 USER_CONFIRMATION_REQUIRED"
+      },
+      {
+        "h": "确认后事件序列",
+        "body": "seq=3 TOOL_CALL_STARTED\nseq=5 TOOL_CALL\nseq=12 USER_CONFIRMATION_REQUIRED\nseq=13 USER_CONFIRM_RESULT\nseq=17 TOOL_FINISHED\nseq=20 CONTENT\nseq=21 CONTENT\nseq=26 DONE"
+      },
+      {
+        "h": "GET /runs/{id} 终态响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "runId": "1279966779bd4401b0ada8c23709724e",
+            "status": "COMPLETED",
+            "lastSequence": 26,
+            "waitingReplyId": null,
+            "terminalEvent": {
+              "schemaVersion": 1,
+              "runId": "1279966779bd4401b0ada8c23709724e",
+              "sequence": 26,
+              "messageId": "terminal-9a0da19494af49c6b5c70159f8b6e8d4",
+              "conversationId": "fcd95e1f4d1249d68ffeaf41989571a1",
+              "outputType": "DONE",
+              "finished": true,
+              "source": "main",
+              "rawEventId": "terminal-9a0da19494af49c6b5c70159f8b6e8d4",
+              "rawEventType": "RUN_TERMINAL",
+              "createdAt": "2026-09-29T08:18:42.970Z"
+            }
+          }
+        }
+      }
+    ],
+    "ms": 42747
+  },
+  {
+    "id": "BP1-1",
+    "doc": "01-白皮书/01",
+    "title": "运行状态机:WAITING_CONFIRMATION → COMPLETED 实证(+CANCELLED 见 AP1-3)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BP1-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "SSE DONE 后运行单据 COMPLETED",
+            "ok": true,
+            "detail": "COMPLETED"
+          },
+          {
+            "label": "终态枚举属文档集合",
+            "ok": true,
+            "detail": "COMPLETED"
+          },
+          {
+            "label": "DB 行同状态",
+            "ok": true,
+            "detail": "COMPLETED"
+          }
+        ]
+      },
+      {
+        "h": "运行单据(GET /runs/{runId})",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "runId": "1279966779bd4401b0ada8c23709724e",
+            "status": "COMPLETED",
+            "lastSequence": 26,
+            "waitingReplyId": null,
+            "terminalEvent": {
+              "schemaVersion": 1,
+              "runId": "1279966779bd4401b0ada8c23709724e",
+              "sequence": 26,
+              "messageId": "terminal-9a0da19494af49c6b5c70159f8b6e8d4",
+              "conversationId": "fcd95e1f4d1249d68ffeaf41989571a1",
+              "outputType": "DONE",
+              "finished": true,
+              "source": "main",
+              "rawEventId": "terminal-9a0da19494af49c6b5c70159f8b6e8d4",
+              "rawEventType": "RUN_TERMINAL",
+              "createdAt": "2026-09-29T08:18:42.970Z"
+            }
+          }
+        }
+      },
+      {
+        "h": "状态机对照(手册)",
+        "body": "RUNNING → WAITING_CONFIRMATION → COMPLETED/FAILED/CANCELLED;SSE 终态事件 DONE/ERROR/CANCELLED ↔ COMPLETED/FAILED/CANCELLED\n本轮实证:WAITING_CONFIRMATION(QS1-3)→ COMPLETED(本用例);CANCELLED 在 AP1-3 实证"
+      }
+    ],
+    "ms": 408
+  },
+  {
+    "id": "IG5-1",
+    "doc": "03-接入指南/05",
+    "title": "mock 规则四条话术 + default:建工单($1 捕获)/年假 KB/报告/几点/无命中",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "① 建工单话术触发 create_ticket 确认卡",
+            "ok": true,
+            "detail": "mcp__acme-demo__create_ticket"
+          },
+          {
+            "label": "工具 FQN=mcp__acme-demo__create_ticket(短名按后缀解析)",
+            "ok": true,
+            "detail": "mcp__acme-demo__create_ticket"
+          },
+          {
+            "label": "args 注入 $1(标题回显)",
+            "ok": true,
+            "detail": "{\"title\":\"手册回归工单-081843\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}"
+          },
+          {
+            "label": "回复含 $1/$2/$3 注入文案",
+            "ok": true,
+            "detail": "工单「手册回归工单-081843」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。"
+          },
+          {
+            "label": "② 年假 → [KB:] 引用",
+            "ok": true,
+            "detail": "按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]"
+          },
+          {
+            "label": "③ 报告规则命中",
+            "ok": true,
+            "detail": "Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。"
+          },
+          {
+            "label": "④ 无命中 → default 回复",
+            "ok": true,
+            "detail": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"
+          }
+        ]
+      },
+      {
+        "h": "① 建工单:确认卡 pendingToolCalls",
+        "body": {
+          "toolCallId": "mock-call-352",
+          "toolName": "mcp__acme-demo__create_ticket",
+          "argumentsPreview": "{\"title\":\"手册回归工单-081843\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}",
+          "scope": {
+            "resolved": true,
+            "degraded": false
+          }
+        }
+      },
+      {
+        "h": "① 确认后全部事件",
+        "body": "seq=3 TOOL_CALL_STARTED mcp__acme-demo__create_ticket\nseq=5 TOOL_CALL mcp__acme-demo__create_ticket\nseq=12 USER_CONFIRMATION_REQUIRED user_confirmation\nseq=13 USER_CONFIRM_RESULT \nseq=17 TOOL_FINISHED mcp__acme-demo__create_ticket\nseq=20 CONTENT \nseq=21 CONTENT \nseq=26 DONE "
+      },
+      {
+        "h": "① confirm 响应",
+        "body": {
+          "status": 200,
+          "json": {
+            "code": 0,
+            "msg": "success",
+            "data": true
+          }
+        }
+      },
+      {
+        "h": "① 最终回复",
+        "body": "工单「手册回归工单-081843」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。"
+      },
+      {
+        "h": "② 年假回复",
+        "body": "按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]"
+      },
+      {
+        "h": "③ 报告回复",
+        "body": "Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。"
+      },
+      {
+        "h": "④ default 回复",
+        "body": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"
+      }
+    ],
+    "ms": 1443
+  },
+  {
+    "id": "IG5-2",
+    "doc": "03-接入指南/05",
+    "title": "deltaMs 出字节拍实测(种子 60)+ agent_definition_snapshot_json.modelOptions 核对",
+    "status": "PASS",
+    "notes": [
+      "deltaMs 实测间隔 min=9ms 中位=64ms(手册:种子 60=CI 快速出字;k6 calibrate 默认 800)"
+    ],
+    "evidence": [
+      "assets/IG5-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "CONTENT 帧数 ≥2(可测节奏)",
+            "ok": true,
+            "detail": "3 帧"
+          },
+          {
+            "label": "相邻 CONTENT 间隔中位数 ≥40ms(deltaMs=60 节拍存在;实测中位=64ms,min=9ms — 单帧间隔可因合帧小于 deltaMs)",
+            "ok": true,
+            "detail": "64,9"
+          },
+          {
+            "label": "快照 modelOptions.mockScript.deltaMs=60(生效值核对;modelOptions 即 config 原文)",
+            "ok": true,
+            "detail": "60"
+          },
+          {
+            "label": "快照含 mockScript(config 原文)",
+            "ok": true,
+            "detail": "ia_agent_run.agent_definition_snapshot_json"
+          }
+        ]
+      },
+      {
+        "h": "CONTENT 到达时刻(ms)",
+        "body": "160, 224, 233"
+      },
+      {
+        "h": "快照 modelOptions(截取)",
+        "body": "{\n  \"mockScript\": {\n    \"default\": \"我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。\",\n    \"deltaMs\": 60,\n    \"rules\": [\n      {\n        \"args\": {\n          \"description\": \"$2\",\n          \"priority\": \"$3\",\n          \"title\": \"$1\"\n        },\n        \"match\": \"帮我建一张工单:标题=(.+?),描述=(.+?),优先级=(\\\\w+)\",\n        \"reply\": \"工单「$1」已创建成功:描述=$2,优先级=$3。已同步到工具台账(Agent 渠道),可在工具页查看。\",\n        \"tool\": \"create_ticket\"\n      },\n      {\n        \"args\": {\n          \"description\": \"用户确认后提交\",\n          \"priority\": \"normal\",\n          \"title\": \"确认流工单\"\n        },\n        \"match\": \"信息无误|提交建单\",\n        \"reply\": \"工单已创建成功(确认流),已同步到工具台账(Agent 渠道)。\",\n        \"tool\": \"create_ticket\"\n      },\n      {\n        \"match\": \"年假|假期|请假\",\n        \"reply\": \"按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]\"\n      },\n      {\n        \"match\": \"报告|总结|销售|回款\",\n        \"reply\": \"Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。\"\n      },\n      {\n        \"args\": {},\n        \"match\": \"现在几点|几点了\",\n        \"reply\": \"已通过内置工具查询当前时间,结果见上方工具调用记录(内置只读工具 get_current_time)。\",\n        \"tool\": \"get_current_time\"\n      }\n    ]\n  }\n}"
+      }
+    ],
+    "ms": 658
+  },
+  {
+    "id": "IG5-3",
+    "doc": "03-接入指南/05",
+    "title": "全角冒号/逗号话术不命中规则 → 落 default(手册 §3 提示)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "全角话术未触发工具/确认",
+            "ok": true,
+            "detail": "CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "落 default 回复",
+            "ok": true,
+            "detail": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"
+          }
+        ]
+      },
+      {
+        "h": "触发语(全角：/，)",
+        "body": "帮我建一张工单：标题=全角测试，描述=标点全角，优先级=high"
+      },
+      {
+        "h": "事件序列",
+        "body": "CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "回复",
+        "body": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"
+      }
+    ],
+    "ms": 530
+  },
+  {
+    "id": "IG5-5",
+    "doc": "03-接入指南/05",
+    "title": "ia_ai_model 登记:max_concurrency 默认 5 / mock 压测 1000 / 唯一默认",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-5.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "MiniMax-M3 max_concurrency=5(登记字段默认)",
+            "ok": true,
+            "detail": "MiniMax-M3 | 1 | f | 1 | 0 | 5"
+          },
+          {
+            "label": "mock-text max_concurrency=1000(压测 calibrate 口径)",
+            "ok": true,
+            "detail": "mock-text | 1 | t | 1 | 0 | 1000"
+          },
+          {
+            "label": "当前 mock-text 为默认(本阶段播种态)",
+            "ok": true,
+            "detail": "mock=t mini=f"
+          },
+          {
+            "label": "model_type=1 仅一个 default_model",
+            "ok": true,
+            "detail": "count=1"
+          }
+        ]
+      },
+      {
+        "h": "ia_ai_model 全表(code|model_type|default_model|status|sort|max_concurrency)",
+        "body": "MiniMax-M3|1|f|1|0|5\nmock-text|1|t|1|0|1000"
+      }
+    ],
+    "ms": 431
+  }
+]

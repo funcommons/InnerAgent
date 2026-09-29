@@ -24,7 +24,7 @@
 / `data: <AiChatStreamRespVO JSON>`。事件类型与终态语义见
 [03-接入指南/02-直接 HTTP 接入](../03-接入指南/02-直接HTTP接入-SSE契约.md)。
 
-失败:JSON `CommonResult`(如 400 参数、401 鉴权、404 Agent 不存在)。
+失败:JSON `CommonResult`(如 400 参数、401 鉴权;非法 agentType/enabledSkills 实测返回 500「Agent 类型不存在 / Skill 不可用」—— 平台侧建议收敛为 400/404)。
 
 ### GET /ia/api/v1/runs/{runId}/events —— 断点续传(SSE)
 
@@ -47,7 +47,7 @@
 
 ### POST /ia/api/v1/runs/{runId}/cancel —— 取消运行
 
-取消后事件流以 `CANCELLED` 终态收尾;已完成运行返回业务错误码。
+取消后事件流以 `CANCELLED` 终态收尾;幂等:对已终态运行返回成功(不改变状态)。
 另有兜底形态 `POST /ia/api/v1/runs/cancel?conversationId=<id>`:仅持会话 id 时按会话
 解析活动根运行并取消(SDK 乐观会话契约;无活动运行时 404)。
 

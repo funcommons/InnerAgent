@@ -218,7 +218,8 @@
 | 挂起运行收口 | 本轮 ALWAYS_ASK 挂起逐案收口(确认/拒绝/取消/expire);另将 12993 名下历史遗留挂起(2026-09-28 压测/回归残留 ≈403 个)一并 cancel 收口 —— 收口后 12993 无非终态运行 |
 | 演示用户口径 | API 走 `X-IA-Demo-User: 12993`;UI/embed 路径经 9300 演示登录(filler-02907,预先将演示用户计数器快进至该名映射 userId=12993;未触碰 user 10086) |
 | demo 后端 | 测试窗口开始时 :9300 已下线,按手册 02-快速开始/02 §3 口径以 `seeds/.local/host.key` 重新拉起(仅环境操作,未改代码);启动日志出现「InnerAgent 桥已注册 4 个宿主工具」 |
-| 未触碰 | user 10086 的数据、他人注册的 `acme-echo` 三方服务、既有代码与文档 |
+| 未触碰 | user 10086 的数据、他人注册的 `acme-echo` 三方服务、既有代码与文档(§7 复验轮除外:该轮为用户批准的唯一文档修改) |
+| 复验轮(2026-09-29) | 播种 `mock-model-script.sql` ×1 → api 全量重跑 → `mock-model-restore.sql` 回切(`MiniMax-M3\|t` 确认);本轮自建 docsverify-* 注册 0 残留;收口 1 个探针挂起;收口后 12993 非终态运行 = 0 |
 
 ## 6. 复现方式
 
@@ -229,3 +230,21 @@ node run.mjs pre|api|ui|finalize   # 分阶段
 ```
 
 结果:`results.json`(41 条);证据:`assets/*.png|html`;阶段产物:`state/*.json`。
+
+## 7. 复验(2026-09-29)
+
+用户批准按 §4「建议改法」列修文档(唯一被授权的文档修改;代码零改动)。9 条逐条落改后,用本 harness 重跑映射用例组,**41/41 通过**(pre 5 + api 29 + ui 5 + finalize 2),受影响证据 PNG 已全部重出,文档表述与实测行为一致。
+
+| 编号 | 改动文件(含 R 编号) | 复验用例 | 结果 |
+| --- | --- | --- | --- |
+| R-01 | 07-参考/02-限制与配额.md(timeoutSeconds 默认 45s → 30s,1-600) | RF2-3 | PASS(实测缺省=30) |
+| R-02 | 02-快速开始/01-五分钟跑起来.md(示例帧删 RUN_STARTED/usage,首帧 CONTENT + seq 跳号注)、03-接入指南/02-直接HTTP接入-SSE契约.md(取值表删 RUN_STARTED)、01-技术白皮书/02-整体架构.md(生命周期图 RUN_STARTED → CONTENT(首帧)) | IG2-1a、QS1-2 | PASS(首帧 CONTENT;seq 4,6,8,12…跳号;终态关流) |
+| R-03 | 02-快速开始/01(DONE 帧 `{"finished":true}`)、03-接入指南/02(DONE 行去「附 usage」;reasoningDurationMs 标条件字段)、01-技术白皮书/02(图 DONE 去 usage) | IG2-1a、QS1-2 | PASS(DONE 载荷仅 finished:true;MiniMax 轮 reasoningDurationMs 未携带) |
+| R-04 | 03-接入指南/02(取值表 TOOL_RESULT → TOOL_FINISHED;另含列表改 TOOL_CALL/USER_CONFIRM_RESULT + REASONING/SUB_AGENT_FINISHED 标注特定路径)、01-技术白皮书/02(图 TOOL_RESULT → TOOL_FINISHED) | IG2-3、QS1-2(工具流) | PASS(工具流投影含 TOOL_FINISHED,无 TOOL_RESULT) |
+| R-05 | 05-最佳实践/01-工具授权与确认流.md(拒绝路径措辞:工具不执行,运行继续收尾(COMPLETED),审计 denied) | BE1-2 | PASS(reject 后 USER_CONFIRM_RESULT → CONTENT → DONE/COMPLETED,无 TOOL_FINISHED,审计 denied) |
+| R-06 | 04-API参考/01-运行与事件流API.md(cancel 幂等:已终态返回成功;失败行:非法 agentType/enabledSkills 实测 500 并注「平台侧建议收敛为 400/404」) | AP1-3、AP2-1、RF1-3 | PASS(COMPLETED cancel → 200/code=0;agentType 500「Agent 类型不存在」;skill 500「Skill 不可用」) |
+| R-07 | 07-参考/01-术语表.md(技能示例 report-style,注明与 agentType 区别、非法值 500) | RF1-3 | PASS(report-style 受理至 DONE;report-writer 500) |
+| R-08 | 03-接入指南/04-MCP三方工具接入.md(冲突域按 appId 划分;软删后同键暂不可复用,建议换键) | IG4-2、IG4-3 | PASS(同键应用级 409;跨 appId 同名宿主键不冲突;软删键复用 409) |
+| R-09 | 07-参考/02-限制与配额.md(32 配额补「超限拒绝 400,按活跃行计数」) | RF2-1 | PASS(32 成功 + 第 33 个 400) |
+
+复验轮环境纪律:播种/回切各一次(`MiniMax-M3|t` 已确认);docsverify-* 注册 0 残留;收口 1 个探针挂起,收口后 12993 非终态运行 = 0;受影响证据 8 张 PNG 重出(IG2-1a/QS1-2/QS1-3/BE1-2/IG4-2/IG4-3/RF2-1/RF2-3 等),无 fail 产物残留。

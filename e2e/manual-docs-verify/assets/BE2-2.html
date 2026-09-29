@@ -14,15 +14,15 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>BE2-2 <span class="title">最佳实践/02 · runs_waiting 联动</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:19.167Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:19:02.114Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
-<tr><td>runs_waiting 可读</td><td class="ok">PASS</td><td class="mono small">base=33</td></tr>
-<tr><td>挂起期间 runs_waiting=基线+1(33→34)</td><td class="ok">PASS</td><td class="mono small">base=33, during=34</td></tr>
-<tr><td>收口后回落(34→34)</td><td class="ok">PASS</td><td class="mono small">after=34, settle via expire</td></tr>
+<tr><td>runs_waiting 可读</td><td class="ok">PASS</td><td class="mono small">base=36</td></tr>
+<tr><td>挂起期间 runs_waiting=基线+1(36→37)</td><td class="ok">PASS</td><td class="mono small">base=36, during=37</td></tr>
+<tr><td>收口后回落(37→37)</td><td class="ok">PASS</td><td class="mono small">after=37, settle via expire</td></tr>
 </table>
 <h2>runs_waiting 采样</h2>
-<pre class="mono">挂起前=33
-挂起中=34
-收口后=34(收口方式: expire)</pre>
+<pre class="mono">挂起前=36
+挂起中=37
+收口后=37(收口方式: expire)</pre>

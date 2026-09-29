@@ -1,0 +1,305 @@
+[
+  {
+    "id": "RD-1",
+    "doc": "README 导读",
+    "title": "文档地图 18 篇在盘 + 全局速查(server/网关/管理面鉴权/观测)可达",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/RD-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "文档地图 18 篇文件在盘",
+            "ok": true,
+            "detail": "18 篇齐全"
+          },
+          {
+            "label": "server API 基址 :18090 健康",
+            "ok": true,
+            "detail": "{\"status\":\"UP\"}"
+          },
+          {
+            "label": "观测 /actuator/prometheus",
+            "ok": true,
+            "detail": "status=200, 含 fusion_agentscope_runtime 系列"
+          },
+          {
+            "label": "网关 :18081 静态资源可打开",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "网关 /ia 反代到 18090(API 路径)",
+            "ok": true,
+            "detail": "status=200, code=0"
+          },
+          {
+            "label": "管理面无 X-IA-Admin-Key 被拒",
+            "ok": true,
+            "detail": "status=403"
+          },
+          {
+            "label": "管理面带 X-IA-Admin-Key 通过",
+            "ok": true,
+            "detail": "status=200, code=0"
+          }
+        ]
+      },
+      {
+        "h": "GET /actuator/health",
+        "body": {
+          "status": "UP"
+        }
+      },
+      {
+        "h": "网关 /ia 反代(GET /ia/api/v1/runs/running)",
+        "body": "{\"code\":0,\"msg\":\"success\",\"data\":[]}"
+      },
+      {
+        "h": "管理面 tools 列表(前 300 字)",
+        "body": "{\"code\":0,\"msg\":\"success\",\"data\":[{\"createTime\":\"2026-09-21T23:20:08.740878\",\"updateTime\":\"2026-09-23T15:15:53.823531\",\"deleted\":false,\"id\":99,\"appId\":34,\"serverKey\":\"acme-demo\",\"toolName\":\"create_ticket\",\"fqn\":\"mcp__acme-demo__create_ticket\",\"description\":\"在 ACME 宿主系统中创建一张工单,返回工单号\",\"parametersSchem"
+      }
+    ],
+    "ms": 689
+  },
+  {
+    "id": "QS1-1",
+    "doc": "02-快速开始/01",
+    "title": "/actuator/health 返回 {\"status\":\"UP\",...}",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS1-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "HTTP 200",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "status=UP",
+            "ok": true,
+            "detail": "{\"status\":\"UP\"}"
+          }
+        ]
+      },
+      {
+        "h": "响应原文",
+        "body": "{\"status\":\"UP\"}"
+      }
+    ],
+    "ms": 339
+  },
+  {
+    "id": "BP2-1",
+    "doc": "01-白皮书/02",
+    "title": "端口表逐项连通(18090/18081/35432/36379/9300/9203)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BP2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "端口连通断言(手册 §1 组件拓扑表)",
+        "verdicts": [
+          {
+            "label": "server :18090",
+            "ok": true,
+            "detail": "health=UP"
+          },
+          {
+            "label": "网关 :18081(web/dist)",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "PostgreSQL :35432(user/db=inneragent)",
+            "ok": true,
+            "detail": "inneragent/inneragent"
+          },
+          {
+            "label": "Redis :36379 可达(PING)",
+            "ok": true,
+            "detail": "PONG"
+          },
+          {
+            "label": "宿主后端 :9300(宿主桥 /ia-mcp)",
+            "ok": true,
+            "detail": "POST /ia-mcp initialize → 401(宿主桥 MCP 端点存活)"
+          },
+          {
+            "label": "宿主前端 :9203",
+            "ok": true,
+            "detail": "status=200"
+          }
+        ]
+      }
+    ],
+    "ms": 497
+  },
+  {
+    "id": "IG2-1a",
+    "doc": "03-接入指南/02",
+    "title": "SSE 帧结构实测(真模型):id/event/data + outputType/createdAt + reasoningDurationMs 条件性",
+    "status": "PASS",
+    "notes": [
+      "reasoningDurationMs 实测: 本运行未携带(字段为条件字段,仅在模型有 reasoning 输出时出现)"
+    ],
+    "evidence": [
+      "assets/IG2-1a.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "POST /runs 响应 text/event-stream",
+            "ok": true,
+            "detail": "200 text/event-stream"
+          },
+          {
+            "label": "每帧 id 形如 <runId>:<seq>",
+            "ok": true,
+            "detail": "646c1e0e1a51473e834c3c140ad757e2:3 | 646c1e0e1a51473e834c3c140ad757e2:5 | 646c1e0e1a51473e834c3c140ad757e2:9"
+          },
+          {
+            "label": "seq 严格递增",
+            "ok": true,
+            "detail": "3,5,9,12,13,14,19"
+          },
+          {
+            "label": "全部帧同一 runId",
+            "ok": true,
+            "detail": "646c1e0e1a51473e834c3c140ad757e2"
+          },
+          {
+            "label": "event: pipeline-event",
+            "ok": true,
+            "detail": "pipeline-event"
+          },
+          {
+            "label": "data 含 outputType",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "createdAt 为 epoch 毫秒或 ISO-8601 之一",
+            "ok": true,
+            "detail": "string 样例=\"2026-09-29T08:17:52.881Z\""
+          },
+          {
+            "label": "存在 CONTENT 帧",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "终态后服务端关流",
+            "ok": true,
+            "detail": "closedByServer=true, 终态=DONE"
+          }
+        ]
+      },
+      {
+        "h": "事件流(共 7 帧,outputType 序列)",
+        "body": "@2302ms 646c1e0e1a51473e834c3c140ad757e2:3 TOOL_CALL_STARTED\n@2460ms 646c1e0e1a51473e834c3c140ad757e2:5 TOOL_CALL\n@2485ms 646c1e0e1a51473e834c3c140ad757e2:9 TOOL_FINISHED\n@3304ms 646c1e0e1a51473e834c3c140ad757e2:12 CONTENT\n@3377ms 646c1e0e1a51473e834c3c140ad757e2:13 CONTENT\n@3471ms 646c1e0e1a51473e834c3c140ad757e2:14 CONTENT\n@3640ms 646c1e0e1a51473e834c3c140ad757e2:19 DONE"
+      },
+      {
+        "h": "首帧完整 JSON",
+        "body": {
+          "schemaVersion": 1,
+          "runId": "646c1e0e1a51473e834c3c140ad757e2",
+          "sequence": 3,
+          "messageId": "f2d8588a63a246afbcca19dc5c992782",
+          "conversationId": "347744dc43de4531a4e5dae0f9d1f82a",
+          "outputType": "TOOL_CALL_STARTED",
+          "toolCalls": [
+            {
+              "id": "call_01a0ec3ddb157098b480afc5",
+              "name": "get_current_time",
+              "arguments": ""
+            }
+          ],
+          "toolCallId": "call_01a0ec3ddb157098b480afc5",
+          "toolName": "get_current_time",
+          "finished": false,
+          "replyId": "9e36e34875e34976ab99cd47c1fc7dd0",
+          "rawEventId": "f2d8588a63a246afbcca19dc5c992782",
+          "rawEventType": "TOOL_CALL_START",
+          "createdAt": "2026-09-29T08:17:51.879Z"
+        }
+      },
+      {
+        "h": "末帧完整 JSON(DONE)",
+        "body": {
+          "schemaVersion": 1,
+          "runId": "646c1e0e1a51473e834c3c140ad757e2",
+          "sequence": 19,
+          "messageId": "terminal-c375766053a94b58b03b5a79deac85a1",
+          "conversationId": "347744dc43de4531a4e5dae0f9d1f82a",
+          "outputType": "DONE",
+          "finished": true,
+          "source": "main",
+          "rawEventId": "terminal-c375766053a94b58b03b5a79deac85a1",
+          "rawEventType": "RUN_TERMINAL",
+          "createdAt": "2026-09-29T08:17:53.216Z"
+        }
+      },
+      {
+        "h": "reasoningDurationMs 观察",
+        "body": "首条 CONTENT 的 reasoningDurationMs=undefined(手册 §3 称「首条携带」,实测为条件字段 — 修复意见 R-03)"
+      }
+    ],
+    "ms": 4023
+  },
+  {
+    "id": "BP2-2",
+    "doc": "01-白皮书/02",
+    "title": "/actuator/prometheus 存在 runs_active/runs_waiting/outbox_backlog/ia_reconnect_total",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BP2-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "指标存在性",
+        "verdicts": [
+          {
+            "label": "指标 fusion_agentscope_runtime_runs_active",
+            "ok": true,
+            "detail": "fusion_agentscope_runtime_runs_active 0.0"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_runs_waiting",
+            "ok": true,
+            "detail": "fusion_agentscope_runtime_runs_waiting 34.0"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_outbox_backlog",
+            "ok": true,
+            "detail": "fusion_agentscope_runtime_outbox_backlog 0.0"
+          },
+          {
+            "label": "指标 ia_reconnect_total",
+            "ok": true,
+            "detail": "ia_reconnect_total{app=\"1\",result=\"resumed\"} 18.0"
+          }
+        ]
+      },
+      {
+        "h": "prometheus 原文(ia/fusion 相关行)",
+        "body": "# HELP fusion_agentscope_runtime_event_backpressure_rejected_total  \n# TYPE fusion_agentscope_runtime_event_backpressure_rejected_total counter\nfusion_agentscope_runtime_event_backpressure_rejected_total 0.0\n# HELP fusion_agentscope_runtime_event_persist_latency_seconds  \n# TYPE fusion_agentscope_runtime_event_persist_latency_seconds summary\nfusion_agentscope_runtime_event_persist_latency_seconds_count 2624\nfusion_agentscope_runtime_event_persist_latency_seconds_sum 10.571463302\n# HELP fusion_agentscope_runtime_event_persist_latency_seconds_max  \n# TYPE fusion_agentscope_runtime_event_persist_latency_seconds_max gauge\nfusion_agentscope_runtime_event_persist_latency_seconds_max 0.03490325\n# HELP fusion_agentscope_runtime_event_persisted_total  \n# TYPE fusion_agentscope_runtime_event_persisted_total counter\nfusion_agentscope_runtime_event_persisted_total 2624.0\n# HELP fusion_agentscope_runtime_event_sequence_allocated_total  \n# TYPE fusion_agentscope_runtime_event_sequence_allocated_total counter\nfusion_agentscope_runtime_event_sequence_allocated_total 2624.0\n# HELP fusion_agentscope_runtime_harness_cache_total  \n# TYPE fusion_agentscope_runtime_harness_cache_total counter\nfusion_agentscope_runtime_harness_cache_total{result=\"hit\"} 198.0\nfusion_agentscope_runtime_harness_cache_total{result=\"miss\"} 34.0\n# HELP fusion_agentscope_runtime_harness_capacity_rejected_total  \n# TYPE fusion_agentscope_runtime_harness_capacity_rejected_total counter\nfusion_agentscope_runtime_harness_capacity_rejected_total 0.0\n# HELP fusion_agentscope_runtime_harness_eviction_total  \n# TYPE fusion_agentscope_runtime_harness_eviction_total counter\nfusion_agentscope_runtime_harness_eviction_total 33.0\n# HELP fusion_agentscope_runtime_harness_leases_active  \n# TYPE fusion_agentscope_runtime_harness_leases_active gauge\nfusion_agentscope_runtime_harness_leases_active 0.0\n# HELP fusion_agentscope_runtime_outbox_backlog  \n# TYPE fusion_agentscope_runtime_outbox_backlog gauge\nfusion_agentscope_runtime_outbox_backlog 0.0\n# HELP fusion_agentscope_runtime_outbox_retry_total  \n# TYPE fusion_agentscope_runtime_outbox_retry_total counter\nfusion_agentscope_runtime_outbox_retry_total 6321623.0\n# HELP fusion_agentscope_runtime_provider_closed_total  \n# TYPE fusion_agentscope_runtime_provider_closed_total counter\nfusion_agentscope_runtime_provider_closed_total 232.0\n# HELP fusion_agentscope_runtime_provider_terminal_total  \n# TYPE fusion_agentscope_runtime_provider_terminal_total counter\nfusion_agentscope_runtime_provider_terminal_total{status=\"CANCELLED\"} 0.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"COMPLETED\"} 232.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"FAILED\"} 0.0\n# HELP fusion_agentscope_runtime_replay_delivered_total  \n# TYPE fusion_agentscope_runtime_replay_delivered_total counter\nfusion_agentscope_runtime_replay_delivered_total 1110.0\n# HELP fusion_agentscope_runtime_replay_duplicate_suppressed_total  \n# TYPE fusion_agentscope_runtime_replay_duplicate_suppressed_total counter\nfusion_agentscope_runtime_replay_duplicate_suppressed_total 176.0\n# HELP fusion_agentscope_runtime_replay_terminal_recovered_total  \n# TYPE fusion_agentscope_runtime_replay_terminal_recovered_total counter\nfusion_agentscope_runtime_replay_terminal_recovered_total 26.0\n# HELP fusion_agentscope_runtime_runs_active  \n# TYPE fusion_agentscope_runtime_runs_active gauge\nfusion_agentscope_runtime_runs_active 0.0\n# HELP fusion_agentscope_runtime_runs_owner_lost_total  \n# TYPE fusion_agentscope_runtime_runs_owner_lost_total counter\nfusion_agentscope_runtime_runs_owner_lost_total 0.0\n# HELP fusion_agentscope_runtime_runs_terminal_total  \n# TYPE fusion_agentscope_runtime_runs_terminal_total counter"
+      }
+    ],
+    "ms": 375
+  }
+]

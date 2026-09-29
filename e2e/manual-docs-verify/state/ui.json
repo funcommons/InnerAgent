@@ -1,0 +1,194 @@
+[
+  {
+    "id": "QS2-1",
+    "doc": "02-快速开始/02",
+    "title": "UI:演示登录 → 建工单话术 → 确认卡(回显参数)→ 确认 → 建单回复",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS2-1-confirm-card.png",
+      "assets/QS2-1-after-confirm.png",
+      "assets/QS2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "确认卡出现",
+            "ok": true,
+            "detail": "标题=手册UI工单-034421"
+          },
+          {
+            "label": "确认卡回显将执行参数(标题/描述)",
+            "ok": true,
+            "detail": "帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high | mcp__acme-demo__create_ticket | 等待确认 | 等待确认 · 剩余 23 小时 59 分 | 约束范围已注入本次运行 | 拒绝 | 允许"
+          },
+          {
+            "label": "确认后收到建单结果回复",
+            "ok": true,
+            "detail": "ketId\":\"T-1018\",\"title\":\"手册UI工单-034421\",\"priority\":\"high\",\"createdBy\":\"12993\"} | 工单「手册UI工单-034421」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。 | MiniMax M3 | mock-text | 默认（按工具设定） | 每次询问 | 总是允许 | 完全访问 | 发送"
+          }
+        ]
+      },
+      {
+        "h": "确认卡文本(尾部)",
+        "body": "帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high\n\nmcp__acme-demo__create_ticket\n等待确认\n等待确认 · 剩余 23 小时 59 分\n\n约束范围已注入本次运行\n\n拒绝\n允许"
+      },
+      {
+        "h": "确认后回复(尾部)",
+        "body": "帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high\n\nmcp__acme-demo__create_ticket\n已完成\n\n{\"status\":\"ok\",\"ticketId\":\"T-1018\",\"title\":\"手册UI工单-034421\",\"priority\":\"high\",\"createdBy\":\"12993\"}\n\n工单「手册UI工单-034421」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。\n\nMiniMax M3\nmock-text\n默认（按工具设定）\n每次询问\n总是允许\n完全访问\n发送"
+      }
+    ],
+    "ms": 8202
+  },
+  {
+    "id": "QS2-2",
+    "doc": "02-快速开始/02",
+    "title": "UI:工具面板台账出现 channel=agent 的本单工单卡片",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS2-2-ticket-board.png",
+      "assets/QS2-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "台账含本轮工单「手册UI工单-034421」",
+            "ok": true,
+            "detail": "SLA 承诺(按优先级):high 首响 30min · 方案 4h;normal 首响 2h · 闭环 24h;low 1 工作日 | ia.tools.filter-all (18) | ia.tools.filter-agent (18) | ia.tools.filter-direct (0) | T-1018 | high | InnerAgent 会话 | 30min 首响 | 创建者: 12993 | 手册UI工单-034421 | 3楼打印机卡纸 | T-1017 | low | InnerAgent 会话 | 1 工作日 | 创建者: 12993 | 豁免档-FULL_ACC"
+          },
+          {
+            "label": "含 agent 渠道标记",
+            "ok": true,
+            "detail": "ia.tools.filter-agent (18)"
+          }
+        ]
+      },
+      {
+        "h": "台账文本(截取)",
+        "body": "SLA 承诺(按优先级):high 首响 30min · 方案 4h;normal 首响 2h · 闭环 24h;low 1 工作日\nia.tools.filter-all (18)\nia.tools.filter-agent (18)\nia.tools.filter-direct (0)\nT-1018\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n手册UI工单-034421\n\n3楼打印机卡纸\n\nT-1017\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-FULL_ACCESS\n\n豁免档直通验证\n\nT-1016\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-ALWAYS_ALLOW\n\n豁免档直通验证\n\nT-1015\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n手册回归工单-034159\n\n3楼打印机卡纸\n\nT-1014\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-FULL_ACCESS\n\n豁免档直通验证\n\nT-1013\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-ALWAYS_ALLOW\n\n豁免档直通验证\n\nT-1012\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n手册回归工单-033809\n\n3楼打印机卡纸\n\nT-1011\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n隔离复现H1\n\n探针\n\nT-1010\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-FULL_ACCESS\n\n豁免档直通验证\n\nT-1009\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-ALWAYS_ALLOW\n\n豁免档直通验证\n\nT-1008\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n内联确认探针F1\n\n探针\n\nT-10"
+      }
+    ],
+    "ms": 1962
+  },
+  {
+    "id": "IG3-1",
+    "doc": "03-接入指南/03",
+    "title": "UI:WC(<inneragent-chat>)挂载并完成一轮对话",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG3-1-wc-chat.png",
+      "assets/IG3-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "WC 组件挂载可见",
+            "ok": true,
+            "detail": "data-testid=ia-chat"
+          },
+          {
+            "label": "对话收到回复(知识库话术含 [KB:] 引用)",
+            "ok": true,
+            "detail": "年假有几天? | 按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave] | MiniMax M3 | mock-text | 默认（按工具设定） | 每次询问 | 总是允许 | 完全访问 | 发送"
+          }
+        ]
+      },
+      {
+        "h": "回复(尾部)",
+        "body": "年假有几天?\n\n按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]\n\nMiniMax M3\nmock-text\n默认（按工具设定）\n每次询问\n总是允许\n完全访问\n发送"
+      }
+    ],
+    "ms": 6256
+  },
+  {
+    "id": "IG3-2",
+    "doc": "03-接入指南/03",
+    "title": "UI:iframe + postMessage 模式完成握手(高度/状态事件回传)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG3-2-iframe-handshake.png",
+      "assets/IG3-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "iframe 握手完成标记出现",
+            "ok": true,
+            "detail": "握手: 完成(origin 校验通过)"
+          }
+        ]
+      },
+      {
+        "h": "握手区文本",
+        "body": "握手: 完成(origin 校验通过)"
+      }
+    ],
+    "ms": 1596
+  },
+  {
+    "id": "IG3-3",
+    "doc": "03-接入指南/03",
+    "title": "静态核对:SDK/iframe 参考实现文件在盘(sdk-js、EmbedChat.vue、frame.html 等)",
+    "status": "PASS",
+    "notes": [
+      "本用例为静态核对(文件存在性),非行为断言"
+    ],
+    "evidence": [
+      "assets/IG3-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "文件存在性(手册 §2/§3 引用的参考实现)",
+        "verdicts": [
+          {
+            "label": "在盘: sdk-js/",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/src/views/ia/EmbedChat.vue",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/src/vendor/inneragent/iframe-host.js",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/public/ia/frame.html",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/public/ia/frame.js",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/public/ia/iframe-child.js",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/src/ia/iframeEmbed.ts",
+            "ok": true,
+            "detail": "存在"
+          }
+        ]
+      }
+    ],
+    "ms": 327
+  }
+]

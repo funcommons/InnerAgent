@@ -47,17 +47,16 @@ data: {"outputType":"CONTENT","createdAt":1730000000000,"content":"...",...}
 
 | 取值 | 含义 | 终态? |
 | --- | --- | --- |
-| `RUN_STARTED` | 运行开始 | |
-| `CONTENT` | 模型增量输出;首条携带 `reasoningDurationMs`(模型思考耗时,可用于口径剥离) | |
+| `CONTENT` | 模型增量输出;流首帧(内部事件不投影,seq 存在跳号);`reasoningDurationMs` 仅当模型产生 reasoning 输出时携带 | |
 | `TOOL_CALL_STARTED` | 模型发起工具调用 | |
 | `USER_CONFIRMATION_REQUIRED`(`controlType=USER_CONFIRM_REQUIRED`) | 等待用户确认(WRITE 工具/ALWAYS_ASK);运行态 `WAITING_CONFIRMATION` | |
-| `TOOL_RESULT` | 工具结果回传 | |
-| `DONE`(附 usage) | 正常结束 | ✅ |
+| `TOOL_FINISHED` | 工具结果回传(工具收尾) | |
+| `DONE` | 正常结束 | ✅ |
 | `ERROR` / `CANCELLED` | 失败/取消 | ✅ |
 
-> 上表为接入方最常处理的取值。服务端 `outputType` 全集另含 `REASONING`、`TOOL_CALL`、
-> `TOOL_FINISHED`、`SUB_AGENT_FINISHED`、`USER_CONFIRM_RESULT`(确认结果回执)——
-> 客户端按未知类型忽略即可,不要因此中断流。
+> 上表为接入方最常处理的取值。服务端 `outputType` 全集另含 `TOOL_CALL`、
+> `USER_CONFIRM_RESULT`(确认结果回执)与 `REASONING`、`SUB_AGENT_FINISHED`
+> (特定模型/子 Agent 编排路径下出现)—— 客户端按未知类型忽略即可,不要因此中断流。
 >
 > `createdAt` 由 Jackson 序列化,可能为 epoch 毫秒数值或 ISO-8601 字符串,解析时两种形态都要兼容。
 

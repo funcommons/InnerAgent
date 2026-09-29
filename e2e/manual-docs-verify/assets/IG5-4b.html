@@ -14,15 +14,15 @@
     td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
     .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
   </style><h1>IG5-4b <span class="title">接入指南/05 · 回切后对话回归</span></h1>
-<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:46:09.494Z · server http://localhost:18090</div>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T08:20:33.312Z · server http://localhost:18090</div>
 <div class="verdict ok">PASS</div>
 <h2>断言结果</h2>
 <table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
 <tr><td>运行受理</td><td class="ok">PASS</td><td class="mono small">200</td></tr>
-<tr><td>真模型回复至 DONE</td><td class="ok">PASS</td><td class="mono small">CONTENT,TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE</td></tr>
-<tr><td>回复非空(非 mock 固定文案路径)</td><td class="ok">PASS</td><td class="mono small">我帮您查询当前时间。现在是 **2026-09-29 11:46:08**(周一,Asia/Shanghai)。有需要我帮您处理的吗?</td></tr>
+<tr><td>真模型回复至 DONE</td><td class="ok">PASS</td><td class="mono small">CONTENT,TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,CONTENT,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>回复非空(非 mock 固定文案路径)</td><td class="ok">PASS</td><td class="mono small">我帮您查询一下当前时间。现在是北京时间2026-09-29 16:20(周一)。如有其他需要随时告诉我~</td></tr>
 </table>
 <h2>事件序列</h2>
-<pre class="mono">CONTENT,TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE</pre>
+<pre class="mono">CONTENT,TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,CONTENT,CONTENT,CONTENT,DONE</pre>
 <h2>回复(截取)</h2>
-<pre class="mono">我帮您查询当前时间。现在是 **2026-09-29 11:46:08**(周一,Asia/Shanghai)。有需要我帮您处理的吗?</pre>
+<pre class="mono">我帮您查询一下当前时间。现在是北京时间2026-09-29 16:20(周一)。如有其他需要随时告诉我~</pre>

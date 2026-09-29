@@ -1,0 +1,46 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>BE1-5 <span class="title">最佳实践/01 · 审计与 FQN</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:07.345Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>近 20 分钟有工具决策审计行(内置工具亦计)</td><td class="ok">PASS</td><td class="mono small">12 行</td></tr>
+<tr><td>tool_fqn 命名 mcp__&lt;serverKey&gt;__&lt;tool&gt; / 内置短名</td><td class="ok">PASS</td><td class="mono small">denied|live-confirm|get_current_time|{}</td></tr>
+<tr><td>审计不含凭据明文</td><td class="ok">PASS</td><td class="mono small">未发现凭据</td></tr>
+<tr><td>含 live-confirm 决策源</td><td class="ok">PASS</td><td class="mono small">live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm</td></tr>
+</table>
+<h2>审计行(decision|decision_source|tool_fqn|params_masked)</h2>
+<pre class="mono">denied|live-confirm|get_current_time|{}
+allowed|live-confirm|mcp__acme-demo__create_ticket|{"title":"手册回归工单-034159","priority":"high","description":"3楼打印机卡纸"}
+allowed|live-confirm|get_current_time|{}
+allowed|live-confirm|mcp__acme-echo__echo|{"message":"手册回归OK。"}
+denied|live-confirm|get_current_time|{}
+allowed|live-confirm|mcp__acme-demo__create_ticket|{"title":"手册回归工单-033809","priority":"high","description":"3楼打印机卡纸"}
+allowed|live-confirm|get_current_time|{}
+allowed|live-confirm|mcp__acme-demo__create_ticket|{"title":"隔离复现H1","priority":"high","description":"探针"}
+denied|live-confirm|get_current_time|{}
+allowed|live-confirm|get_current_time|{}
+allowed|live-confirm|mcp__acme-demo__create_ticket|{"title":"内联确认探针F1","priority":"high","description":"探针"}
+denied|live-confirm|get_current_time|{}</pre>
+<h2>宿主工具清单来源(ia_tool_registry,source=host_app)</h2>
+<pre class="mono">mcp__acme-demo-host__create_ticket|high
+mcp__acme-demo___test_probe_20260923|low
+mcp__acme-demo__create_ticket|low
+mcp__acme-demo__create_ticket2|low
+mcp__acme-demo__list_tickets|low
+mcp__acme-demo__query_sales|low
+mcp__acme-demo__resolve_scope|low</pre>

@@ -1,0 +1,75 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>AP1-5 <span class="title">API 参考/01 · 会话兜底取消与 expire 幂等</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:16.106Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>按会话兜底取消受理</td><td class="ok">PASS</td><td class="mono small">status=200 code=0</td></tr>
+<tr><td>该运行已被兜底取消</td><td class="ok">PASS</td><td class="mono small">CANCELLED</td></tr>
+<tr><td>无活动运行 → 404</td><td class="ok">PASS</td><td class="mono small">status=404 code=404</td></tr>
+<tr><td>expire 重复调用均非 5xx(幂等语义)</td><td class="ok">PASS</td><td class="mono small">1st=200/0 2nd=200/0</td></tr>
+</table>
+<h2>会话兜底取消响应</h2>
+<pre class="mono">{
+  "code": 0,
+  "msg": "success",
+  "data": true
+}</pre>
+<h2>运行终态</h2>
+<pre class="mono">{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "runId": "ea9f645828fc4867bf96a1d7ca8a3095",
+    "status": "CANCELLED",
+    "lastSequence": 13,
+    "waitingReplyId": null,
+    "terminalEvent": {
+      "schemaVersion": 1,
+      "runId": "ea9f645828fc4867bf96a1d7ca8a3095",
+      "sequence": 13,
+      "messageId": "cancelled-9d1f315d67ce41408bcb1e19f26f0b3f",
+      "conversationId": "e8a6b93d738f415083dfdeef1da515e4",
+      "outputType": "CANCELLED",
+      "finished": true,
+      "error": "Agent run was cancelled",
+      "source": "main",
+      "rawEventId": "cancelled-9d1f315d67ce41408bcb1e19f26f0b3f",
+      "rawEventType": "RUN_TERMINAL",
+      "createdAt": "2026-09-29T03:42:16.059Z"
+    }
+  }
+}</pre>
+<h2>无效会话取消响应</h2>
+<pre class="mono">{
+  "code": 404,
+  "msg": "Agent run does not exist",
+  "data": null
+}</pre>
+<h2>expire 两次响应</h2>
+<pre class="mono">{
+  "first": {
+    "code": 0,
+    "msg": "success",
+    "data": false
+  },
+  "second": {
+    "code": 0,
+    "msg": "success",
+    "data": false
+  }
+}</pre>

@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>AP2-3 <span class="title">API 参考/02 · 幂等语义与时钟</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:21.136Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>两次 POST /runs 产生不同运行(非幂等,重试需先查 /runs/running)</td><td class="ok">PASS</td><td class="mono small">8faed8b27e3e4db0a588761e1bfd7c88 vs 7aab16d345544787a1c5a2af0c7aeb1d</td></tr>
+<tr><td>createdAt 为服务端时钟,与本地偏差 444ms(&lt;5s)</td><td class="ok">PASS</td><td class="mono small">444ms</td></tr>
+</table>
+<h2>运行 ID</h2>
+<pre class="mono">run1=8faed8b27e3e4db0a588761e1bfd7c88
+run2=7aab16d345544787a1c5a2af0c7aeb1d</pre>
+<h2>时钟偏差</h2>
+<pre class="mono">444ms(手册 §5:同机或 NTP 对齐;本测试与 server 同机)</pre>

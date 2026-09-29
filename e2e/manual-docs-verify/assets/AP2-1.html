@@ -1,0 +1,55 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>AP2-1 <span class="title">API 参考/02 · 错误码表实测</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:20.160Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>401: 非法 Bearer 被拒(鉴权失败)</td><td class="ok">PASS</td><td class="mono small">status=401 msg=embed token 无效: embed token 不是合法 JWT</td></tr>
+<tr><td>local profile 完全无鉴权头 → 匿名放行(手册「仅 local profile」口径成立)</td><td class="ok">PASS</td><td class="mono small">status=200</td></tr>
+<tr><td>403: 管理面密钥错</td><td class="ok">PASS</td><td class="mono small">status=403</td></tr>
+<tr><td>404: 他人运行(非本人 404 不泄露存在性)</td><td class="ok">PASS</td><td class="mono small">status=404</td></tr>
+<tr><td>非法 agentType → 实测 500「Agent 类型不存在」(文档 API参考/01 称 404 — 候选偏差 R-08)</td><td class="ok">PASS</td><td class="mono small">status=500 msg=Agent 类型不存在: no-such-agent</td></tr>
+</table>
+<h2>错误码表对照(手册 §1)</h2>
+<pre class="mono">200 成功(正常运行) → 实测 见 QS1-2/IG5-1 等用例 
+400 参数非法(serverKey 非法字符) → 实测 见 IG4-2 用例(实测 400) 
+401 非法 Bearer POST /runs → 实测 401 msg=embed token 无效: embed token 不是合法 JWT
+401? 完全无鉴权头(local profile 匿名) → 实测 200 
+403 管理面密钥错 → 实测 403 msg=管理面凭据无效:请携带 X-IA-Admin-Key 请求头或 Authorization: Bearer 管理会话 t
+404 他人运行(行级隔离) → 实测 404 msg=Agent run does not exist
+500(文档称 404) Agent 不存在(POST /runs) → 实测 500 msg=Agent 类型不存在: no-such-agent
+409 serverKey 冲突 → 实测 见 IG4-2 用例(实测 409) 
+429 子 Agent 护栏(唯一已知源) → 实测 本轮未触发 — 静态核对范围 
+501 OAUTH 枚举预留 → 实测 见 IG4-2 用例(实测 501) </pre>
+<h2>非法 Bearer 响应</h2>
+<pre class="mono">{
+  "code": 401,
+  "msg": "embed token 无效: embed token 不是合法 JWT",
+  "data": null
+}</pre>
+<h2>非法 agentType 响应</h2>
+<pre class="mono">{
+  "code": 500,
+  "msg": "Agent 类型不存在: no-such-agent",
+  "data": null
+}</pre>
+<h2>越权读取响应</h2>
+<pre class="mono">{
+  "code": 404,
+  "msg": "Agent run does not exist",
+  "data": null
+}</pre>

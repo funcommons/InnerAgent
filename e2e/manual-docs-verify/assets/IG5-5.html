@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG5-5 <span class="title">接入指南/05 · 模型登记字段</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:01.686Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>MiniMax-M3 max_concurrency=5(登记字段默认)</td><td class="ok">PASS</td><td class="mono small">MiniMax-M3 | 1 | f | 1 | 0 | 5</td></tr>
+<tr><td>mock-text max_concurrency=1000(压测 calibrate 口径)</td><td class="ok">PASS</td><td class="mono small">mock-text | 1 | t | 1 | 0 | 1000</td></tr>
+<tr><td>当前 mock-text 为默认(本阶段播种态)</td><td class="ok">PASS</td><td class="mono small">mock=t mini=f</td></tr>
+<tr><td>model_type=1 仅一个 default_model</td><td class="ok">PASS</td><td class="mono small">count=1</td></tr>
+</table>
+<h2>ia_ai_model 全表(code|model_type|default_model|status|sort|max_concurrency)</h2>
+<pre class="mono">MiniMax-M3|1|f|1|0|5
+mock-text|1|t|1|0|1000</pre>

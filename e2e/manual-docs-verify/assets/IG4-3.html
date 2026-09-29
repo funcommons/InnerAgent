@@ -1,0 +1,58 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG4-3 <span class="title">接入指南/04 · SSRF 护栏与行级隔离</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:12.167Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>localhost 端点被拒 400</td><td class="ok">PASS</td><td class="mono small">400 endpoint URL 不能指向本机或内网地址</td></tr>
+<tr><td>127.0.0.1 端点被拒 400</td><td class="ok">PASS</td><td class="mono small">400</td></tr>
+<tr><td>10.0.0.1 内网端点被拒 400</td><td class="ok">PASS</td><td class="mono small">400</td></tr>
+<tr><td>公网地址注册成功(用后删除)</td><td class="ok">PASS</td><td class="mono small">200</td></tr>
+<tr><td>用户 B 读用户 A 的注册 → 404</td><td class="ok">PASS</td><td class="mono small">status=404</td></tr>
+<tr><td>用户 B 列表不见他人注册</td><td class="ok">PASS</td><td class="mono small">列表 0 条</td></tr>
+</table>
+<h2>SSRF 三连响应</h2>
+<pre class="mono">#1 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址
+#2 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址
+#3 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址</pre>
+<h2>公网注册响应</h2>
+<pre class="mono">{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 233,
+    "serverKey": "docsverify-user-mum4rdt6",
+    "name": "手册回归 echo",
+    "endpointUrl": "https://example.com/mcp",
+    "transport": "streamable-http",
+    "authType": "STATIC_HEADER",
+    "headerName": "X-ACME-Token",
+    "credentialsMasked": "ac***",
+    "timeoutSeconds": 30,
+    "enabled": true,
+    "updateTime": "2026-09-29T11:42:12.157184"
+  }
+}</pre>
+<h2>越权读取响应</h2>
+<pre class="mono">{
+  "status": 404,
+  "json": {
+    "code": 404,
+    "msg": "三方 MCP 服务不存在",
+    "data": null
+  }
+}</pre>

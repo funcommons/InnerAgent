@@ -1,0 +1,70 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>BE2-1 <span class="title">最佳实践/02 · 必盯指标存在性</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:19.492Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果(手册 §3 表)</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>指标 fusion_agentscope_runtime_runs_active</td><td class="ok">PASS</td><td class="mono small"># TYPE fusion_agentscope_runtime_runs_active gauge</td></tr>
+<tr><td>指标 fusion_agentscope_runtime_runs_waiting</td><td class="ok">PASS</td><td class="mono small"># TYPE fusion_agentscope_runtime_runs_waiting gauge</td></tr>
+<tr><td>指标 fusion_agentscope_runtime_outbox_backlog</td><td class="ok">PASS</td><td class="mono small"># TYPE fusion_agentscope_runtime_outbox_backlog gauge</td></tr>
+<tr><td>指标 fusion_agentscope_runtime_event_backpressure_rejected_total</td><td class="ok">PASS</td><td class="mono small"># TYPE fusion_agentscope_runtime_event_backpressure_rejected_total counter</td></tr>
+<tr><td>指标 fusion_agentscope_runtime_harness_capacity_rejected_total</td><td class="ok">PASS</td><td class="mono small"># TYPE fusion_agentscope_runtime_harness_capacity_rejected_total counter</td></tr>
+<tr><td>指标 fusion_agentscope_runtime_state_bulkhead_rejected_total</td><td class="ok">PASS</td><td class="mono small"># TYPE fusion_agentscope_runtime_state_bulkhead_rejected_total counter</td></tr>
+<tr><td>指标 ia_reconnect_total</td><td class="ok">PASS</td><td class="mono small"># TYPE ia_reconnect_total counter</td></tr>
+<tr><td>指标 jvm_gc_pause_seconds</td><td class="ok">PASS</td><td class="mono small"># TYPE jvm_gc_pause_seconds summary</td></tr>
+</table>
+<h2>指标原文(相关行)</h2>
+<pre class="mono">fusion_agentscope_runtime_event_backpressure_rejected_total 0.0
+fusion_agentscope_runtime_event_persist_latency_seconds_count 2519
+fusion_agentscope_runtime_event_persist_latency_seconds_sum 9.819032181
+fusion_agentscope_runtime_event_persist_latency_seconds_max 0.025464791
+fusion_agentscope_runtime_event_persisted_total 2519.0
+fusion_agentscope_runtime_event_sequence_allocated_total 2519.0
+fusion_agentscope_runtime_harness_cache_total{result="hit"} 192.0
+fusion_agentscope_runtime_harness_cache_total{result="miss"} 32.0
+fusion_agentscope_runtime_harness_capacity_rejected_total 0.0
+fusion_agentscope_runtime_harness_eviction_total 18.0
+fusion_agentscope_runtime_harness_leases_active 0.0
+fusion_agentscope_runtime_outbox_backlog 6.0
+fusion_agentscope_runtime_outbox_retry_total 4813419.0
+fusion_agentscope_runtime_provider_closed_total 224.0
+fusion_agentscope_runtime_provider_terminal_total{status="CANCELLED"} 0.0
+fusion_agentscope_runtime_provider_terminal_total{status="COMPLETED"} 224.0
+fusion_agentscope_runtime_provider_terminal_total{status="FAILED"} 0.0
+fusion_agentscope_runtime_replay_delivered_total 1071.0
+fusion_agentscope_runtime_replay_duplicate_suppressed_total 169.0
+fusion_agentscope_runtime_replay_terminal_recovered_total 26.0
+fusion_agentscope_runtime_runs_active 0.0
+fusion_agentscope_runtime_runs_owner_lost_total 0.0
+fusion_agentscope_runtime_runs_terminal_total{status="CANCELLED"} 20.0
+fusion_agentscope_runtime_runs_terminal_total{status="COMPLETED"} 165.0
+fusion_agentscope_runtime_runs_terminal_total{status="FAILED"} 0.0
+fusion_agentscope_runtime_runs_waiting 34.0
+fusion_agentscope_runtime_state_bulkhead_rejected_total 0.0
+fusion_agentscope_runtime_state_failure_total 0.0
+fusion_agentscope_runtime_state_latency_seconds_count 1717
+fusion_agentscope_runtime_state_latency_seconds_sum 1.221881817
+fusion_agentscope_runtime_state_latency_seconds_max 0.008501
+fusion_agentscope_runtime_tool_scheduler_violation_total 0.0
+ia_confirmation_total{app="1",decision="approved",source="live-confirm"} 11.0
+ia_confirmation_total{app="1",decision="rejected",source="live-confirm"} 9.0
+ia_confirmation_total{app="34",decision="approved",source="live-confirm"} 5.0
+ia_reconnect_total{app="1",result="resumed"} 18.0
+ia_tool_calls_total{app="1",result="error",tool="mcp__acme-echo__echo"} 2.0
+ia_tool_calls_total{app="1",result="ok",tool="get_current_time"} 40.0
+ia_tool_calls_total{app="34",result="ok",tool="mcp__acme-demo__create_ticket"} 17.0
+jvm_gc_concurrent_phase_time_seconds_count{action="end of concurrent GC pause",cause="No GC",gc="G1 Concurrent GC"} 3658</pre>

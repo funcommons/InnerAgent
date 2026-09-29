@@ -1,0 +1,64 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG5-1 <span class="title">接入指南/05 · canned mock 规则行为</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:00.032Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>① 建工单话术触发 create_ticket 确认卡</td><td class="ok">PASS</td><td class="mono small">mcp__acme-demo__create_ticket</td></tr>
+<tr><td>工具 FQN=mcp__acme-demo__create_ticket(短名按后缀解析)</td><td class="ok">PASS</td><td class="mono small">mcp__acme-demo__create_ticket</td></tr>
+<tr><td>args 注入 $1(标题回显)</td><td class="ok">PASS</td><td class="mono small">{"title":"手册回归工单-034159","priority":"high","description":"3楼打印机卡纸"}</td></tr>
+<tr><td>回复含 $1/$2/$3 注入文案</td><td class="ok">PASS</td><td class="mono small">工单「手册回归工单-034159」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。</td></tr>
+<tr><td>② 年假 → [KB:] 引用</td><td class="ok">PASS</td><td class="mono small">按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]</td></tr>
+<tr><td>③ 报告规则命中</td><td class="ok">PASS</td><td class="mono small">Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。</td></tr>
+<tr><td>④ 无命中 → default 回复</td><td class="ok">PASS</td><td class="mono small">我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。</td></tr>
+</table>
+<h2>① 建工单:确认卡 pendingToolCalls</h2>
+<pre class="mono">{
+  "toolCallId": "mock-call-305",
+  "toolName": "mcp__acme-demo__create_ticket",
+  "argumentsPreview": "{\"title\":\"手册回归工单-034159\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}",
+  "scope": {
+    "resolved": true,
+    "degraded": false
+  }
+}</pre>
+<h2>① 确认后全部事件</h2>
+<pre class="mono">seq=3 TOOL_CALL_STARTED mcp__acme-demo__create_ticket
+seq=5 TOOL_CALL mcp__acme-demo__create_ticket
+seq=12 USER_CONFIRMATION_REQUIRED user_confirmation
+seq=13 USER_CONFIRM_RESULT 
+seq=17 TOOL_FINISHED mcp__acme-demo__create_ticket
+seq=20 CONTENT 
+seq=21 CONTENT 
+seq=26 DONE </pre>
+<h2>① confirm 响应</h2>
+<pre class="mono">{
+  "status": 200,
+  "json": {
+    "code": 0,
+    "msg": "success",
+    "data": true
+  }
+}</pre>
+<h2>① 最终回复</h2>
+<pre class="mono">工单「手册回归工单-034159」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。</pre>
+<h2>② 年假回复</h2>
+<pre class="mono">按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]</pre>
+<h2>③ 报告回复</h2>
+<pre class="mono">Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。</pre>
+<h2>④ default 回复</h2>
+<pre class="mono">我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。</pre>

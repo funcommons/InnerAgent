@@ -1,0 +1,70 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG5-2 <span class="title">接入指南/05 · deltaMs 节奏与快照核对</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:00.681Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>CONTENT 帧数 ≥2(可测节奏)</td><td class="ok">PASS</td><td class="mono small">3 帧</td></tr>
+<tr><td>相邻 CONTENT 间隔中位数 ≥40ms(deltaMs=60 节拍存在;实测中位=66ms,min=8ms — 单帧间隔可因合帧小于 deltaMs)</td><td class="ok">PASS</td><td class="mono small">66,8</td></tr>
+<tr><td>快照 modelOptions.mockScript.deltaMs=60(生效值核对;modelOptions 即 config 原文)</td><td class="ok">PASS</td><td class="mono small">60</td></tr>
+<tr><td>快照含 mockScript(config 原文)</td><td class="ok">PASS</td><td class="mono small">ia_agent_run.agent_definition_snapshot_json</td></tr>
+</table>
+<h2>CONTENT 到达时刻(ms)</h2>
+<pre class="mono">156, 222, 230</pre>
+<h2>快照 modelOptions(截取)</h2>
+<pre class="mono">{
+  "mockScript": {
+    "default": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。",
+    "deltaMs": 60,
+    "rules": [
+      {
+        "args": {
+          "description": "$2",
+          "priority": "$3",
+          "title": "$1"
+        },
+        "match": "帮我建一张工单:标题=(.+?),描述=(.+?),优先级=(\\w+)",
+        "reply": "工单「$1」已创建成功:描述=$2,优先级=$3。已同步到工具台账(Agent 渠道),可在工具页查看。",
+        "tool": "create_ticket"
+      },
+      {
+        "args": {
+          "description": "用户确认后提交",
+          "priority": "normal",
+          "title": "确认流工单"
+        },
+        "match": "信息无误|提交建单",
+        "reply": "工单已创建成功(确认流),已同步到工具台账(Agent 渠道)。",
+        "tool": "create_ticket"
+      },
+      {
+        "match": "年假|假期|请假",
+        "reply": "按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]"
+      },
+      {
+        "match": "报告|总结|销售|回款",
+        "reply": "Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。"
+      },
+      {
+        "args": {},
+        "match": "现在几点|几点了",
+        "reply": "已通过内置工具查询当前时间,结果见上方工具调用记录(内置只读工具 get_current_time)。",
+        "tool": "get_current_time"
+      }
+    ]
+  }
+}</pre>

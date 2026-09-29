@@ -1,0 +1,49 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>QS1-2 <span class="title">快速开始/01 · 第一轮运行(DEFAULT)</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:41:15.286Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>HTTP 200 + text/event-stream</td><td class="ok">PASS</td><td class="mono small">200 text/event-stream</td></tr>
+<tr><td>收到 SSE 帧</td><td class="ok">PASS</td><td class="mono small">6 帧</td></tr>
+<tr><td>收到 CONTENT</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>内置工具 get_current_time 被调用(工具事件)</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>DEFAULT 档读工具未弹确认</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>终态 DONE</td><td class="ok">PASS</td><td class="mono small">DONE</td></tr>
+<tr><td>服务端关闭流</td><td class="ok">PASS</td><td class="mono small">closedByServer=true</td></tr>
+</table>
+<h2>outputType 序列</h2>
+<pre class="mono">seq=3 TOOL_CALL_STARTED tool=get_current_time
+seq=5 TOOL_CALL tool=get_current_time
+seq=9 TOOL_FINISHED tool=get_current_time
+seq=12 CONTENT
+seq=13 CONTENT
+seq=18 DONE</pre>
+<h2>DONE 帧原文</h2>
+<pre class="mono">{
+  "schemaVersion": 1,
+  "runId": "15dc52b8610c429496f08316795a3ab2",
+  "sequence": 18,
+  "messageId": "terminal-ee59652abb6a46ae9a3f42b2acdc854d",
+  "conversationId": "3bf7820418544405bb43a68865298347",
+  "outputType": "DONE",
+  "finished": true,
+  "source": "main",
+  "rawEventId": "terminal-ee59652abb6a46ae9a3f42b2acdc854d",
+  "rawEventType": "RUN_TERMINAL",
+  "createdAt": "2026-09-29T03:41:15.275Z"
+}</pre>

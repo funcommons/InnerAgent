@@ -1,0 +1,32 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG4-4 <span class="title">接入指南/04 · 注册生效与目录摘除(FQN 工具箱)</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:13.410Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>注册成功</td><td class="ok">PASS</td><td class="mono small">id=42</td></tr>
+<tr><td>裸名 echo 按工具箱 FQN 后缀(__&lt;name&gt;)解析:确认卡 → 批准 → 调用</td><td class="ok">PASS</td><td class="mono small">toolEvents=mcp__acme-echo__echo,mcp__acme-echo__echo,user_confirmation,mcp__acme-echo__echo,mcp__acme-echo__echo,user_confirmation,mcp__acme-echo__echo ots=TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,</td></tr>
+<tr><td>echo 工具结果回流对话($1 捕获回显)</td><td class="ok">PASS</td><td class="mono small">已回显:手册回归OK。(MCP echo)</td></tr>
+<tr><td>删除成功</td><td class="ok">PASS</td><td class="mono small">status=200</td></tr>
+<tr><td>删除后目录摘除(失效广播)</td><td class="ok">PASS</td><td class="mono small">删除前列表含=true,删除后含=false</td></tr>
+</table>
+<h2>对话事件序列</h2>
+<pre class="mono">TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,CONTENT,DONE</pre>
+<h2>工具事件名</h2>
+<pre class="mono">mcp__acme-echo__echo, mcp__acme-echo__echo, user_confirmation, mcp__acme-echo__echo, mcp__acme-echo__echo, user_confirmation, mcp__acme-echo__echo</pre>
+<h2>回复</h2>
+<pre class="mono">已回显:手册回归OK。(MCP echo)</pre>

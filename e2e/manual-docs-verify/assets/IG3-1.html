@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG3-1 <span class="title">接入指南/03 · WC 直挂对话</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:44:37.563Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>WC 组件挂载可见</td><td class="ok">PASS</td><td class="mono small">data-testid=ia-chat</td></tr>
+<tr><td>对话收到回复(知识库话术含 [KB:] 引用)</td><td class="ok">PASS</td><td class="mono small">年假有几天? | 按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave] | MiniMax M3 | mock-text | 默认（按工具设定） | 每次询问 | 总是允许 | 完全访问 | 发送</td></tr>
+</table>
+<h2>回复(尾部)</h2>
+<pre class="mono">年假有几天?
+
+按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]
+
+MiniMax M3
+mock-text
+默认（按工具设定）
+每次询问
+总是允许
+完全访问
+发送</pre>

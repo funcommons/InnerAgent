@@ -1,0 +1,2518 @@
+[
+  {
+    "id": "RD-1",
+    "doc": "README 导读",
+    "title": "文档地图 18 篇在盘 + 全局速查(server/网关/管理面鉴权/观测)可达",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/RD-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "文档地图 18 篇文件在盘",
+            "ok": true,
+            "detail": "18 篇齐全"
+          },
+          {
+            "label": "server API 基址 :18090 健康",
+            "ok": true,
+            "detail": "{\"status\":\"UP\"}"
+          },
+          {
+            "label": "观测 /actuator/prometheus",
+            "ok": true,
+            "detail": "status=200, 含 fusion_agentscope_runtime 系列"
+          },
+          {
+            "label": "网关 :18081 静态资源可打开",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "网关 /ia 反代到 18090(API 路径)",
+            "ok": true,
+            "detail": "status=200, code=0"
+          },
+          {
+            "label": "管理面无 X-IA-Admin-Key 被拒",
+            "ok": true,
+            "detail": "status=403"
+          },
+          {
+            "label": "管理面带 X-IA-Admin-Key 通过",
+            "ok": true,
+            "detail": "status=200, code=0"
+          }
+        ]
+      },
+      {
+        "h": "GET /actuator/health",
+        "body": {
+          "status": "UP"
+        }
+      },
+      {
+        "h": "网关 /ia 反代(GET /ia/api/v1/runs/running)",
+        "body": "{\"code\":0,\"msg\":\"success\",\"data\":[{\"runId\":\"c5a2c9f27ff943478badfbcbf3508012\",\"conversationId\":\"e78be99d2a7c495e9afbb031283cdef3\",\"projectId\":null,\"title\":\"现在几点了?\",\"category\":null,\"status\":\"WAITING_CO"
+      },
+      {
+        "h": "管理面 tools 列表(前 300 字)",
+        "body": "{\"code\":0,\"msg\":\"success\",\"data\":[{\"createTime\":\"2026-09-21T23:20:08.740878\",\"updateTime\":\"2026-09-23T15:15:53.823531\",\"deleted\":false,\"id\":99,\"appId\":34,\"serverKey\":\"acme-demo\",\"toolName\":\"create_ticket\",\"fqn\":\"mcp__acme-demo__create_ticket\",\"description\":\"在 ACME 宿主系统中创建一张工单,返回工单号\",\"parametersSchem"
+      }
+    ],
+    "ms": 489
+  },
+  {
+    "id": "QS1-1",
+    "doc": "02-快速开始/01",
+    "title": "/actuator/health 返回 {\"status\":\"UP\",...}",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS1-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "HTTP 200",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "status=UP",
+            "ok": true,
+            "detail": "{\"status\":\"UP\"}"
+          }
+        ]
+      },
+      {
+        "h": "响应原文",
+        "body": "{\"status\":\"UP\"}"
+      }
+    ],
+    "ms": 311
+  },
+  {
+    "id": "BP2-1",
+    "doc": "01-白皮书/02",
+    "title": "端口表逐项连通(18090/18081/35432/36379/9300/9203)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BP2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "端口连通断言(手册 §1 组件拓扑表)",
+        "verdicts": [
+          {
+            "label": "server :18090",
+            "ok": true,
+            "detail": "health=UP"
+          },
+          {
+            "label": "网关 :18081(web/dist)",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "PostgreSQL :35432(user/db=inneragent)",
+            "ok": true,
+            "detail": "inneragent/inneragent"
+          },
+          {
+            "label": "Redis :36379 可达(PING)",
+            "ok": true,
+            "detail": "PONG"
+          },
+          {
+            "label": "宿主后端 :9300(宿主桥 /ia-mcp)",
+            "ok": true,
+            "detail": "POST /ia-mcp initialize → 401(宿主桥 MCP 端点存活)"
+          },
+          {
+            "label": "宿主前端 :9203",
+            "ok": true,
+            "detail": "status=200"
+          }
+        ]
+      }
+    ],
+    "ms": 437
+  },
+  {
+    "id": "IG2-1a",
+    "doc": "03-接入指南/02",
+    "title": "SSE 帧结构实测(真模型):id/event/data + outputType/createdAt + reasoningDurationMs 条件性",
+    "status": "PASS",
+    "notes": [
+      "reasoningDurationMs 实测: 本运行未携带(字段为条件字段,仅在模型有 reasoning 输出时出现)"
+    ],
+    "evidence": [
+      "assets/IG2-1a.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "POST /runs 响应 text/event-stream",
+            "ok": true,
+            "detail": "200 text/event-stream"
+          },
+          {
+            "label": "每帧 id 形如 <runId>:<seq>",
+            "ok": true,
+            "detail": "48bbecda7500433780cd2f34295a60c5:3 | 48bbecda7500433780cd2f34295a60c5:5 | 48bbecda7500433780cd2f34295a60c5:9"
+          },
+          {
+            "label": "seq 严格递增",
+            "ok": true,
+            "detail": "3,5,9,12,13,14,19"
+          },
+          {
+            "label": "全部帧同一 runId",
+            "ok": true,
+            "detail": "48bbecda7500433780cd2f34295a60c5"
+          },
+          {
+            "label": "event: pipeline-event",
+            "ok": true,
+            "detail": "pipeline-event"
+          },
+          {
+            "label": "data 含 outputType",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "createdAt 为 epoch 毫秒或 ISO-8601 之一",
+            "ok": true,
+            "detail": "string 样例=\"2026-09-28T12:25:20.692Z\""
+          },
+          {
+            "label": "存在 CONTENT 帧",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "终态后服务端关流",
+            "ok": true,
+            "detail": "closedByServer=true, 终态=DONE"
+          }
+        ]
+      },
+      {
+        "h": "事件流(共 7 帧,outputType 序列)",
+        "body": "@806ms 48bbecda7500433780cd2f34295a60c5:3 TOOL_CALL_STARTED\n@912ms 48bbecda7500433780cd2f34295a60c5:5 TOOL_CALL\n@926ms 48bbecda7500433780cd2f34295a60c5:9 TOOL_FINISHED\n@1617ms 48bbecda7500433780cd2f34295a60c5:12 CONTENT\n@1686ms 48bbecda7500433780cd2f34295a60c5:13 CONTENT\n@2029ms 48bbecda7500433780cd2f34295a60c5:14 CONTENT\n@2156ms 48bbecda7500433780cd2f34295a60c5:19 DONE"
+      },
+      {
+        "h": "首帧完整 JSON",
+        "body": {
+          "schemaVersion": 1,
+          "runId": "48bbecda7500433780cd2f34295a60c5",
+          "sequence": 3,
+          "messageId": "23a194e0340a41b9a55d111d9354daad",
+          "conversationId": "1bb83cfc39684c9481214d5a105da41f",
+          "outputType": "TOOL_CALL_STARTED",
+          "toolCalls": [
+            {
+              "id": "call_01a0e7fa0ea3725ab3ff08da",
+              "name": "get_current_time",
+              "arguments": ""
+            }
+          ],
+          "toolCallId": "call_01a0e7fa0ea3725ab3ff08da",
+          "toolName": "get_current_time",
+          "finished": false,
+          "replyId": "c4c2f75a3b87488ea8c34cabcd24ece5",
+          "rawEventId": "23a194e0340a41b9a55d111d9354daad",
+          "rawEventType": "TOOL_CALL_START",
+          "createdAt": "2026-09-28T12:25:19.929Z"
+        }
+      },
+      {
+        "h": "末帧完整 JSON(DONE)",
+        "body": {
+          "schemaVersion": 1,
+          "runId": "48bbecda7500433780cd2f34295a60c5",
+          "sequence": 19,
+          "messageId": "terminal-948d3a71efc54837bdbc5de81033979b",
+          "conversationId": "1bb83cfc39684c9481214d5a105da41f",
+          "outputType": "DONE",
+          "finished": true,
+          "source": "main",
+          "rawEventId": "terminal-948d3a71efc54837bdbc5de81033979b",
+          "rawEventType": "RUN_TERMINAL",
+          "createdAt": "2026-09-28T12:25:21.281Z"
+        }
+      },
+      {
+        "h": "reasoningDurationMs 观察",
+        "body": "首条 CONTENT 的 reasoningDurationMs=undefined(手册 §3 称「首条携带」,实测为条件字段 — 修复意见 R-03)"
+      }
+    ],
+    "ms": 2507
+  },
+  {
+    "id": "BP2-2",
+    "doc": "01-白皮书/02",
+    "title": "/actuator/prometheus 存在 runs_active/runs_waiting/outbox_backlog/ia_reconnect_total",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BP2-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "指标存在性",
+        "verdicts": [
+          {
+            "label": "指标 fusion_agentscope_runtime_runs_active",
+            "ok": true,
+            "detail": "fusion_agentscope_runtime_runs_active 0.0"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_runs_waiting",
+            "ok": true,
+            "detail": "fusion_agentscope_runtime_runs_waiting 1.0"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_outbox_backlog",
+            "ok": true,
+            "detail": "fusion_agentscope_runtime_outbox_backlog 0.0"
+          },
+          {
+            "label": "指标 ia_reconnect_total",
+            "ok": true,
+            "detail": "基线未出现(惰性计数器,首次真重连后注册 — 见 IG2-3 重连后断言)"
+          }
+        ]
+      },
+      {
+        "h": "prometheus 原文(ia/fusion 相关行)",
+        "body": "# HELP fusion_agentscope_runtime_event_backpressure_rejected_total  \n# TYPE fusion_agentscope_runtime_event_backpressure_rejected_total counter\nfusion_agentscope_runtime_event_backpressure_rejected_total 0.0\n# HELP fusion_agentscope_runtime_event_persist_latency_seconds  \n# TYPE fusion_agentscope_runtime_event_persist_latency_seconds summary\nfusion_agentscope_runtime_event_persist_latency_seconds_count 133\nfusion_agentscope_runtime_event_persist_latency_seconds_sum 0.591401212\n# HELP fusion_agentscope_runtime_event_persist_latency_seconds_max  \n# TYPE fusion_agentscope_runtime_event_persist_latency_seconds_max gauge\nfusion_agentscope_runtime_event_persist_latency_seconds_max 0.011519416\n# HELP fusion_agentscope_runtime_event_persisted_total  \n# TYPE fusion_agentscope_runtime_event_persisted_total counter\nfusion_agentscope_runtime_event_persisted_total 133.0\n# HELP fusion_agentscope_runtime_event_sequence_allocated_total  \n# TYPE fusion_agentscope_runtime_event_sequence_allocated_total counter\nfusion_agentscope_runtime_event_sequence_allocated_total 133.0\n# HELP fusion_agentscope_runtime_harness_cache_total  \n# TYPE fusion_agentscope_runtime_harness_cache_total counter\nfusion_agentscope_runtime_harness_cache_total{result=\"hit\"} 5.0\nfusion_agentscope_runtime_harness_cache_total{result=\"miss\"} 3.0\n# HELP fusion_agentscope_runtime_harness_capacity_rejected_total  \n# TYPE fusion_agentscope_runtime_harness_capacity_rejected_total counter\nfusion_agentscope_runtime_harness_capacity_rejected_total 0.0\n# HELP fusion_agentscope_runtime_harness_eviction_total  \n# TYPE fusion_agentscope_runtime_harness_eviction_total counter\nfusion_agentscope_runtime_harness_eviction_total 1.0\n# HELP fusion_agentscope_runtime_harness_leases_active  \n# TYPE fusion_agentscope_runtime_harness_leases_active gauge\nfusion_agentscope_runtime_harness_leases_active 0.0\n# HELP fusion_agentscope_runtime_outbox_backlog  \n# TYPE fusion_agentscope_runtime_outbox_backlog gauge\nfusion_agentscope_runtime_outbox_backlog 0.0\n# HELP fusion_agentscope_runtime_outbox_retry_total  \n# TYPE fusion_agentscope_runtime_outbox_retry_total counter\nfusion_agentscope_runtime_outbox_retry_total 360297.0\n# HELP fusion_agentscope_runtime_provider_closed_total  \n# TYPE fusion_agentscope_runtime_provider_closed_total counter\nfusion_agentscope_runtime_provider_closed_total 8.0\n# HELP fusion_agentscope_runtime_provider_terminal_total  \n# TYPE fusion_agentscope_runtime_provider_terminal_total counter\nfusion_agentscope_runtime_provider_terminal_total{status=\"CANCELLED\"} 0.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"COMPLETED\"} 8.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"FAILED\"} 0.0\n# HELP fusion_agentscope_runtime_replay_delivered_total  \n# TYPE fusion_agentscope_runtime_replay_delivered_total counter\nfusion_agentscope_runtime_replay_delivered_total 46.0\n# HELP fusion_agentscope_runtime_replay_duplicate_suppressed_total  \n# TYPE fusion_agentscope_runtime_replay_duplicate_suppressed_total counter\nfusion_agentscope_runtime_replay_duplicate_suppressed_total 18.0\n# HELP fusion_agentscope_runtime_replay_terminal_recovered_total  \n# TYPE fusion_agentscope_runtime_replay_terminal_recovered_total counter\nfusion_agentscope_runtime_replay_terminal_recovered_total 0.0\n# HELP fusion_agentscope_runtime_runs_active  \n# TYPE fusion_agentscope_runtime_runs_active gauge\nfusion_agentscope_runtime_runs_active 0.0\n# HELP fusion_agentscope_runtime_runs_owner_lost_total  \n# TYPE fusion_agentscope_runtime_runs_owner_lost_total counter\nfusion_agentscope_runtime_runs_owner_lost_total 0.0\n# HELP fusion_agentscope_runtime_runs_terminal_total  \n# TYPE fusion_agentscope_runtime_runs_terminal_total counter"
+      }
+    ],
+    "ms": 321
+  },
+  {
+    "id": "QS1-2",
+    "doc": "02-快速开始/01",
+    "title": "POST /runs(DEFAULT):SSE 流 + demo 内置工具自动放行 + DONE 终态关流",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS1-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "HTTP 200 + text/event-stream",
+            "ok": true,
+            "detail": "200 text/event-stream"
+          },
+          {
+            "label": "收到 SSE 帧",
+            "ok": true,
+            "detail": "6 帧"
+          },
+          {
+            "label": "收到 CONTENT",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "内置工具 get_current_time 被调用(工具事件)",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "DEFAULT 档读工具未弹确认",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "终态 DONE",
+            "ok": true,
+            "detail": "DONE"
+          },
+          {
+            "label": "服务端关闭流",
+            "ok": true,
+            "detail": "closedByServer=true"
+          }
+        ]
+      },
+      {
+        "h": "outputType 序列",
+        "body": "seq=3 TOOL_CALL_STARTED tool=get_current_time\nseq=5 TOOL_CALL tool=get_current_time\nseq=9 TOOL_FINISHED tool=get_current_time\nseq=12 CONTENT\nseq=13 CONTENT\nseq=18 DONE"
+      },
+      {
+        "h": "DONE 帧原文",
+        "body": {
+          "schemaVersion": 1,
+          "runId": "15dc52b8610c429496f08316795a3ab2",
+          "sequence": 18,
+          "messageId": "terminal-ee59652abb6a46ae9a3f42b2acdc854d",
+          "conversationId": "3bf7820418544405bb43a68865298347",
+          "outputType": "DONE",
+          "finished": true,
+          "source": "main",
+          "rawEventId": "terminal-ee59652abb6a46ae9a3f42b2acdc854d",
+          "rawEventType": "RUN_TERMINAL",
+          "createdAt": "2026-09-29T03:41:15.275Z"
+        }
+      }
+    ],
+    "ms": 830
+  },
+  {
+    "id": "QS1-3",
+    "doc": "02-快速开始/01",
+    "title": "ALWAYS_ASK:确认卡事件 + WAITING_CONFIRMATION + 流保持打开(keep-alive)+ 确认后 DONE",
+    "status": "PASS",
+    "notes": [
+      "keep-alive 注释帧 1 条,间隔样例 30016ms"
+    ],
+    "evidence": [
+      "assets/QS1-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "收到确认卡事件 USER_CONFIRMATION_REQUIRED",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED"
+          },
+          {
+            "label": "controlType=USER_CONFIRM_REQUIRED",
+            "ok": true,
+            "detail": "USER_CONFIRM_REQUIRED"
+          },
+          {
+            "label": "运行态 WAITING_CONFIRMATION",
+            "ok": true,
+            "detail": "WAITING_CONFIRMATION"
+          },
+          {
+            "label": "确认事件带 expiresAt",
+            "ok": true,
+            "detail": "2026-09-30T03:41:15.914Z"
+          },
+          {
+            "label": "GET /runs/running 含该挂起运行",
+            "ok": true,
+            "detail": "列表 410 条"
+          },
+          {
+            "label": "SSE 半开期间收到 keep-alive 注释帧(≈30s/条)",
+            "ok": true,
+            "detail": "@30016ms :keep-alive"
+          },
+          {
+            "label": "POST /confirm 受理",
+            "ok": true,
+            "detail": "status=200 code=0"
+          },
+          {
+            "label": "确认后续流至 DONE",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "运行态终为 COMPLETED(SSE DONE ↔ COMPLETED)",
+            "ok": true,
+            "detail": "COMPLETED"
+          }
+        ]
+      },
+      {
+        "h": "确认卡事件完整 JSON",
+        "body": {
+          "schemaVersion": 1,
+          "runId": "c3ba9b65b58d46d59143166318d68d1c",
+          "sequence": 12,
+          "messageId": "platform-7f3df226cca6d35df6308db5a40debb26462fa0bda5156a18ca395555508dc1c",
+          "conversationId": "f8e927c793bc49dd852079f2f241dae5",
+          "outputType": "USER_CONFIRMATION_REQUIRED",
+          "toolName": "user_confirmation",
+          "finished": false,
+          "source": "platform/waiting",
+          "replyId": "2073e99e07d14d058879cc4642c308eb",
+          "rawEventId": "platform-7f3df226cca6d35df6308db5a40debb26462fa0bda5156a18ca395555508dc1c",
+          "rawEventType": "PLATFORM_USER_CONFIRM_REQUIRED",
+          "createdAt": "2026-09-29T03:41:15.961Z",
+          "controlType": "USER_CONFIRM_REQUIRED",
+          "pendingToolCalls": [
+            {
+              "toolCallId": "mock-call-302",
+              "toolName": "get_current_time",
+              "argumentsPreview": "{}",
+              "scope": {
+                "resolved": false,
+                "degraded": true,
+                "summary": "宿主未实现约束范围反查(resolve_scope),本次运行无约束范围上下文"
+              }
+            }
+          ],
+          "expiresAt": "2026-09-30T03:41:15.914Z"
+        }
+      },
+      {
+        "h": "挂起期间事件序列",
+        "body": "seq=3 TOOL_CALL_STARTED\nseq=5 TOOL_CALL\nseq=12 USER_CONFIRMATION_REQUIRED"
+      },
+      {
+        "h": "确认后事件序列",
+        "body": "seq=3 TOOL_CALL_STARTED\nseq=5 TOOL_CALL\nseq=12 USER_CONFIRMATION_REQUIRED\nseq=13 USER_CONFIRM_RESULT\nseq=17 TOOL_FINISHED\nseq=20 CONTENT\nseq=21 CONTENT\nseq=26 DONE"
+      },
+      {
+        "h": "GET /runs/{id} 终态响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "runId": "c3ba9b65b58d46d59143166318d68d1c",
+            "status": "COMPLETED",
+            "lastSequence": 26,
+            "waitingReplyId": null,
+            "terminalEvent": {
+              "schemaVersion": 1,
+              "runId": "c3ba9b65b58d46d59143166318d68d1c",
+              "sequence": 26,
+              "messageId": "terminal-9f6cfb4ea43c4d83a852681d8efcbe94",
+              "conversationId": "f8e927c793bc49dd852079f2f241dae5",
+              "outputType": "DONE",
+              "finished": true,
+              "source": "main",
+              "rawEventId": "terminal-9f6cfb4ea43c4d83a852681d8efcbe94",
+              "rawEventType": "RUN_TERMINAL",
+              "createdAt": "2026-09-29T03:41:58.261Z"
+            }
+          }
+        }
+      }
+    ],
+    "ms": 42818
+  },
+  {
+    "id": "BP1-1",
+    "doc": "01-白皮书/01",
+    "title": "运行状态机:WAITING_CONFIRMATION → COMPLETED 实证(+CANCELLED 见 AP1-3)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BP1-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "SSE DONE 后运行单据 COMPLETED",
+            "ok": true,
+            "detail": "COMPLETED"
+          },
+          {
+            "label": "终态枚举属文档集合",
+            "ok": true,
+            "detail": "COMPLETED"
+          },
+          {
+            "label": "DB 行同状态",
+            "ok": true,
+            "detail": "COMPLETED"
+          }
+        ]
+      },
+      {
+        "h": "运行单据(GET /runs/{runId})",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "runId": "c3ba9b65b58d46d59143166318d68d1c",
+            "status": "COMPLETED",
+            "lastSequence": 26,
+            "waitingReplyId": null,
+            "terminalEvent": {
+              "schemaVersion": 1,
+              "runId": "c3ba9b65b58d46d59143166318d68d1c",
+              "sequence": 26,
+              "messageId": "terminal-9f6cfb4ea43c4d83a852681d8efcbe94",
+              "conversationId": "f8e927c793bc49dd852079f2f241dae5",
+              "outputType": "DONE",
+              "finished": true,
+              "source": "main",
+              "rawEventId": "terminal-9f6cfb4ea43c4d83a852681d8efcbe94",
+              "rawEventType": "RUN_TERMINAL",
+              "createdAt": "2026-09-29T03:41:58.261Z"
+            }
+          }
+        }
+      },
+      {
+        "h": "状态机对照(手册)",
+        "body": "RUNNING → WAITING_CONFIRMATION → COMPLETED/FAILED/CANCELLED;SSE 终态事件 DONE/ERROR/CANCELLED ↔ COMPLETED/FAILED/CANCELLED\n本轮实证:WAITING_CONFIRMATION(QS1-3)→ COMPLETED(本用例);CANCELLED 在 AP1-3 实证"
+      }
+    ],
+    "ms": 382
+  },
+  {
+    "id": "IG5-1",
+    "doc": "03-接入指南/05",
+    "title": "mock 规则四条话术 + default:建工单($1 捕获)/年假 KB/报告/几点/无命中",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "① 建工单话术触发 create_ticket 确认卡",
+            "ok": true,
+            "detail": "mcp__acme-demo__create_ticket"
+          },
+          {
+            "label": "工具 FQN=mcp__acme-demo__create_ticket(短名按后缀解析)",
+            "ok": true,
+            "detail": "mcp__acme-demo__create_ticket"
+          },
+          {
+            "label": "args 注入 $1(标题回显)",
+            "ok": true,
+            "detail": "{\"title\":\"手册回归工单-034159\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}"
+          },
+          {
+            "label": "回复含 $1/$2/$3 注入文案",
+            "ok": true,
+            "detail": "工单「手册回归工单-034159」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。"
+          },
+          {
+            "label": "② 年假 → [KB:] 引用",
+            "ok": true,
+            "detail": "按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]"
+          },
+          {
+            "label": "③ 报告规则命中",
+            "ok": true,
+            "detail": "Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。"
+          },
+          {
+            "label": "④ 无命中 → default 回复",
+            "ok": true,
+            "detail": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"
+          }
+        ]
+      },
+      {
+        "h": "① 建工单:确认卡 pendingToolCalls",
+        "body": {
+          "toolCallId": "mock-call-305",
+          "toolName": "mcp__acme-demo__create_ticket",
+          "argumentsPreview": "{\"title\":\"手册回归工单-034159\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}",
+          "scope": {
+            "resolved": true,
+            "degraded": false
+          }
+        }
+      },
+      {
+        "h": "① 确认后全部事件",
+        "body": "seq=3 TOOL_CALL_STARTED mcp__acme-demo__create_ticket\nseq=5 TOOL_CALL mcp__acme-demo__create_ticket\nseq=12 USER_CONFIRMATION_REQUIRED user_confirmation\nseq=13 USER_CONFIRM_RESULT \nseq=17 TOOL_FINISHED mcp__acme-demo__create_ticket\nseq=20 CONTENT \nseq=21 CONTENT \nseq=26 DONE "
+      },
+      {
+        "h": "① confirm 响应",
+        "body": {
+          "status": 200,
+          "json": {
+            "code": 0,
+            "msg": "success",
+            "data": true
+          }
+        }
+      },
+      {
+        "h": "① 最终回复",
+        "body": "工单「手册回归工单-034159」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。"
+      },
+      {
+        "h": "② 年假回复",
+        "body": "按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]"
+      },
+      {
+        "h": "③ 报告回复",
+        "body": "Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。"
+      },
+      {
+        "h": "④ default 回复",
+        "body": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"
+      }
+    ],
+    "ms": 1330
+  },
+  {
+    "id": "IG5-2",
+    "doc": "03-接入指南/05",
+    "title": "deltaMs 出字节拍实测(种子 60)+ agent_definition_snapshot_json.modelOptions 核对",
+    "status": "PASS",
+    "notes": [
+      "deltaMs 实测间隔 min=8ms 中位=66ms(手册:种子 60=CI 快速出字;k6 calibrate 默认 800)"
+    ],
+    "evidence": [
+      "assets/IG5-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "CONTENT 帧数 ≥2(可测节奏)",
+            "ok": true,
+            "detail": "3 帧"
+          },
+          {
+            "label": "相邻 CONTENT 间隔中位数 ≥40ms(deltaMs=60 节拍存在;实测中位=66ms,min=8ms — 单帧间隔可因合帧小于 deltaMs)",
+            "ok": true,
+            "detail": "66,8"
+          },
+          {
+            "label": "快照 modelOptions.mockScript.deltaMs=60(生效值核对;modelOptions 即 config 原文)",
+            "ok": true,
+            "detail": "60"
+          },
+          {
+            "label": "快照含 mockScript(config 原文)",
+            "ok": true,
+            "detail": "ia_agent_run.agent_definition_snapshot_json"
+          }
+        ]
+      },
+      {
+        "h": "CONTENT 到达时刻(ms)",
+        "body": "156, 222, 230"
+      },
+      {
+        "h": "快照 modelOptions(截取)",
+        "body": "{\n  \"mockScript\": {\n    \"default\": \"我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。\",\n    \"deltaMs\": 60,\n    \"rules\": [\n      {\n        \"args\": {\n          \"description\": \"$2\",\n          \"priority\": \"$3\",\n          \"title\": \"$1\"\n        },\n        \"match\": \"帮我建一张工单:标题=(.+?),描述=(.+?),优先级=(\\\\w+)\",\n        \"reply\": \"工单「$1」已创建成功:描述=$2,优先级=$3。已同步到工具台账(Agent 渠道),可在工具页查看。\",\n        \"tool\": \"create_ticket\"\n      },\n      {\n        \"args\": {\n          \"description\": \"用户确认后提交\",\n          \"priority\": \"normal\",\n          \"title\": \"确认流工单\"\n        },\n        \"match\": \"信息无误|提交建单\",\n        \"reply\": \"工单已创建成功(确认流),已同步到工具台账(Agent 渠道)。\",\n        \"tool\": \"create_ticket\"\n      },\n      {\n        \"match\": \"年假|假期|请假\",\n        \"reply\": \"按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]\"\n      },\n      {\n        \"match\": \"报告|总结|销售|回款\",\n        \"reply\": \"Q3 销售总结(报告规范 report-style):华东区回款完成率 92%,环比 +5pp;应收账期缩短至 45 天。建议四季度聚焦头部客户续约与账期管控,并复制华东打法至华南区。\"\n      },\n      {\n        \"args\": {},\n        \"match\": \"现在几点|几点了\",\n        \"reply\": \"已通过内置工具查询当前时间,结果见上方工具调用记录(内置只读工具 get_current_time)。\",\n        \"tool\": \"get_current_time\"\n      }\n    ]\n  }\n}"
+      }
+    ],
+    "ms": 636
+  },
+  {
+    "id": "IG5-3",
+    "doc": "03-接入指南/05",
+    "title": "全角冒号/逗号话术不命中规则 → 落 default(手册 §3 提示)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "全角话术未触发工具/确认",
+            "ok": true,
+            "detail": "CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "落 default 回复",
+            "ok": true,
+            "detail": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"
+          }
+        ]
+      },
+      {
+        "h": "触发语(全角：/，)",
+        "body": "帮我建一张工单：标题=全角测试，描述=标点全角，优先级=high"
+      },
+      {
+        "h": "事件序列",
+        "body": "CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "回复",
+        "body": "我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。"
+      }
+    ],
+    "ms": 529
+  },
+  {
+    "id": "IG5-5",
+    "doc": "03-接入指南/05",
+    "title": "ia_ai_model 登记:max_concurrency 默认 5 / mock 压测 1000 / 唯一默认",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-5.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "MiniMax-M3 max_concurrency=5(登记字段默认)",
+            "ok": true,
+            "detail": "MiniMax-M3 | 1 | f | 1 | 0 | 5"
+          },
+          {
+            "label": "mock-text max_concurrency=1000(压测 calibrate 口径)",
+            "ok": true,
+            "detail": "mock-text | 1 | t | 1 | 0 | 1000"
+          },
+          {
+            "label": "当前 mock-text 为默认(本阶段播种态)",
+            "ok": true,
+            "detail": "mock=t mini=f"
+          },
+          {
+            "label": "model_type=1 仅一个 default_model",
+            "ok": true,
+            "detail": "count=1"
+          }
+        ]
+      },
+      {
+        "h": "ia_ai_model 全表(code|model_type|default_model|status|sort|max_concurrency)",
+        "body": "MiniMax-M3|1|f|1|0|5\nmock-text|1|t|1|0|1000"
+      }
+    ],
+    "ms": 455
+  },
+  {
+    "id": "IG2-3",
+    "doc": "03-接入指南/02",
+    "title": "断点续传:半途断开 → Last-Event-ID 重连不丢帧;afterSequence 等价;replay-then-live",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG2-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "断开前收到 2 帧",
+            "ok": true,
+            "detail": "got=2"
+          },
+          {
+            "label": "重连首回放帧 seq(9)> 断点 seq(5),且无更早帧重放",
+            "ok": true,
+            "detail": "首帧 seq=9"
+          },
+          {
+            "label": "回放帧 seq 集合 == journal 断点后全部投影 seq(不丢不重)",
+            "ok": true,
+            "detail": "收到=[9,12,13,18] journal=[9,12,13,18]"
+          },
+          {
+            "label": "重连收到终态(DONE)",
+            "ok": true,
+            "detail": "DONE"
+          },
+          {
+            "label": "afterSequence 参数等价(终态运行回放完即由服务端关流)",
+            "ok": true,
+            "detail": "4 帧, closed=true"
+          },
+          {
+            "label": "ia_reconnect_total{result=resumed} 首次真重连后出现(惰性注册)",
+            "ok": true,
+            "detail": "ia_reconnect_total{app=\"1\",result=\"resumed\"} 18.0"
+          }
+        ]
+      },
+      {
+        "h": "断开前帧(id=1420ff60fbda4809bff0c7e907b92742:5)",
+        "body": "1420ff60fbda4809bff0c7e907b92742:3 TOOL_CALL_STARTED\n1420ff60fbda4809bff0c7e907b92742:5 TOOL_CALL"
+      },
+      {
+        "h": "重连后帧(Last-Event-ID: 1420ff60fbda4809bff0c7e907b92742:5)",
+        "body": "1420ff60fbda4809bff0c7e907b92742:9 TOOL_FINISHED\n1420ff60fbda4809bff0c7e907b92742:12 CONTENT\n1420ff60fbda4809bff0c7e907b92742:13 CONTENT\n1420ff60fbda4809bff0c7e907b92742:18 DONE"
+      },
+      {
+        "h": "afterSequence 回放帧",
+        "body": "1420ff60fbda4809bff0c7e907b92742:9 TOOL_FINISHED\n1420ff60fbda4809bff0c7e907b92742:12 CONTENT\n1420ff60fbda4809bff0c7e907b92742:13 CONTENT\n1420ff60fbda4809bff0c7e907b92742:18 DONE"
+      },
+      {
+        "h": "重连指标",
+        "body": "ia_reconnect_total{app=\"1\",result=\"resumed\"} 18.0"
+      }
+    ],
+    "ms": 3552
+  },
+  {
+    "id": "BE1-2",
+    "doc": "05-最佳实践/01",
+    "title": "ALWAYS_ASK:读工具也确认;拒绝 → 取消语义收尾且工具未执行",
+    "status": "PASS",
+    "notes": [
+      "文档偏差:最佳实践/01 §5 称「拒绝后运行按取消语义收尾」,实测拒绝后运行继续(模型组织拒绝回复)直至 DONE/COMPLETED,工具未执行 — 修复意见 R-06"
+    ],
+    "evidence": [
+      "assets/BE1-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "ALWAYS_ASK 下内置只读工具也推确认卡",
+            "ok": true,
+            "detail": "USER_CONFIRM_REQUIRED"
+          },
+          {
+            "label": "拒绝(reject)提交受理",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "拒绝后收到 USER_CONFIRM_RESULT 回执",
+            "ok": true,
+            "detail": "USER_CONFIRM_RESULT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "拒绝后运行仍收尾至终态",
+            "ok": true,
+            "detail": "events=USER_CONFIRM_RESULT,CONTENT,CONTENT,DONE status=COMPLETED"
+          },
+          {
+            "label": "拒绝后工具未执行",
+            "ok": true,
+            "detail": "USER_CONFIRM_RESULT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "审计含 denied 决策",
+            "ok": true,
+            "detail": "denied|live-confirm|get_current_time"
+          }
+        ]
+      },
+      {
+        "h": "确认前事件",
+        "body": "3 TOOL_CALL_STARTED\n5 TOOL_CALL\n12 USER_CONFIRMATION_REQUIRED"
+      },
+      {
+        "h": "拒绝后事件",
+        "body": "13 USER_CONFIRM_RESULT\n17 CONTENT\n18 CONTENT\n23 DONE"
+      },
+      {
+        "h": "运行单据终态",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "runId": "e872cb23ac2a45119ea7360b4cef74e8",
+            "status": "COMPLETED",
+            "lastSequence": 23,
+            "waitingReplyId": null,
+            "terminalEvent": {
+              "schemaVersion": 1,
+              "runId": "e872cb23ac2a45119ea7360b4cef74e8",
+              "sequence": 23,
+              "messageId": "terminal-785d5c94feae4d66a8256e02fa33fcb2",
+              "conversationId": "87fa7004d7b44e28b3e990ce42568982",
+              "outputType": "DONE",
+              "finished": true,
+              "source": "main",
+              "rawEventId": "terminal-785d5c94feae4d66a8256e02fa33fcb2",
+              "rawEventType": "RUN_TERMINAL",
+              "createdAt": "2026-09-29T03:42:05.897Z"
+            }
+          }
+        }
+      },
+      {
+        "h": "审计行(decision/source/fqn)",
+        "body": "denied|live-confirm|get_current_time"
+      }
+    ],
+    "ms": 782
+  },
+  {
+    "id": "BE1-3",
+    "doc": "05-最佳实践/01",
+    "title": "ALWAYS_ALLOW / FULL_ACCESS 显式豁免档:WRITE 工具跳过确认直接执行",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BE1-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "ALWAYS_ALLOW 无确认卡",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "ALWAYS_ALLOW 下 create_ticket 直接执行",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "FULL_ACCESS 无确认卡",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "工单真实创建(回复含 $1 文案)",
+            "ok": true,
+            "detail": "工单「豁免档-ALWAYS_ALLOW」已创建成功:描述=豁免档直通验证,优先级=low。已同步到工具台账(Agent 渠道),可在工具页查看。"
+          }
+        ]
+      },
+      {
+        "h": "ALWAYS_ALLOW 事件序列",
+        "body": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "FULL_ACCESS 事件序列",
+        "body": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "ALWAYS_ALLOW 回复",
+        "body": "工单「豁免档-ALWAYS_ALLOW」已创建成功:描述=豁免档直通验证,优先级=low。已同步到工具台账(Agent 渠道),可在工具页查看。"
+      }
+    ],
+    "ms": 799
+  },
+  {
+    "id": "BE1-5",
+    "doc": "05-最佳实践/01",
+    "title": "审计:decision/decisionSource/toolFqn 落行,不含凭据;FQN=mcp__<serverKey>__<tool>",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BE1-5.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "近 20 分钟有工具决策审计行(内置工具亦计)",
+            "ok": true,
+            "detail": "12 行"
+          },
+          {
+            "label": "tool_fqn 命名 mcp__<serverKey>__<tool> / 内置短名",
+            "ok": true,
+            "detail": "denied|live-confirm|get_current_time|{}"
+          },
+          {
+            "label": "审计不含凭据明文",
+            "ok": true,
+            "detail": "未发现凭据"
+          },
+          {
+            "label": "含 live-confirm 决策源",
+            "ok": true,
+            "detail": "live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm,live-confirm"
+          }
+        ]
+      },
+      {
+        "h": "审计行(decision|decision_source|tool_fqn|params_masked)",
+        "body": "denied|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-demo__create_ticket|{\"title\":\"手册回归工单-034159\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}\nallowed|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-echo__echo|{\"message\":\"手册回归OK。\"}\ndenied|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-demo__create_ticket|{\"title\":\"手册回归工单-033809\",\"priority\":\"high\",\"description\":\"3楼打印机卡纸\"}\nallowed|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-demo__create_ticket|{\"title\":\"隔离复现H1\",\"priority\":\"high\",\"description\":\"探针\"}\ndenied|live-confirm|get_current_time|{}\nallowed|live-confirm|get_current_time|{}\nallowed|live-confirm|mcp__acme-demo__create_ticket|{\"title\":\"内联确认探针F1\",\"priority\":\"high\",\"description\":\"探针\"}\ndenied|live-confirm|get_current_time|{}"
+      },
+      {
+        "h": "宿主工具清单来源(ia_tool_registry,source=host_app)",
+        "body": "mcp__acme-demo-host__create_ticket|high\nmcp__acme-demo___test_probe_20260923|low\nmcp__acme-demo__create_ticket|low\nmcp__acme-demo__create_ticket2|low\nmcp__acme-demo__list_tickets|low\nmcp__acme-demo__query_sales|low\nmcp__acme-demo__resolve_scope|low"
+      }
+    ],
+    "ms": 535
+  },
+  {
+    "id": "RF1-1",
+    "doc": "07-参考/01",
+    "title": "事件口径实测:journal 条数 / SSE 投影帧数 / ia_agent_message 条数",
+    "status": "PASS",
+    "notes": [
+      "口径对照:文档 BP2「journal≈10,SSE≈3」/术语表「journal≈11,投影≈2」/限制与配额「journal≈11,SSE 纯回复 3、工具流 6」;实测纯回复 journal=10(投影=3)、SSE=3;工具流 journal=18(投影=6)、SSE=6"
+    ],
+    "evidence": [
+      "assets/RF1-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "纯回复 SSE 投影 = 3 帧(文档口径:纯回复 3 条)",
+            "ok": true,
+            "detail": "实测 3 帧"
+          },
+          {
+            "label": "纯回复 journal 在 8-12 条(文档口径 ≈10-11 条/运行)",
+            "ok": true,
+            "detail": "实测 10 条(其中投影 3)"
+          },
+          {
+            "label": "ia_agent_message 投影 = 2 条(user+assistant)",
+            "ok": true,
+            "detail": "实测 2 条"
+          },
+          {
+            "label": "工具流 journal 投影帧数 == SSE 帧数(6/6;文档口径工具流 6 条)",
+            "ok": true,
+            "detail": "投影=6, sse=6"
+          }
+        ]
+      },
+      {
+        "h": "纯回复运行事件明细",
+        "body": "1|(内部)|AGENT_START\n2|(内部)|MODEL_CALL_START\n3|(内部)|TEXT_BLOCK_START\n4|CONTENT|TEXT_BLOCK_DELTA\n5|CONTENT|TEXT_BLOCK_DELTA\n6|(内部)|TEXT_BLOCK_END\n7|(内部)|MODEL_CALL_END\n8|(内部)|AGENT_RESULT\n9|(内部)|AGENT_END\n10|DONE|RUN_TERMINAL"
+      },
+      {
+        "h": "ia_agent_message",
+        "body": "user|随便聊聊天气。\nassistant|我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」"
+      },
+      {
+        "h": "文档口径对照",
+        "body": "BP2: journal≈10/运行,SSE 投影≈3/运行 | 术语表: journal≈11,投影≈2(user+assistant) | 限制与配额: journal≈11;SSE 纯回复 3/工具流 6"
+      }
+    ],
+    "ms": 1783
+  },
+  {
+    "id": "RF3-1",
+    "doc": "07-参考/03",
+    "title": "outputType 全集:实测集合 vs 手册全集(未知类型忽略语义)",
+    "status": "PASS",
+    "notes": [
+      "实测 outputType=TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,DONE,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT | 手册主表未实测者: RUN_STARTED,TOOL_RESULT,ERROR,CANCELLED | 全集宣称含 REASONING/TOOL_CALL/TOOL_FINISHED/SUB_AGENT_FINISHED/USER_CONFIRM_RESULT"
+    ],
+    "evidence": [
+      "assets/RF3-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "观测汇总",
+        "verdicts": [
+          {
+            "label": "核心类型已实测(CONTENT/DONE)",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,DONE,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT"
+          },
+          {
+            "label": "CANCELLED 在 AP1-3 触发后并入",
+            "ok": true,
+            "detail": "RUN_STARTED,TOOL_RESULT,ERROR,CANCELLED"
+          }
+        ]
+      },
+      {
+        "h": "本轮 API 用例实测到的 outputType",
+        "body": "CONTENT\nDONE\nTOOL_CALL\nTOOL_CALL_STARTED\nTOOL_FINISHED\nUSER_CONFIRMATION_REQUIRED\nUSER_CONFIRM_RESULT"
+      },
+      {
+        "h": "手册宣称(接入指南/02)",
+        "body": "主要取值: RUN_STARTED, CONTENT, TOOL_CALL_STARTED, USER_CONFIRMATION_REQUIRED, TOOL_RESULT, DONE, ERROR, CANCELLED\n另含: REASONING, TOOL_CALL, TOOL_FINISHED, SUB_AGENT_FINISHED, USER_CONFIRM_RESULT\n\n本轮实测缺失(未出现于任何投影事件): RUN_STARTED, TOOL_RESULT, ERROR, CANCELLED\n(历史全库亦无 RUN_STARTED/TOOL_RESULT output_type — 见修复意见 R-02)"
+      }
+    ],
+    "ms": 346
+  },
+  {
+    "id": "RF1-3",
+    "doc": "07-参考/01",
+    "title": "enabledSkills 传入应用激活技能(report-style)运行成功;非法技能名 → 500(术语表示例值勘误)",
+    "status": "PASS",
+    "notes": [
+      "术语表「技能(skill)」示例 report-writer/knowledge-qa 实为 agentType;enabledSkills 实际取应用激活技能(本环境 ia_skill: report-style)— R-09"
+    ],
+    "evidence": [
+      "assets/RF1-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "带 enabledSkills=[report-style](应用激活技能)的运行被受理",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "正常终态",
+            "ok": true,
+            "detail": "CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "非法技能名(report-writer 是 agentType 非技能)→ 500「Skill 不可用」(术语表示例值勘误 — 修复意见 R-09)",
+            "ok": true,
+            "detail": "status=500"
+          }
+        ]
+      },
+      {
+        "h": "report-style 运行事件序列",
+        "body": "CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "非法技能名响应",
+        "body": "status=500(Skill 不可用: report-writer)"
+      },
+      {
+        "h": "本环境技能清单(ia_skill)",
+        "body": "report-style(app_id=34 / app_id=1 各一条,status=active)"
+      }
+    ],
+    "ms": 664
+  },
+  {
+    "id": "QS2-3",
+    "doc": "02-快速开始/02",
+    "title": "宿主桥工具 4 个(AcmeTicketTools×3+AcmeSalesTools×1);endpointUrl 指向 :9300/ia-mcp",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS2-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "宿主工具恰 4 个",
+            "ok": true,
+            "detail": "create_ticket,list_tickets,query_sales,resolve_scope"
+          },
+          {
+            "label": "工具名与手册一致(create_ticket/list_tickets/resolve_scope/query_sales)",
+            "ok": true,
+            "detail": "create_ticket,list_tickets,query_sales,resolve_scope"
+          },
+          {
+            "label": "FQN 注册行存在(mcp__acme-demo__create_ticket)",
+            "ok": true,
+            "detail": "mcp__acme-demo__create_ticket|low|http://localhost:9300/ia-mcp"
+          },
+          {
+            "label": "endpointUrl 均为 :9300/ia-mcp(与 act.audiences 对齐)",
+            "ok": true,
+            "detail": "http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp"
+          },
+          {
+            "label": "WRITE 语义由行为证明(建单话术推确认卡,见 IG5-1/QS1-3;登记 riskLevel=low 为手册示例口径)",
+            "ok": true,
+            "detail": "确认卡行为 = 平台强制授权语义"
+          },
+          {
+            "label": "宿主桥 MCP 端点 /ia-mcp 存活",
+            "ok": true,
+            "detail": "initialize → true"
+          }
+        ]
+      },
+      {
+        "h": "管理面工具清单(acme-demo)",
+        "body": "[\n  {\n    \"createTime\": \"2026-09-21T23:20:08.740878\",\n    \"updateTime\": \"2026-09-23T15:15:53.823531\",\n    \"deleted\": false,\n    \"id\": 99,\n    \"appId\": 34,\n    \"serverKey\": \"acme-demo\",\n    \"toolName\": \"create_ticket\",\n    \"fqn\": \"mcp__acme-demo__create_ticket\",\n    \"description\": \"在 ACME 宿主系统中创建一张工单,返回工单号\",\n    \"parametersSchema\": \"{\\\"properties\\\":{\\\"description\\\":{\\\"type\\\":\\\"string\\\"},\\\"priority\\\":{\\\"description\\\":\\\"low/normal/high\\\",\\\"type\\\":\\\"string\\\"},\\\"title\\\":{\\\"description\\\":\\\"工单标题\\\",\\\"type\\\":\\\"string\\\"}},\\\"type\\\":\\\"object\\\"}\",\n    \"annotationsJson\": null,\n    \"riskLevel\": \"low\",\n    \"adminPolicy\": null,\n    \"resumeSafe\": false,\n    \"concurrencySafe\": false,\n    \"source\": \"host_app\",\n    \"endpointUrl\": \"http://localhost:9300/ia-mcp\",\n    \"credentialsEnc\": null,\n    \"schemaSha256\": \"3699e52dd1088cc91805ad7eb0e4e157a16cdc401fd532d12c5783f2745d283e\",\n    \"toolVersion\": null,\n    \"revalidateRequired\": false,\n    \"pendingSchema\": null,\n    \"pendingAnnotationsJson\": null,\n    \"pendingSchemaSha256\": null,\n    \"pendingRefreshAt\": null,\n    \"enabled\": true,\n    \"lastTestStatus\": null,\n    \"healthStatus\": null,\n    \"lastCheckedAt\": null,\n    \"healthDetailJson\": null\n  },\n  {\n    \"createTime\": \"2026-09-21T23:19:06.025198\",\n    \"updateTime\": \"2026-09-23T15:15:53.76642\",\n    \"deleted\": false,\n    \"id\": 96,\n    \"appId\": 34,\n    \"serverKey\": \"acme-demo\",\n    \"toolName\": \"list_tickets\",\n    \"fqn\": \"mcp__acme-demo__list_tickets\",\n    \"description\": \"列出 ACME 宿主系统中的工单(可按状态过滤)\",\n    \"parametersSchema\": \"{\\\"properties\\\":{\\\"status\\\":{\\\"description\\\":\\\"open/done,缺省全部\\\",\\\"type\\\":\\\"string\\\"}"
+      },
+      {
+        "h": "ia_tool_registry(fqn|risk|endpoint)",
+        "body": "mcp__acme-demo__create_ticket|low|http://localhost:9300/ia-mcp\nmcp__acme-demo__list_tickets|low|http://localhost:9300/ia-mcp\nmcp__acme-demo__query_sales|low|http://localhost:9300/ia-mcp\nmcp__acme-demo__resolve_scope|low|http://localhost:9300/ia-mcp"
+      }
+    ],
+    "ms": 422
+  },
+  {
+    "id": "IG1-2",
+    "doc": "03-接入指南/01",
+    "title": "embed token:宿主登录 → 后端签发(expiresIn=43200)→ Bearer 调平台 + claims(sub/iss/exp)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG1-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "宿主端点签发 embed token",
+            "ok": true,
+            "detail": "POST /api/demo/login → 200 userId=12993 ; GET /api/ia/embed-token → 200"
+          },
+          {
+            "label": "expiresIn=43200s(12h,手册口径)",
+            "ok": true,
+            "detail": "43200"
+          },
+          {
+            "label": "claims.sub 存在(行级隔离 userId)",
+            "ok": true,
+            "detail": "{\"iss\":\"acme-demo\",\"tenantId\":0,\"sub\":\"12993\",\"exp\":1790696530,\"iat\":1790653330}"
+          },
+          {
+            "label": "Bearer 调 GET /runs/running 200",
+            "ok": true,
+            "detail": "200 {\"code\":0,\"msg\":\"success\",\"data\":[{\"runId\":\"ababcc86ab6d4d908fa7537141b0851f\",\"c"
+          }
+        ]
+      },
+      {
+        "h": "签发响应",
+        "body": {
+          "appKey": "acme-demo",
+          "expiresIn": 43200,
+          "token": "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJhY21lLWR…"
+        }
+      },
+      {
+        "h": "token claims",
+        "body": {
+          "iss": "acme-demo",
+          "tenantId": 0,
+          "sub": "12993",
+          "exp": 1790696530,
+          "iat": 1790653330
+        }
+      },
+      {
+        "h": "Bearer 调用",
+        "body": {
+          "status": 200,
+          "json": {
+            "code": 0,
+            "msg": "success",
+            "data": [
+              {
+                "runId": "ababcc86ab6d4d908fa7537141b0851f",
+                "conversationId": "49ae998fba944842a8ee65f397f2cd2a",
+                "projectId": null,
+                "title": "帮我建一张工单:标题=隔离复现G2,描述=探针,优先级=high",
+                "category": null,
+                "status": "WAITING_CONFIRMATION",
+                "lastSequence": 12,
+                "waitingReplyId": "38f54e42f8ae4817b8cd5b7640ea3f2b",
+                "startedAt": "2026-09-29T03:35:02.499Z"
+              },
+              {
+                "runId": "e8b2fab01c42451e8d5ea94610b1071b",
+                "conversationId": "4639d5c401424991a6df877e2e039edb",
+                "projectId": null,
+                "title": "帮我建一张工单:标题=手册回归工单-033146,描述=3楼打印机卡纸,优先级=high",
+                "category": null,
+                "status": "WAITING_CONFIRMATION",
+                "lastSequence": 12,
+                "waitingReplyId": "38e81a711da14faa80c3f8c7f7e33947",
+                "startedAt": "2026-09-29T03:31:46.504Z"
+              },
+              {
+                "runId": "ea0174e16a3343bea2a315d60526098c",
+                "conversationId": "1d152c12c790403eb24f59a48a8b82e6",
+                "projectId": null,
+                "title": "帮我建一张工单:标题=手册回归工单-032424,描述=3楼打印机卡纸,优先级=high",
+                "category": null,
+                "status": "WAITING_CONFIRMATION",
+                "lastSequence": 12,
+                "waitingReplyId": "3e2b5362c3574ef5a91126e61c404ec4",
+                "startedAt": "2026-09-29T03:24:24.145Z"
+              },
+              {
+                "runId": "b76bbad93511406d9a96b241f9000de0",
+                "conversationId": "99dc249a72e6456198f7a483c37eab8d",
+                "projectId": null,
+                "title": "帮我建一张工单:标题=手册回归工单-031656,描述=3楼打印机卡纸,优先级=high",
+                "category": null,
+                "status": "WAITING_CONFIRMATION",
+                "lastSequence": 12,
+                "waitingReplyId": "444954fb70f648dbb4c0a81c162d85ca",
+                "startedAt": "2026-09-29T03:16:56.310Z"
+              },
+              {
+                "runId": "6586ec1967f64e168cf3776ba276b52d",
+                "conversationId": "2293baf50a994b26bcf278d79d5479de",
+                "projectId": null,
+                "title": "帮我建一张工单:标题=手册回归工单-030914,描述=3楼打印机卡纸,优先级=high",
+                "category": null,
+                "status": "WAITING_CONFIRMATION",
+                "lastSequence": 12,
+                "waitingReplyId": "0d007a0b6c5d475c881e79796df82c93",
+                "startedAt": "2026-09-29T03:09:14.251Z"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "ms": 366
+  },
+  {
+    "id": "IG4-1",
+    "doc": "03-接入指南/04",
+    "title": "管理面注册三方 MCP(echo :9401,streamable-http+STATIC_HEADER)成功;凭据打码;审计落行",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG4-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "注册成功 200",
+            "ok": true,
+            "detail": "200 {\"code\":0,\"msg\":\"success\",\"data\":{\"id\":39,\"serverKey\":\"docsverify-echo-mum4q5o7\",\"name\":\"手册回归 echo\",\"endpointUrl\":\"http://localhost:9401/mcp\",\"transport\":\"strea"
+          },
+          {
+            "label": "列表含该注册",
+            "ok": true,
+            "detail": "{\"id\":39,\"serverKey\":\"docsverify-echo-mum4q5o7\",\"name\":\"手册回归 echo\",\"endpointUrl\":\"http://localhost:9401/mcp\",\"transport\":\"streamable-http\",\"authType\":\"STATIC_HEADER\",\"headerName\":\"X-ACME-Token\",\"crede"
+          },
+          {
+            "label": "响应凭据打码(credentialsMasked,不含明文)",
+            "ok": true,
+            "detail": "{\"id\":39,\"serverKey\":\"docsverify-echo-mum4q5o7\",\"name\":\"手册回归 echo\",\"endpointUrl\":\"http://localhost:9401/mcp\",\"transport\":\"streamable-http\",\"authType\":\"STATIC_HEADER\",\"headerName\":\"X-ACME-Token\",\"crede"
+          },
+          {
+            "label": "transport=streamable-http",
+            "ok": true,
+            "detail": "streamable-http"
+          },
+          {
+            "label": "注册落审计(decision=allowed,无凭据)",
+            "ok": true,
+            "detail": "allowed|admin|应用级三方 MCP 服务已注册(authType=STATIC_HEADER;凭据不落审计)"
+          }
+        ]
+      },
+      {
+        "h": "注册响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "id": 39,
+            "serverKey": "docsverify-echo-mum4q5o7",
+            "name": "手册回归 echo",
+            "endpointUrl": "http://localhost:9401/mcp",
+            "transport": "streamable-http",
+            "authType": "STATIC_HEADER",
+            "headerName": "X-ACME-Token",
+            "credentialsMasked": "ac***",
+            "timeoutSeconds": 30,
+            "enabled": true,
+            "updateTime": "2026-09-29T11:42:11.261969"
+          }
+        }
+      },
+      {
+        "h": "列表行",
+        "body": {
+          "id": 39,
+          "serverKey": "docsverify-echo-mum4q5o7",
+          "name": "手册回归 echo",
+          "endpointUrl": "http://localhost:9401/mcp",
+          "transport": "streamable-http",
+          "authType": "STATIC_HEADER",
+          "headerName": "X-ACME-Token",
+          "credentialsMasked": "ac***",
+          "timeoutSeconds": 30,
+          "enabled": true,
+          "updateTime": "2026-09-29T11:42:11.261969"
+        }
+      },
+      {
+        "h": "工具清单可见性说明",
+        "body": "三方 MCP 工具不落 ia_tool_registry(该表为宿主/管理面工具登记);工具以 FQN 动态进入模型工具箱 — 运行时行为证明见 IG4-5"
+      },
+      {
+        "h": "近 5 分钟审计(decision|source|fqn)",
+        "body": "allowed|admin|应用级三方 MCP 服务已注册(authType=STATIC_HEADER;凭据不落审计)\ndenied|live-confirm|\nallowed|live-confirm|\nallowed|live-confirm|\ndenied|forced-policy|三方工具被丢弃(防遮蔽:name_shadow;serverKey=docsverify-echo-mum0rjwr,tool=echo)\ndenied|forced-policy|三方工具被丢弃(防遮蔽:fqn_conflict;serverKey=acme-echo,tool=echo)\ndenied|admin|应用级三方 MCP 服务已删除(serverKey=docsverify-tmo-mum4mgjj)(authType=STATIC_HEADER;凭据不落审计\ndenied|admin|应用级三方 MCP 服务已删除(serverKey=kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk-mum"
+      }
+    ],
+    "ms": 520
+  },
+  {
+    "id": "IG4-2",
+    "doc": "03-接入指南/04",
+    "title": "serverKey 冲突 409 / 非法字符 400 / OAUTH 501 / STATIC_HEADER 缺项 400 / 64 字上限",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG4-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "重复 serverKey(同键应用级 docsverify-echo-mum4q5o7,IG4-1 注册仍在册)→ 409",
+            "ok": true,
+            "detail": "status=409"
+          },
+          {
+            "label": "与宿主注册表 serverKey 同名(acme-demo;跨 appId)→ 200/409 皆记录(R-10)",
+            "ok": true,
+            "detail": "status=409 — 第 2 轮实测 200(冲突域按 appId 划分:管理面注册落 app 1,宿主 acme-demo 工具登记在 app 34);本轮 409 为软删残留键占用(见 R-10/R-11)"
+          },
+          {
+            "label": "serverKey 非法字符(下划线)→ 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "serverKey 中文 → 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "serverKey 65 字 → 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "serverKey 64 字 → 允许(注册后删除)",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "OAUTH → 501",
+            "ok": true,
+            "detail": "status=501 msg=三方 MCP OAuth(CIMD/DCR + RFC 8707)暂未实现:当前仅支持 STATIC_HEADER 静态头鉴权"
+          },
+          {
+            "label": "STATIC_HEADER 缺 headerName → 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "STATIC_HEADER 缺 credentials → 400",
+            "ok": true,
+            "detail": "status=400"
+          },
+          {
+            "label": "非法 transport(sse)→ 400",
+            "ok": true,
+            "detail": "status=400"
+          }
+        ]
+      },
+      {
+        "h": "各请求响应(status|code|msg)",
+        "body": "409\t409\t重复 serverKey(同键应用级 docsverify-echo-mum4q5o7,IG4-1 注册仍在册)→ 409\tserverKey 已被应用级三方 MCP 服务占用: docsverify-echo-mum4q5o7\n409\t409\t与宿主注册表 serverKey 同名(acme-demo;跨 appId)→ 200/409 皆记录(R-10)\t数据状态冲突(唯一性/完整性约束未通过),请刷新后重试;若为重复提交无需重试\n400\t400\tserverKey 非法字符(下划线)→ 400\tserverKey 仅允许字母/数字/连字符(避用下划线,FQN 命名空间): bad_key\n400\t400\tserverKey 中文 → 400\tserverKey 仅允许字母/数字/连字符(避用下划线,FQN 命名空间): 键名\n400\t400\tserverKey 65 字 → 400\tserverKey 仅允许字母/数字/连字符(避用下划线,FQN 命名空间): kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\n200\t0\tserverKey 64 字 → 允许(注册后删除)\tsuccess\n501\t501\tOAUTH → 501\t三方 MCP OAuth(CIMD/DCR + RFC 8707)暂未实现:当前仅支持 STATIC_HEADER 静态头鉴权\n400\t400\tSTATIC_HEADER 缺 headerName → 400\t静态头名不能为空\n400\t400\tSTATIC_HEADER 缺 credentials → 400\t静态头值不能为空\n400\t400\t非法 transport(sse)→ 400\t三方 MCP 当前仅支持 streamable-http 传输: sse"
+      }
+    ],
+    "ms": 365
+  },
+  {
+    "id": "IG4-3",
+    "doc": "03-接入指南/04",
+    "title": "用户级注册:内网地址被拒(SSRF);他人注册 404 不泄露存在性",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG4-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "localhost 端点被拒 400",
+            "ok": true,
+            "detail": "400 endpoint URL 不能指向本机或内网地址"
+          },
+          {
+            "label": "127.0.0.1 端点被拒 400",
+            "ok": true,
+            "detail": "400"
+          },
+          {
+            "label": "10.0.0.1 内网端点被拒 400",
+            "ok": true,
+            "detail": "400"
+          },
+          {
+            "label": "公网地址注册成功(用后删除)",
+            "ok": true,
+            "detail": "200"
+          },
+          {
+            "label": "用户 B 读用户 A 的注册 → 404",
+            "ok": true,
+            "detail": "status=404"
+          },
+          {
+            "label": "用户 B 列表不见他人注册",
+            "ok": true,
+            "detail": "列表 0 条"
+          }
+        ]
+      },
+      {
+        "h": "SSRF 三连响应",
+        "body": "#1 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址\n#2 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址\n#3 status=400 code=400 msg=endpoint URL 不能指向本机或内网地址"
+      },
+      {
+        "h": "公网注册响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "id": 233,
+            "serverKey": "docsverify-user-mum4rdt6",
+            "name": "手册回归 echo",
+            "endpointUrl": "https://example.com/mcp",
+            "transport": "streamable-http",
+            "authType": "STATIC_HEADER",
+            "headerName": "X-ACME-Token",
+            "credentialsMasked": "ac***",
+            "timeoutSeconds": 30,
+            "enabled": true,
+            "updateTime": "2026-09-29T11:42:12.157184"
+          }
+        }
+      },
+      {
+        "h": "越权读取响应",
+        "body": {
+          "status": 404,
+          "json": {
+            "code": 404,
+            "msg": "三方 MCP 服务不存在",
+            "data": null
+          }
+        }
+      }
+    ],
+    "ms": 376
+  },
+  {
+    "id": "IG4-4",
+    "doc": "03-接入指南/04",
+    "title": "注册三方 MCP 后工具以 FQN 进入模型工具箱并被调用;删除后目录摘除",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG4-4.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "注册成功",
+            "ok": true,
+            "detail": "id=42"
+          },
+          {
+            "label": "裸名 echo 按工具箱 FQN 后缀(__<name>)解析:确认卡 → 批准 → 调用",
+            "ok": true,
+            "detail": "toolEvents=mcp__acme-echo__echo,mcp__acme-echo__echo,user_confirmation,mcp__acme-echo__echo,mcp__acme-echo__echo,user_confirmation,mcp__acme-echo__echo ots=TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,"
+          },
+          {
+            "label": "echo 工具结果回流对话($1 捕获回显)",
+            "ok": true,
+            "detail": "已回显:手册回归OK。(MCP echo)"
+          },
+          {
+            "label": "删除成功",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "删除后目录摘除(失效广播)",
+            "ok": true,
+            "detail": "删除前列表含=true,删除后含=false"
+          }
+        ]
+      },
+      {
+        "h": "对话事件序列",
+        "body": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,CONTENT,DONE"
+      },
+      {
+        "h": "工具事件名",
+        "body": "mcp__acme-echo__echo, mcp__acme-echo__echo, user_confirmation, mcp__acme-echo__echo, mcp__acme-echo__echo, user_confirmation, mcp__acme-echo__echo"
+      },
+      {
+        "h": "回复",
+        "body": "已回显:手册回归OK。(MCP echo)"
+      }
+    ],
+    "ms": 1229
+  },
+  {
+    "id": "RF2-1",
+    "doc": "07-参考/02",
+    "title": "用户级三方 MCP 注册配额 = 32(超出被拒,实测 400);用后全删",
+    "status": "PASS",
+    "notes": [
+      "配额拒绝响应: status=400 code=400 msg=每个用户最多注册 32 个三方 MCP 服务(手册仅说「每用户 32 个」,未指明拒绝码;实测见上)"
+    ],
+    "evidence": [
+      "assets/RF2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "第 1..32 个注册成功",
+            "ok": true,
+            "detail": "成功 32 个"
+          },
+          {
+            "label": "第 33 个被配额拒绝(手册未指明拒绝码;实测第 1 轮 400「每个用户最多注册 32 个三方 MCP 服务」,软删残留场景见 409)",
+            "ok": true,
+            "detail": "第 33 个 → status=400 msg=每个用户最多注册 32 个三方 MCP 服务"
+          },
+          {
+            "label": "自建注册全部删除",
+            "ok": true,
+            "detail": "deleted=32/32"
+          },
+          {
+            "label": "DB 无残留",
+            "ok": true,
+            "detail": "leftover=0"
+          }
+        ]
+      },
+      {
+        "h": "配额拒绝详情",
+        "body": {
+          "i": 33,
+          "status": 400,
+          "code": 400,
+          "msg": "每个用户最多注册 32 个三方 MCP 服务"
+        }
+      },
+      {
+        "h": "清理记录",
+        "body": "成功注册 32 个,已删除 32 个,DB 残留=0"
+      }
+    ],
+    "ms": 1114
+  },
+  {
+    "id": "RF2-3",
+    "doc": "07-参考/02",
+    "title": "timeoutSeconds 缺省值实测(手册称 45s;代码缺省 30 — 候选文档错误)",
+    "status": "PASS",
+    "notes": [
+      "手册 07-参考/02 配额表「三方 MCP 注册超时 timeoutSeconds 默认 45s」与实现不符,实测/代码缺省均为 30s → 修复意见 R-01"
+    ],
+    "evidence": [
+      "assets/RF2-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "缺省 timeoutSeconds 注册成功",
+            "ok": true,
+            "detail": "200"
+          },
+          {
+            "label": "缺省 timeoutSeconds=30(代码 McpThirdPartyServerSupport 缺省 30;手册「限制与配额」写 45 — 文档候选错误)",
+            "ok": true,
+            "detail": "实测=30"
+          },
+          {
+            "label": "不是 45(与手册口径不一致坐实)",
+            "ok": true,
+            "detail": "t=30"
+          }
+        ]
+      },
+      {
+        "h": "注册响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "id": 43,
+            "serverKey": "docsverify-tmo-mum4rfwp",
+            "name": "手册回归 echo",
+            "endpointUrl": "http://localhost:9401/mcp",
+            "transport": "streamable-http",
+            "authType": "STATIC_HEADER",
+            "headerName": "X-ACME-Token",
+            "credentialsMasked": "ac***",
+            "timeoutSeconds": 30,
+            "enabled": true,
+            "updateTime": "2026-09-29T11:42:14.867515"
+          }
+        }
+      }
+    ],
+    "ms": 360
+  },
+  {
+    "id": "AP1-3",
+    "doc": "04-API参考/01",
+    "title": "cancel:挂起运行 → CANCELLED 终态;重复取消幂等;已完成运行取消 → 业务错误码",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP1-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "前置:挂起运行就绪",
+            "ok": true,
+            "detail": "0a5ad77984354200a9f71d7ade0fdd1f"
+          },
+          {
+            "label": "取消受理 200",
+            "ok": true,
+            "detail": "status=200 code=0"
+          },
+          {
+            "label": "事件流含 CANCELLED 终态帧",
+            "ok": true,
+            "detail": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,CANCELLED"
+          },
+          {
+            "label": "运行单据 CANCELLED(SSE CANCELLED ↔ CANCELLED)",
+            "ok": true,
+            "detail": "CANCELLED"
+          },
+          {
+            "label": "重复取消幂等(非 5xx)",
+            "ok": true,
+            "detail": "status=200 code=0"
+          },
+          {
+            "label": "已完成运行取消 → 实测 200/success(文档称「返回业务错误码」— 候选偏差 R-07,幂等成功语义)",
+            "ok": true,
+            "detail": "status=200 code=0 msg=success"
+          }
+        ]
+      },
+      {
+        "h": "取消响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": true
+        }
+      },
+      {
+        "h": "事件流 outputType",
+        "body": "TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,CANCELLED"
+      },
+      {
+        "h": "重复取消响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": true
+        }
+      },
+      {
+        "h": "已完成运行取消响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": true
+        }
+      }
+    ],
+    "ms": 681
+  },
+  {
+    "id": "AP1-5",
+    "doc": "04-API参考/01",
+    "title": "cancel?conversationId= 兜底(无活动运行 404);confirm/expire 幂等收口",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP1-5.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "按会话兜底取消受理",
+            "ok": true,
+            "detail": "status=200 code=0"
+          },
+          {
+            "label": "该运行已被兜底取消",
+            "ok": true,
+            "detail": "CANCELLED"
+          },
+          {
+            "label": "无活动运行 → 404",
+            "ok": true,
+            "detail": "status=404 code=404"
+          },
+          {
+            "label": "expire 重复调用均非 5xx(幂等语义)",
+            "ok": true,
+            "detail": "1st=200/0 2nd=200/0"
+          }
+        ]
+      },
+      {
+        "h": "会话兜底取消响应",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": true
+        }
+      },
+      {
+        "h": "运行终态",
+        "body": {
+          "code": 0,
+          "msg": "success",
+          "data": {
+            "runId": "ea9f645828fc4867bf96a1d7ca8a3095",
+            "status": "CANCELLED",
+            "lastSequence": 13,
+            "waitingReplyId": null,
+            "terminalEvent": {
+              "schemaVersion": 1,
+              "runId": "ea9f645828fc4867bf96a1d7ca8a3095",
+              "sequence": 13,
+              "messageId": "cancelled-9d1f315d67ce41408bcb1e19f26f0b3f",
+              "conversationId": "e8a6b93d738f415083dfdeef1da515e4",
+              "outputType": "CANCELLED",
+              "finished": true,
+              "error": "Agent run was cancelled",
+              "source": "main",
+              "rawEventId": "cancelled-9d1f315d67ce41408bcb1e19f26f0b3f",
+              "rawEventType": "RUN_TERMINAL",
+              "createdAt": "2026-09-29T03:42:16.059Z"
+            }
+          }
+        }
+      },
+      {
+        "h": "无效会话取消响应",
+        "body": {
+          "code": 404,
+          "msg": "Agent run does not exist",
+          "data": null
+        }
+      },
+      {
+        "h": "expire 两次响应",
+        "body": {
+          "first": {
+            "code": 0,
+            "msg": "success",
+            "data": false
+          },
+          "second": {
+            "code": 0,
+            "msg": "success",
+            "data": false
+          }
+        }
+      }
+    ],
+    "ms": 562
+  },
+  {
+    "id": "AP1-6",
+    "doc": "04-API参考/01",
+    "title": "POST /runs/{runId}/continue:对已取消运行续跑 — 新 runId 新事件流至终态,旧 run 保持 CANCELLED",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP1-6.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "continue 响应为 SSE 流",
+            "ok": true,
+            "detail": "200 text/event-stream"
+          },
+          {
+            "label": "续跑出新事件帧",
+            "ok": true,
+            "detail": "3 帧: CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "续跑产生新 runId(原运行保持不变)",
+            "ok": true,
+            "detail": "old=0a5ad779 new=b13fcd15"
+          },
+          {
+            "label": "续跑至终态",
+            "ok": true,
+            "detail": "DONE"
+          },
+          {
+            "label": "新运行单据终态化",
+            "ok": true,
+            "detail": "COMPLETED"
+          },
+          {
+            "label": "原 CANCELLED 运行保持不变",
+            "ok": true,
+            "detail": "CANCELLED"
+          }
+        ]
+      },
+      {
+        "h": "续跑事件序列",
+        "body": "b13fcd155e9e48dda6f5fd4eca794fad:4 CONTENT\nb13fcd155e9e48dda6f5fd4eca794fad:5 CONTENT\nb13fcd155e9e48dda6f5fd4eca794fad:10 DONE"
+      },
+      {
+        "h": "新旧运行单据",
+        "body": {
+          "old": {
+            "code": 0,
+            "msg": "success",
+            "data": {
+              "runId": "0a5ad77984354200a9f71d7ade0fdd1f",
+              "status": "CANCELLED",
+              "lastSequence": 13,
+              "waitingReplyId": null,
+              "terminalEvent": {
+                "schemaVersion": 1,
+                "runId": "0a5ad77984354200a9f71d7ade0fdd1f",
+                "sequence": 13,
+                "messageId": "cancelled-a265f50485a048319ea296ebba56bc12",
+                "conversationId": "d3b08c14cdc94bf6b2801e78aa045ce0",
+                "outputType": "CANCELLED",
+                "finished": true,
+                "error": "Agent run was cancelled",
+                "source": "main",
+                "rawEventId": "cancelled-a265f50485a048319ea296ebba56bc12",
+                "rawEventType": "RUN_TERMINAL",
+                "createdAt": "2026-09-29T03:42:15.467Z"
+              }
+            }
+          },
+          "new": {
+            "code": 0,
+            "msg": "success",
+            "data": {
+              "runId": "b13fcd155e9e48dda6f5fd4eca794fad",
+              "status": "COMPLETED",
+              "lastSequence": 10,
+              "waitingReplyId": null,
+              "terminalEvent": {
+                "schemaVersion": 1,
+                "runId": "b13fcd155e9e48dda6f5fd4eca794fad",
+                "sequence": 10,
+                "messageId": "terminal-54041a494fff49ffb409e75e128d9d66",
+                "conversationId": "d3b08c14cdc94bf6b2801e78aa045ce0",
+                "outputType": "DONE",
+                "finished": true,
+                "source": "main",
+                "rawEventId": "terminal-54041a494fff49ffb409e75e128d9d66",
+                "rawEventType": "RUN_TERMINAL",
+                "createdAt": "2026-09-29T03:42:16.758Z"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "ms": 706
+  },
+  {
+    "id": "BE2-2",
+    "doc": "05-最佳实践/02",
+    "title": "runs_waiting 与确认卡积压联动:挂起 +1,收口回落",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BE2-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "runs_waiting 可读",
+            "ok": true,
+            "detail": "base=33"
+          },
+          {
+            "label": "挂起期间 runs_waiting=基线+1(33→34)",
+            "ok": true,
+            "detail": "base=33, during=34"
+          },
+          {
+            "label": "收口后回落(34→34)",
+            "ok": true,
+            "detail": "after=34, settle via expire"
+          }
+        ]
+      },
+      {
+        "h": "runs_waiting 采样",
+        "body": "挂起前=33\n挂起中=34\n收口后=34(收口方式: expire)"
+      }
+    ],
+    "ms": 2319
+  },
+  {
+    "id": "BE2-1",
+    "doc": "05-最佳实践/02",
+    "title": "必盯指标 7 行逐项存在于 /actuator/prometheus",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/BE2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果(手册 §3 表)",
+        "verdicts": [
+          {
+            "label": "指标 fusion_agentscope_runtime_runs_active",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_runs_active gauge"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_runs_waiting",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_runs_waiting gauge"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_outbox_backlog",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_outbox_backlog gauge"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_event_backpressure_rejected_total",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_event_backpressure_rejected_total counter"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_harness_capacity_rejected_total",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_harness_capacity_rejected_total counter"
+          },
+          {
+            "label": "指标 fusion_agentscope_runtime_state_bulkhead_rejected_total",
+            "ok": true,
+            "detail": "# TYPE fusion_agentscope_runtime_state_bulkhead_rejected_total counter"
+          },
+          {
+            "label": "指标 ia_reconnect_total",
+            "ok": true,
+            "detail": "# TYPE ia_reconnect_total counter"
+          },
+          {
+            "label": "指标 jvm_gc_pause_seconds",
+            "ok": true,
+            "detail": "# TYPE jvm_gc_pause_seconds summary"
+          }
+        ]
+      },
+      {
+        "h": "指标原文(相关行)",
+        "body": "fusion_agentscope_runtime_event_backpressure_rejected_total 0.0\nfusion_agentscope_runtime_event_persist_latency_seconds_count 2519\nfusion_agentscope_runtime_event_persist_latency_seconds_sum 9.819032181\nfusion_agentscope_runtime_event_persist_latency_seconds_max 0.025464791\nfusion_agentscope_runtime_event_persisted_total 2519.0\nfusion_agentscope_runtime_event_sequence_allocated_total 2519.0\nfusion_agentscope_runtime_harness_cache_total{result=\"hit\"} 192.0\nfusion_agentscope_runtime_harness_cache_total{result=\"miss\"} 32.0\nfusion_agentscope_runtime_harness_capacity_rejected_total 0.0\nfusion_agentscope_runtime_harness_eviction_total 18.0\nfusion_agentscope_runtime_harness_leases_active 0.0\nfusion_agentscope_runtime_outbox_backlog 6.0\nfusion_agentscope_runtime_outbox_retry_total 4813419.0\nfusion_agentscope_runtime_provider_closed_total 224.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"CANCELLED\"} 0.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"COMPLETED\"} 224.0\nfusion_agentscope_runtime_provider_terminal_total{status=\"FAILED\"} 0.0\nfusion_agentscope_runtime_replay_delivered_total 1071.0\nfusion_agentscope_runtime_replay_duplicate_suppressed_total 169.0\nfusion_agentscope_runtime_replay_terminal_recovered_total 26.0\nfusion_agentscope_runtime_runs_active 0.0\nfusion_agentscope_runtime_runs_owner_lost_total 0.0\nfusion_agentscope_runtime_runs_terminal_total{status=\"CANCELLED\"} 20.0\nfusion_agentscope_runtime_runs_terminal_total{status=\"COMPLETED\"} 165.0\nfusion_agentscope_runtime_runs_terminal_total{status=\"FAILED\"} 0.0\nfusion_agentscope_runtime_runs_waiting 34.0\nfusion_agentscope_runtime_state_bulkhead_rejected_total 0.0\nfusion_agentscope_runtime_state_failure_total 0.0\nfusion_agentscope_runtime_state_latency_seconds_count 1717\nfusion_agentscope_runtime_state_latency_seconds_sum 1.221881817\nfusion_agentscope_runtime_state_latency_seconds_max 0.008501\nfusion_agentscope_runtime_tool_scheduler_violation_total 0.0\nia_confirmation_total{app=\"1\",decision=\"approved\",source=\"live-confirm\"} 11.0\nia_confirmation_total{app=\"1\",decision=\"rejected\",source=\"live-confirm\"} 9.0\nia_confirmation_total{app=\"34\",decision=\"approved\",source=\"live-confirm\"} 5.0\nia_reconnect_total{app=\"1\",result=\"resumed\"} 18.0\nia_tool_calls_total{app=\"1\",result=\"error\",tool=\"mcp__acme-echo__echo\"} 2.0\nia_tool_calls_total{app=\"1\",result=\"ok\",tool=\"get_current_time\"} 40.0\nia_tool_calls_total{app=\"34\",result=\"ok\",tool=\"mcp__acme-demo__create_ticket\"} 17.0\njvm_gc_concurrent_phase_time_seconds_count{action=\"end of concurrent GC pause\",cause=\"No GC\",gc=\"G1 Concurrent GC\"} 3658"
+      }
+    ],
+    "ms": 362
+  },
+  {
+    "id": "AP2-1",
+    "doc": "04-API参考/02",
+    "title": "错误码表实测:200/400/401/403/404/409/501(429 本轮未触发,标注静态)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "401: 非法 Bearer 被拒(鉴权失败)",
+            "ok": true,
+            "detail": "status=401 msg=embed token 无效: embed token 不是合法 JWT"
+          },
+          {
+            "label": "local profile 完全无鉴权头 → 匿名放行(手册「仅 local profile」口径成立)",
+            "ok": true,
+            "detail": "status=200"
+          },
+          {
+            "label": "403: 管理面密钥错",
+            "ok": true,
+            "detail": "status=403"
+          },
+          {
+            "label": "404: 他人运行(非本人 404 不泄露存在性)",
+            "ok": true,
+            "detail": "status=404"
+          },
+          {
+            "label": "非法 agentType → 实测 500「Agent 类型不存在」(文档 API参考/01 称 404 — 候选偏差 R-08)",
+            "ok": true,
+            "detail": "status=500 msg=Agent 类型不存在: no-such-agent"
+          }
+        ]
+      },
+      {
+        "h": "错误码表对照(手册 §1)",
+        "body": "200 成功(正常运行) → 实测 见 QS1-2/IG5-1 等用例 \n400 参数非法(serverKey 非法字符) → 实测 见 IG4-2 用例(实测 400) \n401 非法 Bearer POST /runs → 实测 401 msg=embed token 无效: embed token 不是合法 JWT\n401? 完全无鉴权头(local profile 匿名) → 实测 200 \n403 管理面密钥错 → 实测 403 msg=管理面凭据无效:请携带 X-IA-Admin-Key 请求头或 Authorization: Bearer 管理会话 t\n404 他人运行(行级隔离) → 实测 404 msg=Agent run does not exist\n500(文档称 404) Agent 不存在(POST /runs) → 实测 500 msg=Agent 类型不存在: no-such-agent\n409 serverKey 冲突 → 实测 见 IG4-2 用例(实测 409) \n429 子 Agent 护栏(唯一已知源) → 实测 本轮未触发 — 静态核对范围 \n501 OAUTH 枚举预留 → 实测 见 IG4-2 用例(实测 501) "
+      },
+      {
+        "h": "非法 Bearer 响应",
+        "body": {
+          "code": 401,
+          "msg": "embed token 无效: embed token 不是合法 JWT",
+          "data": null
+        }
+      },
+      {
+        "h": "非法 agentType 响应",
+        "body": {
+          "code": 500,
+          "msg": "Agent 类型不存在: no-such-agent",
+          "data": null
+        }
+      },
+      {
+        "h": "越权读取响应",
+        "body": {
+          "code": 404,
+          "msg": "Agent run does not exist",
+          "data": null
+        }
+      }
+    ],
+    "ms": 657
+  },
+  {
+    "id": "AP2-3",
+    "doc": "04-API参考/02",
+    "title": "POST /runs 非幂等(两次→两个 runId);createdAt 为服务端时钟(偏差 <5s)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/AP2-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "两次 POST /runs 产生不同运行(非幂等,重试需先查 /runs/running)",
+            "ok": true,
+            "detail": "8faed8b27e3e4db0a588761e1bfd7c88 vs 7aab16d345544787a1c5a2af0c7aeb1d"
+          },
+          {
+            "label": "createdAt 为服务端时钟,与本地偏差 444ms(<5s)",
+            "ok": true,
+            "detail": "444ms"
+          }
+        ]
+      },
+      {
+        "h": "运行 ID",
+        "body": "run1=8faed8b27e3e4db0a588761e1bfd7c88\nrun2=7aab16d345544787a1c5a2af0c7aeb1d"
+      },
+      {
+        "h": "时钟偏差",
+        "body": "444ms(手册 §5:同机或 NTP 对齐;本测试与 server 同机)"
+      }
+    ],
+    "ms": 963
+  },
+  {
+    "id": "QS2-1",
+    "doc": "02-快速开始/02",
+    "title": "UI:演示登录 → 建工单话术 → 确认卡(回显参数)→ 确认 → 建单回复",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS2-1-confirm-card.png",
+      "assets/QS2-1-after-confirm.png",
+      "assets/QS2-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "确认卡出现",
+            "ok": true,
+            "detail": "标题=手册UI工单-034421"
+          },
+          {
+            "label": "确认卡回显将执行参数(标题/描述)",
+            "ok": true,
+            "detail": "帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high | mcp__acme-demo__create_ticket | 等待确认 | 等待确认 · 剩余 23 小时 59 分 | 约束范围已注入本次运行 | 拒绝 | 允许"
+          },
+          {
+            "label": "确认后收到建单结果回复",
+            "ok": true,
+            "detail": "ketId\":\"T-1018\",\"title\":\"手册UI工单-034421\",\"priority\":\"high\",\"createdBy\":\"12993\"} | 工单「手册UI工单-034421」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。 | MiniMax M3 | mock-text | 默认（按工具设定） | 每次询问 | 总是允许 | 完全访问 | 发送"
+          }
+        ]
+      },
+      {
+        "h": "确认卡文本(尾部)",
+        "body": "帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high\n\nmcp__acme-demo__create_ticket\n等待确认\n等待确认 · 剩余 23 小时 59 分\n\n约束范围已注入本次运行\n\n拒绝\n允许"
+      },
+      {
+        "h": "确认后回复(尾部)",
+        "body": "帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high\n\nmcp__acme-demo__create_ticket\n已完成\n\n{\"status\":\"ok\",\"ticketId\":\"T-1018\",\"title\":\"手册UI工单-034421\",\"priority\":\"high\",\"createdBy\":\"12993\"}\n\n工单「手册UI工单-034421」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。\n\nMiniMax M3\nmock-text\n默认（按工具设定）\n每次询问\n总是允许\n完全访问\n发送"
+      }
+    ],
+    "ms": 8202
+  },
+  {
+    "id": "QS2-2",
+    "doc": "02-快速开始/02",
+    "title": "UI:工具面板台账出现 channel=agent 的本单工单卡片",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/QS2-2-ticket-board.png",
+      "assets/QS2-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "台账含本轮工单「手册UI工单-034421」",
+            "ok": true,
+            "detail": "SLA 承诺(按优先级):high 首响 30min · 方案 4h;normal 首响 2h · 闭环 24h;low 1 工作日 | ia.tools.filter-all (18) | ia.tools.filter-agent (18) | ia.tools.filter-direct (0) | T-1018 | high | InnerAgent 会话 | 30min 首响 | 创建者: 12993 | 手册UI工单-034421 | 3楼打印机卡纸 | T-1017 | low | InnerAgent 会话 | 1 工作日 | 创建者: 12993 | 豁免档-FULL_ACC"
+          },
+          {
+            "label": "含 agent 渠道标记",
+            "ok": true,
+            "detail": "ia.tools.filter-agent (18)"
+          }
+        ]
+      },
+      {
+        "h": "台账文本(截取)",
+        "body": "SLA 承诺(按优先级):high 首响 30min · 方案 4h;normal 首响 2h · 闭环 24h;low 1 工作日\nia.tools.filter-all (18)\nia.tools.filter-agent (18)\nia.tools.filter-direct (0)\nT-1018\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n手册UI工单-034421\n\n3楼打印机卡纸\n\nT-1017\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-FULL_ACCESS\n\n豁免档直通验证\n\nT-1016\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-ALWAYS_ALLOW\n\n豁免档直通验证\n\nT-1015\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n手册回归工单-034159\n\n3楼打印机卡纸\n\nT-1014\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-FULL_ACCESS\n\n豁免档直通验证\n\nT-1013\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-ALWAYS_ALLOW\n\n豁免档直通验证\n\nT-1012\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n手册回归工单-033809\n\n3楼打印机卡纸\n\nT-1011\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n隔离复现H1\n\n探针\n\nT-1010\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-FULL_ACCESS\n\n豁免档直通验证\n\nT-1009\nlow\nInnerAgent 会话\n1 工作日\n创建者: 12993\n\n豁免档-ALWAYS_ALLOW\n\n豁免档直通验证\n\nT-1008\nhigh\nInnerAgent 会话\n30min 首响\n创建者: 12993\n\n内联确认探针F1\n\n探针\n\nT-10"
+      }
+    ],
+    "ms": 1962
+  },
+  {
+    "id": "IG3-1",
+    "doc": "03-接入指南/03",
+    "title": "UI:WC(<inneragent-chat>)挂载并完成一轮对话",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG3-1-wc-chat.png",
+      "assets/IG3-1.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "WC 组件挂载可见",
+            "ok": true,
+            "detail": "data-testid=ia-chat"
+          },
+          {
+            "label": "对话收到回复(知识库话术含 [KB:] 引用)",
+            "ok": true,
+            "detail": "年假有几天? | 按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave] | MiniMax M3 | mock-text | 默认（按工具设定） | 每次询问 | 总是允许 | 完全访问 | 发送"
+          }
+        ]
+      },
+      {
+        "h": "回复(尾部)",
+        "body": "年假有几天?\n\n按《员工手册》:入职满 1 年享 5 天年假,满 10 年享 10 天,需提前 3 个工作日在 OA 申请。[KB:demo-kb-annual-leave]\n\nMiniMax M3\nmock-text\n默认（按工具设定）\n每次询问\n总是允许\n完全访问\n发送"
+      }
+    ],
+    "ms": 6256
+  },
+  {
+    "id": "IG3-2",
+    "doc": "03-接入指南/03",
+    "title": "UI:iframe + postMessage 模式完成握手(高度/状态事件回传)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG3-2-iframe-handshake.png",
+      "assets/IG3-2.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "iframe 握手完成标记出现",
+            "ok": true,
+            "detail": "握手: 完成(origin 校验通过)"
+          }
+        ]
+      },
+      {
+        "h": "握手区文本",
+        "body": "握手: 完成(origin 校验通过)"
+      }
+    ],
+    "ms": 1596
+  },
+  {
+    "id": "IG3-3",
+    "doc": "03-接入指南/03",
+    "title": "静态核对:SDK/iframe 参考实现文件在盘(sdk-js、EmbedChat.vue、frame.html 等)",
+    "status": "PASS",
+    "notes": [
+      "本用例为静态核对(文件存在性),非行为断言"
+    ],
+    "evidence": [
+      "assets/IG3-3.png"
+    ],
+    "_sections": [
+      {
+        "h": "文件存在性(手册 §2/§3 引用的参考实现)",
+        "verdicts": [
+          {
+            "label": "在盘: sdk-js/",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/src/views/ia/EmbedChat.vue",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/src/vendor/inneragent/iframe-host.js",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/public/ia/frame.html",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/public/ia/frame.js",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/public/ia/iframe-child.js",
+            "ok": true,
+            "detail": "存在"
+          },
+          {
+            "label": "在盘: examples/acme-demo/frontend/src/ia/iframeEmbed.ts",
+            "ok": true,
+            "detail": "存在"
+          }
+        ]
+      }
+    ],
+    "ms": 327
+  },
+  {
+    "id": "IG5-4",
+    "doc": "03-接入指南/05",
+    "title": "回切真实模型:执行 mock-model-restore.sql → MiniMax-M3 恢复默认、mock 退出",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-4.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "default_model 唯一且为 MiniMax-M3(回切成功)",
+            "ok": true,
+            "detail": "defaults=MiniMax-M3"
+          },
+          {
+            "label": "mock-text 已退出默认位",
+            "ok": true,
+            "detail": "MiniMax-M3|t|1 ; mock-text|f|1"
+          }
+        ]
+      },
+      {
+        "h": "回切后 ia_ai_model(code|default|status)",
+        "body": "MiniMax-M3|t|1\nmock-text|f|1"
+      },
+      {
+        "h": "执行的脚本",
+        "body": "examples/acme-demo/seeds/mock-model-restore.sql(手册 03-接入指南/05 §4 口径)"
+      }
+    ],
+    "ms": 617
+  },
+  {
+    "id": "IG5-4b",
+    "doc": "03-接入指南/05",
+    "title": "回切后回归一轮对话(真模型 MiniMax 正常应答至终态)",
+    "status": "PASS",
+    "notes": [],
+    "evidence": [
+      "assets/IG5-4b.png"
+    ],
+    "_sections": [
+      {
+        "h": "断言结果",
+        "verdicts": [
+          {
+            "label": "运行受理",
+            "ok": true,
+            "detail": "200"
+          },
+          {
+            "label": "真模型回复至 DONE",
+            "ok": true,
+            "detail": "CONTENT,TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE"
+          },
+          {
+            "label": "回复非空(非 mock 固定文案路径)",
+            "ok": true,
+            "detail": "我帮您查询当前时间。现在是 **2026-09-29 11:46:08**(周一,Asia/Shanghai)。有需要我帮您处理的吗?"
+          }
+        ]
+      },
+      {
+        "h": "事件序列",
+        "body": "CONTENT,TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,CONTENT,DONE"
+      },
+      {
+        "h": "回复(截取)",
+        "body": "我帮您查询当前时间。现在是 **2026-09-29 11:46:08**(周一,Asia/Shanghai)。有需要我帮您处理的吗?"
+      }
+    ],
+    "ms": 3198
+  }
+]

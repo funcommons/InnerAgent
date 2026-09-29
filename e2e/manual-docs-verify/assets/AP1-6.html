@@ -1,0 +1,81 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>AP1-6 <span class="title">API 参考/01 · continue 续跑</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:16.807Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>continue 响应为 SSE 流</td><td class="ok">PASS</td><td class="mono small">200 text/event-stream</td></tr>
+<tr><td>续跑出新事件帧</td><td class="ok">PASS</td><td class="mono small">3 帧: CONTENT,CONTENT,DONE</td></tr>
+<tr><td>续跑产生新 runId(原运行保持不变)</td><td class="ok">PASS</td><td class="mono small">old=0a5ad779 new=b13fcd15</td></tr>
+<tr><td>续跑至终态</td><td class="ok">PASS</td><td class="mono small">DONE</td></tr>
+<tr><td>新运行单据终态化</td><td class="ok">PASS</td><td class="mono small">COMPLETED</td></tr>
+<tr><td>原 CANCELLED 运行保持不变</td><td class="ok">PASS</td><td class="mono small">CANCELLED</td></tr>
+</table>
+<h2>续跑事件序列</h2>
+<pre class="mono">b13fcd155e9e48dda6f5fd4eca794fad:4 CONTENT
+b13fcd155e9e48dda6f5fd4eca794fad:5 CONTENT
+b13fcd155e9e48dda6f5fd4eca794fad:10 DONE</pre>
+<h2>新旧运行单据</h2>
+<pre class="mono">{
+  "old": {
+    "code": 0,
+    "msg": "success",
+    "data": {
+      "runId": "0a5ad77984354200a9f71d7ade0fdd1f",
+      "status": "CANCELLED",
+      "lastSequence": 13,
+      "waitingReplyId": null,
+      "terminalEvent": {
+        "schemaVersion": 1,
+        "runId": "0a5ad77984354200a9f71d7ade0fdd1f",
+        "sequence": 13,
+        "messageId": "cancelled-a265f50485a048319ea296ebba56bc12",
+        "conversationId": "d3b08c14cdc94bf6b2801e78aa045ce0",
+        "outputType": "CANCELLED",
+        "finished": true,
+        "error": "Agent run was cancelled",
+        "source": "main",
+        "rawEventId": "cancelled-a265f50485a048319ea296ebba56bc12",
+        "rawEventType": "RUN_TERMINAL",
+        "createdAt": "2026-09-29T03:42:15.467Z"
+      }
+    }
+  },
+  "new": {
+    "code": 0,
+    "msg": "success",
+    "data": {
+      "runId": "b13fcd155e9e48dda6f5fd4eca794fad",
+      "status": "COMPLETED",
+      "lastSequence": 10,
+      "waitingReplyId": null,
+      "terminalEvent": {
+        "schemaVersion": 1,
+        "runId": "b13fcd155e9e48dda6f5fd4eca794fad",
+        "sequence": 10,
+        "messageId": "terminal-54041a494fff49ffb409e75e128d9d66",
+        "conversationId": "d3b08c14cdc94bf6b2801e78aa045ce0",
+        "outputType": "DONE",
+        "finished": true,
+        "source": "main",
+        "rawEventId": "terminal-54041a494fff49ffb409e75e128d9d66",
+        "rawEventType": "RUN_TERMINAL",
+        "createdAt": "2026-09-29T03:42:16.758Z"
+      }
+    }
+  }
+}</pre>

@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>RF2-1 <span class="title">限制与配额 · 每用户 32 注册配额</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:14.496Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>第 1..32 个注册成功</td><td class="ok">PASS</td><td class="mono small">成功 32 个</td></tr>
+<tr><td>第 33 个被配额拒绝(手册未指明拒绝码;实测第 1 轮 400「每个用户最多注册 32 个三方 MCP 服务」,软删残留场景见 409)</td><td class="ok">PASS</td><td class="mono small">第 33 个 → status=400 msg=每个用户最多注册 32 个三方 MCP 服务</td></tr>
+<tr><td>自建注册全部删除</td><td class="ok">PASS</td><td class="mono small">deleted=32/32</td></tr>
+<tr><td>DB 无残留</td><td class="ok">PASS</td><td class="mono small">leftover=0</td></tr>
+</table>
+<h2>配额拒绝详情</h2>
+<pre class="mono">{
+  "i": 33,
+  "status": 400,
+  "code": 400,
+  "msg": "每个用户最多注册 32 个三方 MCP 服务"
+}</pre>
+<h2>清理记录</h2>
+<pre class="mono">成功注册 32 个,已删除 32 个,DB 残留=0</pre>

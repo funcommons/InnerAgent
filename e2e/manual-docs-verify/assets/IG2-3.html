@@ -1,0 +1,42 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG2-3 <span class="title">接入指南/02 · 断点续传(replay-then-live)</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:05.208Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>断开前收到 2 帧</td><td class="ok">PASS</td><td class="mono small">got=2</td></tr>
+<tr><td>重连首回放帧 seq(9)&gt; 断点 seq(5),且无更早帧重放</td><td class="ok">PASS</td><td class="mono small">首帧 seq=9</td></tr>
+<tr><td>回放帧 seq 集合 == journal 断点后全部投影 seq(不丢不重)</td><td class="ok">PASS</td><td class="mono small">收到=[9,12,13,18] journal=[9,12,13,18]</td></tr>
+<tr><td>重连收到终态(DONE)</td><td class="ok">PASS</td><td class="mono small">DONE</td></tr>
+<tr><td>afterSequence 参数等价(终态运行回放完即由服务端关流)</td><td class="ok">PASS</td><td class="mono small">4 帧, closed=true</td></tr>
+<tr><td>ia_reconnect_total{result=resumed} 首次真重连后出现(惰性注册)</td><td class="ok">PASS</td><td class="mono small">ia_reconnect_total{app="1",result="resumed"} 18.0</td></tr>
+</table>
+<h2>断开前帧(id=1420ff60fbda4809bff0c7e907b92742:5)</h2>
+<pre class="mono">1420ff60fbda4809bff0c7e907b92742:3 TOOL_CALL_STARTED
+1420ff60fbda4809bff0c7e907b92742:5 TOOL_CALL</pre>
+<h2>重连后帧(Last-Event-ID: 1420ff60fbda4809bff0c7e907b92742:5)</h2>
+<pre class="mono">1420ff60fbda4809bff0c7e907b92742:9 TOOL_FINISHED
+1420ff60fbda4809bff0c7e907b92742:12 CONTENT
+1420ff60fbda4809bff0c7e907b92742:13 CONTENT
+1420ff60fbda4809bff0c7e907b92742:18 DONE</pre>
+<h2>afterSequence 回放帧</h2>
+<pre class="mono">1420ff60fbda4809bff0c7e907b92742:9 TOOL_FINISHED
+1420ff60fbda4809bff0c7e907b92742:12 CONTENT
+1420ff60fbda4809bff0c7e907b92742:13 CONTENT
+1420ff60fbda4809bff0c7e907b92742:18 DONE</pre>
+<h2>重连指标</h2>
+<pre class="mono">ia_reconnect_total{app="1",result="resumed"} 18.0</pre>

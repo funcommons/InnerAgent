@@ -1,0 +1,52 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>QS2-1 <span class="title">快速开始/02 · UI 确认流闭环</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:44:29.314Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>确认卡出现</td><td class="ok">PASS</td><td class="mono small">标题=手册UI工单-034421</td></tr>
+<tr><td>确认卡回显将执行参数(标题/描述)</td><td class="ok">PASS</td><td class="mono small">帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high | mcp__acme-demo__create_ticket | 等待确认 | 等待确认 · 剩余 23 小时 59 分 | 约束范围已注入本次运行 | 拒绝 | 允许</td></tr>
+<tr><td>确认后收到建单结果回复</td><td class="ok">PASS</td><td class="mono small">ketId":"T-1018","title":"手册UI工单-034421","priority":"high","createdBy":"12993"} | 工单「手册UI工单-034421」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。 | MiniMax M3 | mock-text | 默认（按工具设定） | 每次询问 | 总是允许 | 完全访问 | 发送</td></tr>
+</table>
+<h2>确认卡文本(尾部)</h2>
+<pre class="mono">帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high
+
+mcp__acme-demo__create_ticket
+等待确认
+等待确认 · 剩余 23 小时 59 分
+
+约束范围已注入本次运行
+
+拒绝
+允许</pre>
+<h2>确认后回复(尾部)</h2>
+<pre class="mono">帮我建一张工单:标题=手册UI工单-034421,描述=3楼打印机卡纸,优先级=high
+
+mcp__acme-demo__create_ticket
+已完成
+
+{"status":"ok","ticketId":"T-1018","title":"手册UI工单-034421","priority":"high","createdBy":"12993"}
+
+工单「手册UI工单-034421」已创建成功:描述=3楼打印机卡纸,优先级=high。已同步到工具台账(Agent 渠道),可在工具页查看。
+
+MiniMax M3
+mock-text
+默认（按工具设定）
+每次询问
+总是允许
+完全访问
+发送</pre>

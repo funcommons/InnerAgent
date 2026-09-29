@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>BE1-3 <span class="title">最佳实践/01 · 豁免档跳过确认</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:06.818Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>ALWAYS_ALLOW 无确认卡</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>ALWAYS_ALLOW 下 create_ticket 直接执行</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>FULL_ACCESS 无确认卡</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>工单真实创建(回复含 $1 文案)</td><td class="ok">PASS</td><td class="mono small">工单「豁免档-ALWAYS_ALLOW」已创建成功:描述=豁免档直通验证,优先级=low。已同步到工具台账(Agent 渠道),可在工具页查看。</td></tr>
+</table>
+<h2>ALWAYS_ALLOW 事件序列</h2>
+<pre class="mono">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE</pre>
+<h2>FULL_ACCESS 事件序列</h2>
+<pre class="mono">TOOL_CALL_STARTED,TOOL_CALL,TOOL_FINISHED,CONTENT,CONTENT,DONE</pre>
+<h2>ALWAYS_ALLOW 回复</h2>
+<pre class="mono">工单「豁免档-ALWAYS_ALLOW」已创建成功:描述=豁免档直通验证,优先级=low。已同步到工具台账(Agent 渠道),可在工具页查看。</pre>

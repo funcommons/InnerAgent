@@ -1,0 +1,77 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>QS2-3 <span class="title">快速开始/02 · 宿主工具 4 个与 endpointUrl 对齐</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:10.542Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>宿主工具恰 4 个</td><td class="ok">PASS</td><td class="mono small">create_ticket,list_tickets,query_sales,resolve_scope</td></tr>
+<tr><td>工具名与手册一致(create_ticket/list_tickets/resolve_scope/query_sales)</td><td class="ok">PASS</td><td class="mono small">create_ticket,list_tickets,query_sales,resolve_scope</td></tr>
+<tr><td>FQN 注册行存在(mcp__acme-demo__create_ticket)</td><td class="ok">PASS</td><td class="mono small">mcp__acme-demo__create_ticket|low|http://localhost:9300/ia-mcp</td></tr>
+<tr><td>endpointUrl 均为 :9300/ia-mcp(与 act.audiences 对齐)</td><td class="ok">PASS</td><td class="mono small">http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp,http://localhost:9300/ia-mcp</td></tr>
+<tr><td>WRITE 语义由行为证明(建单话术推确认卡,见 IG5-1/QS1-3;登记 riskLevel=low 为手册示例口径)</td><td class="ok">PASS</td><td class="mono small">确认卡行为 = 平台强制授权语义</td></tr>
+<tr><td>宿主桥 MCP 端点 /ia-mcp 存活</td><td class="ok">PASS</td><td class="mono small">initialize → true</td></tr>
+</table>
+<h2>管理面工具清单(acme-demo)</h2>
+<pre class="mono">[
+  {
+    "createTime": "2026-09-21T23:20:08.740878",
+    "updateTime": "2026-09-23T15:15:53.823531",
+    "deleted": false,
+    "id": 99,
+    "appId": 34,
+    "serverKey": "acme-demo",
+    "toolName": "create_ticket",
+    "fqn": "mcp__acme-demo__create_ticket",
+    "description": "在 ACME 宿主系统中创建一张工单,返回工单号",
+    "parametersSchema": "{\"properties\":{\"description\":{\"type\":\"string\"},\"priority\":{\"description\":\"low/normal/high\",\"type\":\"string\"},\"title\":{\"description\":\"工单标题\",\"type\":\"string\"}},\"type\":\"object\"}",
+    "annotationsJson": null,
+    "riskLevel": "low",
+    "adminPolicy": null,
+    "resumeSafe": false,
+    "concurrencySafe": false,
+    "source": "host_app",
+    "endpointUrl": "http://localhost:9300/ia-mcp",
+    "credentialsEnc": null,
+    "schemaSha256": "3699e52dd1088cc91805ad7eb0e4e157a16cdc401fd532d12c5783f2745d283e",
+    "toolVersion": null,
+    "revalidateRequired": false,
+    "pendingSchema": null,
+    "pendingAnnotationsJson": null,
+    "pendingSchemaSha256": null,
+    "pendingRefreshAt": null,
+    "enabled": true,
+    "lastTestStatus": null,
+    "healthStatus": null,
+    "lastCheckedAt": null,
+    "healthDetailJson": null
+  },
+  {
+    "createTime": "2026-09-21T23:19:06.025198",
+    "updateTime": "2026-09-23T15:15:53.76642",
+    "deleted": false,
+    "id": 96,
+    "appId": 34,
+    "serverKey": "acme-demo",
+    "toolName": "list_tickets",
+    "fqn": "mcp__acme-demo__list_tickets",
+    "description": "列出 ACME 宿主系统中的工单(可按状态过滤)",
+    "parametersSchema": "{\"properties\":{\"status\":{\"description\":\"open/done,缺省全部\",\"type\":\"string\"}</pre>
+<h2>ia_tool_registry(fqn|risk|endpoint)</h2>
+<pre class="mono">mcp__acme-demo__create_ticket|low|http://localhost:9300/ia-mcp
+mcp__acme-demo__list_tickets|low|http://localhost:9300/ia-mcp
+mcp__acme-demo__query_sales|low|http://localhost:9300/ia-mcp
+mcp__acme-demo__resolve_scope|low|http://localhost:9300/ia-mcp</pre>

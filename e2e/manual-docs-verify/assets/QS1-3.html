@@ -1,0 +1,97 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>QS1-3 <span class="title">快速开始/01 · ALWAYS_ASK 确认流(含 keep-alive)</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:41:58.280Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>收到确认卡事件 USER_CONFIRMATION_REQUIRED</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED</td></tr>
+<tr><td>controlType=USER_CONFIRM_REQUIRED</td><td class="ok">PASS</td><td class="mono small">USER_CONFIRM_REQUIRED</td></tr>
+<tr><td>运行态 WAITING_CONFIRMATION</td><td class="ok">PASS</td><td class="mono small">WAITING_CONFIRMATION</td></tr>
+<tr><td>确认事件带 expiresAt</td><td class="ok">PASS</td><td class="mono small">2026-09-30T03:41:15.914Z</td></tr>
+<tr><td>GET /runs/running 含该挂起运行</td><td class="ok">PASS</td><td class="mono small">列表 410 条</td></tr>
+<tr><td>SSE 半开期间收到 keep-alive 注释帧(≈30s/条)</td><td class="ok">PASS</td><td class="mono small">@30016ms :keep-alive</td></tr>
+<tr><td>POST /confirm 受理</td><td class="ok">PASS</td><td class="mono small">status=200 code=0</td></tr>
+<tr><td>确认后续流至 DONE</td><td class="ok">PASS</td><td class="mono small">TOOL_CALL_STARTED,TOOL_CALL,USER_CONFIRMATION_REQUIRED,USER_CONFIRM_RESULT,TOOL_FINISHED,CONTENT,CONTENT,DONE</td></tr>
+<tr><td>运行态终为 COMPLETED(SSE DONE ↔ COMPLETED)</td><td class="ok">PASS</td><td class="mono small">COMPLETED</td></tr>
+</table>
+<h2>确认卡事件完整 JSON</h2>
+<pre class="mono">{
+  "schemaVersion": 1,
+  "runId": "c3ba9b65b58d46d59143166318d68d1c",
+  "sequence": 12,
+  "messageId": "platform-7f3df226cca6d35df6308db5a40debb26462fa0bda5156a18ca395555508dc1c",
+  "conversationId": "f8e927c793bc49dd852079f2f241dae5",
+  "outputType": "USER_CONFIRMATION_REQUIRED",
+  "toolName": "user_confirmation",
+  "finished": false,
+  "source": "platform/waiting",
+  "replyId": "2073e99e07d14d058879cc4642c308eb",
+  "rawEventId": "platform-7f3df226cca6d35df6308db5a40debb26462fa0bda5156a18ca395555508dc1c",
+  "rawEventType": "PLATFORM_USER_CONFIRM_REQUIRED",
+  "createdAt": "2026-09-29T03:41:15.961Z",
+  "controlType": "USER_CONFIRM_REQUIRED",
+  "pendingToolCalls": [
+    {
+      "toolCallId": "mock-call-302",
+      "toolName": "get_current_time",
+      "argumentsPreview": "{}",
+      "scope": {
+        "resolved": false,
+        "degraded": true,
+        "summary": "宿主未实现约束范围反查(resolve_scope),本次运行无约束范围上下文"
+      }
+    }
+  ],
+  "expiresAt": "2026-09-30T03:41:15.914Z"
+}</pre>
+<h2>挂起期间事件序列</h2>
+<pre class="mono">seq=3 TOOL_CALL_STARTED
+seq=5 TOOL_CALL
+seq=12 USER_CONFIRMATION_REQUIRED</pre>
+<h2>确认后事件序列</h2>
+<pre class="mono">seq=3 TOOL_CALL_STARTED
+seq=5 TOOL_CALL
+seq=12 USER_CONFIRMATION_REQUIRED
+seq=13 USER_CONFIRM_RESULT
+seq=17 TOOL_FINISHED
+seq=20 CONTENT
+seq=21 CONTENT
+seq=26 DONE</pre>
+<h2>GET /runs/{id} 终态响应</h2>
+<pre class="mono">{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "runId": "c3ba9b65b58d46d59143166318d68d1c",
+    "status": "COMPLETED",
+    "lastSequence": 26,
+    "waitingReplyId": null,
+    "terminalEvent": {
+      "schemaVersion": 1,
+      "runId": "c3ba9b65b58d46d59143166318d68d1c",
+      "sequence": 26,
+      "messageId": "terminal-9f6cfb4ea43c4d83a852681d8efcbe94",
+      "conversationId": "f8e927c793bc49dd852079f2f241dae5",
+      "outputType": "DONE",
+      "finished": true,
+      "source": "main",
+      "rawEventId": "terminal-9f6cfb4ea43c4d83a852681d8efcbe94",
+      "rawEventType": "RUN_TERMINAL",
+      "createdAt": "2026-09-29T03:41:58.261Z"
+    }
+  }
+}</pre>

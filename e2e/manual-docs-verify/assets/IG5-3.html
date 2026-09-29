@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><style>
+    body{font:13px/1.5 -apple-system,'PingFang SC','Helvetica Neue',sans-serif;margin:24px;max-width:1180px;color:#1a1a1a}
+    h1{font-size:20px;border-bottom:2px solid #2563eb;padding-bottom:8px}
+    h1 .title{font-size:15px;color:#555;font-weight:normal;margin-left:10px}
+    h2{font-size:14px;margin:18px 0 6px;color:#2563eb}
+    .meta{color:#888;font-size:12px;margin:6px 0 2px}
+    .verdict{display:inline-block;margin-top:8px;padding:3px 14px;border-radius:4px;font-weight:700;color:#fff}
+    .verdict.ok{background:#16a34a}.verdict.bad{background:#dc2626}
+    pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow:auto;max-height:420px;font-size:11.5px}
+    pre.json{background:#0d1117;color:#c9d1d9;border-color:#0d1117}
+    table.v{border-collapse:collapse;width:100%;margin:4px 0}
+    table.v td,table.v th{border:1px solid #d0d7de;padding:4px 8px;text-align:left;vertical-align:top}
+    table.v th{background:#f6f8fa}
+    td.ok{color:#16a34a;font-weight:700}td.bad{color:#dc2626;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:11px}
+  </style><h1>IG5-3 <span class="title">接入指南/05 · 全角标点不命中</span></h1>
+<div class="meta">InnerAgent 手册回归 · 2026-09-29T03:42:01.226Z · server http://localhost:18090</div>
+<div class="verdict ok">PASS</div>
+<h2>断言结果</h2>
+<table class="v"><tr><th>断言</th><th>结果</th><th>实测/说明</th></tr>
+<tr><td>全角话术未触发工具/确认</td><td class="ok">PASS</td><td class="mono small">CONTENT,CONTENT,DONE</td></tr>
+<tr><td>落 default 回复</td><td class="ok">PASS</td><td class="mono small">我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。</td></tr>
+</table>
+<h2>触发语(全角：/，)</h2>
+<pre class="mono">帮我建一张工单：标题=全角测试，描述=标点全角，优先级=high</pre>
+<h2>事件序列</h2>
+<pre class="mono">CONTENT,CONTENT,DONE</pre>
+<h2>回复</h2>
+<pre class="mono">我是 ACME 演示助手(mock 脚本模型)。可以让我帮你建工单、查公司知识库(例如「年假有几天」)、写季度报告小结,或汇总工单情况并给出一句运营建议。</pre>

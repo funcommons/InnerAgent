@@ -243,8 +243,8 @@ fi
 # ---------------------------------------------------------------------------
 step "[6/7] 宿主桥工具注册(已注册跳过;endpoint 需与 demo 后端 act.audiences 一致)"
 BRIDGE_ENDPOINT="${ACME_BRIDGE_ENDPOINT:-http://localhost:9300/ia-mcp}"
-register_tool() { # register_tool <toolName> <description> <schemaJSON>
-  local tool="$1" desc="$2" schema="$3"
+register_tool() { # register_tool <toolName> <description> <schemaJSON> [annotationsJSON]
+  local tool="$1" desc="$2" schema="$3" annotations="${4:-}"
   api GET "/ia/api/v1/admin/tools?serverKey=${ACME_APP_KEY}"
   [[ "$REPLY_CODE" == "200" ]] || fail "工具列表失败: HTTP $REPLY_CODE"
   # 2026-09-23 fix:工具若已存在,校验其 appId 是否落在目标应用;
@@ -264,8 +264,10 @@ import json, sys
 print(json.dumps({"serverKey": sys.argv[1], "toolName": sys.argv[2],
                   "description": sys.argv[3], "riskLevel": "low",
                   "source": "host_app", "endpointUrl": sys.argv[4],
-                  "parametersSchema": sys.argv[5]}, ensure_ascii=False))' \
-    "$ACME_APP_KEY" "$tool" "$desc" "$BRIDGE_ENDPOINT" "$schema" > "$TMP_JSON"
+                  "parametersSchema": sys.argv[5],
+                  "annotationsJson": (sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else None)},
+                 ensure_ascii=False))' \
+    "$ACME_APP_KEY" "$tool" "$desc" "$BRIDGE_ENDPOINT" "$schema" "$annotations" > "$TMP_JSON"
   # 显式 appId 写入目标应用(2026-09-23 fix:不传则行级拦截器按缺省 app_id=1
   # 兜底,acme-demo 视角下 catalog 静默空;带上后既有串台行会被 422 拦下)
   api POST "/ia/api/v1/admin/tools?appId=${APP_ID}" -H 'Content-Type: application/json' \
@@ -288,11 +290,24 @@ print(json.dumps({"serverKey": sys.argv[1], "toolName": sys.argv[2],
 register_tool "create_ticket" "在 ACME 宿主系统中创建一张工单,返回工单号" \
   '{"type":"object","properties":{"title":{"type":"string","description":"工单标题"},"description":{"type":"string"},"priority":{"type":"string","description":"low/normal/high"}}}'
 register_tool "list_tickets" "列出 ACME 宿主系统中的工单(可按状态过滤)" \
-  '{"type":"object","properties":{"status":{"type":"string","description":"open/done,缺省全部"}}}'
+  '{"type":"object","properties":{"status":{"type":"string","description":"open/done,缺省全部"}}}' \
+  '{"readOnlyHint":true}'
 register_tool "resolve_scope" "返回当前页面上下文的可见域/可写字段/禁止操作" \
-  '{"type":"object","properties":{"pageId":{"type":"string"},"objectId":{"type":"string"},"objectType":{"type":"string"}}}'
+  '{"type":"object","properties":{"pageId":{"type":"string"},"objectId":{"type":"string"},"objectType":{"type":"string"}}}' \
+  '{"readOnlyHint":true}'
 register_tool "query_sales" "查询 ACME 销售数据(区域×月份×产品,单位元)" \
-  '{"type":"object","properties":{"month":{"type":"string","description":"YYYY-MM"},"region":{"type":"string","description":"华东/华北/华南"}}}'
+  '{"type":"object","properties":{"month":{"type":"string","description":"YYYY-MM"},"region":{"type":"string","description":"华东/华北/华南"}}}' \
+  '{"readOnlyHint":true}'
+# 只读注解幂等回填(2026-09-29):历史 provision 注册时未带 annotationsJson,
+# 「已注册跳过」路径会让 readOnlyHint 永远缺失 → DEFAULT 档 READ 工具被 ASK
+# (实测 list_tickets 弹确认卡)。docker psql 直改,与 mock 播种同通道。
+if docker exec "$PG_CONTAINER" psql -U inneragent -d inneragent -c \
+  "UPDATE ia_tool_registry SET annotations_json='{\"readOnlyHint\":true}' \
+     WHERE server_key='${ACME_APP_KEY}' AND tool_name IN ('list_tickets','resolve_scope','query_sales');" >/dev/null 2>&1; then
+  ok "只读注解回填: list_tickets/resolve_scope/query_sales"
+else
+  warn "只读注解回填失败(psql 不可达?)——READ 工具将走确认流"
+fi
 
 # §E5 工具面装配自检(2026-09-23):provisioning 完成后,以一次会话级工具可解析性
 # 验证替代直接发对话——清单 (get) 数值=4 且 app_id 全等于本应用 → 内核工具面非空。

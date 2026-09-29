@@ -29,7 +29,7 @@ import { demoApi, type DemoConfig } from '@/api/demo'
 import { fetchIaEmbedToken } from '@/api/ia'
 import { createEmbedTokenGetter, resolveInnerAgentAppKey } from '@/ia/innerAgentBridge'
 import { buildIframeEmbedOptions, describeEmbedEvent, resolveFrameSrc } from '@/ia/iframeEmbed'
-import { loadIframeEmbed, loadInnerAgentSdk, type IFrameEmbedHandle } from '@/ia/sdkLoader'
+import { loadIframeEmbed, loadInnerAgentSdk, type IFrameEmbedHandle, type InnerAgentSdkModule } from '@/ia/sdkLoader'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { DEMO_AGENTS, IA_EMBED_AGENT_TYPE_KEY, isDemoAgentType, type DemoAgentType } from '@/ia/demoAgents'
 import { runChatAutoSequence, type ChatAutoSequenceResult } from '@/ia/chatAutoSequence'
@@ -127,6 +127,31 @@ function addLog(type: string, detail: string) {
   if (logs.value.length > 50) logs.value.pop()
 }
 
+/**
+ * 宿主工单 → @ 引用候选(通用上下文引用,02-技术方案 §8.2):
+ * 注册为页面上下文引用(type=ticket)后,随每次发送进 autoReferences,
+ * 服务端渲染为提示变量 {ticketId};name 供 @ 弹层「名称或 ID」模糊匹配。
+ * 失败降级为日志,不阻断挂载。
+ */
+async function registerTicketReferences(sdk: InnerAgentSdkModule): Promise<void> {
+  try {
+    const tickets = await demoApi.listTickets()
+    sdk.setAssistantPageContext(tickets
+      .map((ticket) => ({
+        type: 'ticket',
+        // 平台 autoReferences.id 为 Long:工单号「T-1024」取数字段;完整单号
+        // 并入 name 供 @ 弹层「名称或 ID」模糊匹配。无数字段的工单跳过
+        // (id 传 null/字符串会被服务端 500/400 拒收,实测 2026-09-29)。
+        id: Number(String(ticket.ticketId).replace(/\D/g, '')),
+        name: `${ticket.title}（${ticket.ticketId}）`,
+      }))
+      .filter((ref) => ref.id > 0))
+    addLog('IA_CONTEXT', `tickets=${tickets.length}`)
+  } catch (error: unknown) {
+    addLog('IA_CONTEXT', `skip: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 async function onMount(): Promise<void> {
   if (!config.value || !containerRef.value || status.value === 'loading') return
   await onDestroy()
@@ -149,6 +174,7 @@ async function onMount(): Promise<void> {
         agentType: effectiveAgentType.value,
       })
       sdk.registerInnerAgentChat()
+      void registerTicketReferences(sdk)
       handshake.value = t('ia.embed.wc-ready')
     } else {
       // 4. iframe 模式:src 只给页面地址,token 经 postMessage 消息桥下发

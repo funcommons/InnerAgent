@@ -256,6 +256,20 @@ inneragent:
     # 启动期运行探测 pg_ts_config/扩展,不可得自动降级 simple 并 WARN);
     # 变更后须重建索引(POST /admin/kb/documents/{id}/rebuild-index)。
     search-config: simple
+    # 可选语义层(升级战役 D2):enabled=false(缺省)时零行为、零外呼,
+    # 纯全文检索现路径不变。开启后摄取对新分段批量向量化,向量落
+    # ia_kb_chunk.embedding_json(TEXT 存 float[] JSON 数组,DEF-08 铁律;
+    # pgvector 升级路径见外部知识库规范 §7);检索余弦排序后与全文做
+    # RRF(k=60)融合,任一异常降级纯全文。endpoint 为 OpenAI 兼容
+    # embeddings 完整 URL;api-key 以 Bearer 头外呼(勿落日志)。
+    semantic:
+      enabled: false
+      # endpoint: http://kb-embed.local:18080/v1/embeddings
+      # api-key: sk-xxx
+      # model: text-embedding-3-small
+      batch-size: 16
+      timeout-ms: 10000
+      top-n: 8
 
 logging:
   level:

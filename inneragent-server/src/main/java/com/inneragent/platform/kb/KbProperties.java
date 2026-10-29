@@ -44,6 +44,9 @@ public class KbProperties {
     /** 单次运行注入「引用资料」区块的正文预算(字符,整段截停)。 */
     private int maxInjectedChars = 8000;
 
+    /** 可选语义层(升级战役 D2):缺省关闭,关闭时零行为、零外呼。 */
+    private final Semantic semantic = new Semantic();
+
     public long getMaxDocumentBytes() {
         return maxDocumentBytes;
     }
@@ -141,5 +144,110 @@ public class KbProperties {
             throw new IllegalArgumentException("maxInjectedChars must not be positive");
         }
         this.maxInjectedChars = maxInjectedChars;
+    }
+
+    public Semantic getSemantic() {
+        return semantic;
+    }
+
+    /**
+     * 可选语义检索组({@code inneragent.kb.semantic.*}):enabled=false
+     * (缺省)时纯全文路径逐字节不变、零外呼;开启后摄取侧批量向量化落
+     * embedding_json(TEXT 存 JSON 数组,DEF-08 铁律),检索侧余弦 + RRF
+     * (k=60)与全文融合,任一异常降级纯全文。endpoint 为 embeddings
+     * 完整 URL;向量存储不引入 pgvector(mini 规模 TEXT+JVM 余弦足够,
+     * 升级路径见外部知识库规范 §7)。
+     */
+    public static class Semantic {
+
+        /** 语义层总开关(缺省 false:不配置即零行为)。 */
+        private boolean enabled = false;
+
+        /** embeddings 完整 URL(OpenAI 兼容,如 http://host/v1/embeddings)。 */
+        private String endpoint;
+
+        /** Bearer 鉴权密钥(外呼语义向量服务用;不落日志)。 */
+        private String apiKey;
+
+        /** 向量模型名(text-embedding-3-small 等,随端点约定)。 */
+        private String model;
+
+        /** 单次外呼最大文本条数(超批切分多次)。 */
+        private int batchSize = 16;
+
+        /** 外呼连接/读超时(毫秒,装配 RestClient 时落参)。 */
+        private long timeoutMs = 10_000;
+
+        /** 语义路参与 RRF 融合的候选上限(余弦排序截断)。 */
+        private int topN = 8;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getEndpoint() {
+            return endpoint;
+        }
+
+        public void setEndpoint(String endpoint) {
+            this.endpoint = normalize(endpoint);
+        }
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = normalize(apiKey);
+        }
+
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(String model) {
+            this.model = normalize(model);
+        }
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public void setBatchSize(int batchSize) {
+            if (batchSize < 1) {
+                throw new IllegalArgumentException("batchSize must be positive");
+            }
+            this.batchSize = batchSize;
+        }
+
+        public long getTimeoutMs() {
+            return timeoutMs;
+        }
+
+        public void setTimeoutMs(long timeoutMs) {
+            if (timeoutMs <= 0) {
+                throw new IllegalArgumentException("timeoutMs must be positive");
+            }
+            this.timeoutMs = timeoutMs;
+        }
+
+        public int getTopN() {
+            return topN;
+        }
+
+        public void setTopN(int topN) {
+            if (topN < 1) {
+                throw new IllegalArgumentException("topN must be positive");
+            }
+            this.topN = topN;
+        }
+
+        private static String normalize(String value) {
+            return value == null || value.isBlank() ? null : value.trim();
+        }
     }
 }

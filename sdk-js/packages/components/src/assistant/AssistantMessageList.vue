@@ -30,8 +30,10 @@ import IaEmpty from '../ui/IaEmpty.vue'
 import AssistantTimeline, { type AssistantToolConfirmation } from './AssistantTimeline.vue'
 import AssistantToolConfirmBar from './AssistantToolConfirmBar.vue'
 import AssistantAttachmentChip from './AssistantAttachmentChip.vue'
+import AssistantKbCitations from './AssistantKbCitations.vue'
 import { buildSegments, type RenderableMessageSegment } from './assistantDisplay'
 import { messageAttachments } from './assistantMessageAttachments'
+import { segmentKbCitations } from './assistantKbCitations'
 import { useAssistantMessageScroll } from './useAssistantMessageScroll'
 
 const props = defineProps<{ conversationId: string }>()
@@ -54,13 +56,28 @@ const activeRunId = computed(() => showPipelineTimeline.value
   ? runtime.value?.pipeline.runId ?? runtime.value?.knownRunId
   : undefined)
 
-const segments = computed<RenderableMessageSegment[]>(() =>
-  buildSegments(runtime.value?.messages ?? [], activeRunId.value).map((segment) => ({
+const segments = computed<RenderableMessageSegment[]>(() => {
+  const list = buildSegments(runtime.value?.messages ?? [], activeRunId.value).map((segment) => ({
     ...segment,
     timeline: messagesToTimeline(segment.assistant),
     // [P2 #14] 用户消息附件视图(发送后气泡与历史回放同路径)
     attachments: segment.user ? messageAttachments(segment.user) : [],
-  })))
+  }))
+  // [P4-W14] 「引用资料」视图: 消息自带优先; pipeline 捕获仅回退末段(当前最新
+  // assistant 消息)。终态触发 messagesLoaded:false 重拉, mergeMessages 以 incoming
+  // 覆盖 current 会冲掉消息体上的瞬时引用, pipeline state 仍存活; 历史未重拉完成
+  // (messagesLoaded=false)期间不回退, 避免引用提前挂到上一轮气泡下。
+  const pipelineCitations = runtime.value?.messagesLoaded
+    ? runtime.value.pipeline.kbCitations
+    : undefined
+  return list.map((segment, index) => ({
+    ...segment,
+    citations: segmentKbCitations(
+      segment.assistant,
+      index === list.length - 1 ? pipelineCitations : undefined,
+    ),
+  }))
+})
 
 const liveTimeline = computed<TimelineItem[]>(() =>
   runtime.value && showPipelineTimeline.value ? runtime.value.pipeline.timeline : [])
@@ -226,6 +243,11 @@ function hasContent(): boolean {
             </div>
           </div>
           <AssistantTimeline class="assistant-timeline-host" :items="segment.timeline" />
+          <!-- [P4-W14] 「引用资料」折叠区 (assistant 气泡下方, 与附件行同范式) -->
+          <AssistantKbCitations
+            v-if="segment.citations?.length"
+            :citations="segment.citations"
+          />
         </template>
 
         <AssistantTimeline

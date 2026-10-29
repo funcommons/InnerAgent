@@ -36,6 +36,15 @@ export interface AgentConversation {
   createTime?: string
 }
 
+/** KB 引用条目 (服务端 KbCitationVO; content 仅存在于服务端 KbHit, 不上网) */
+export interface KbCitation {
+  chunkId: number
+  documentId: number
+  documentTitle: string
+  anchor?: string
+  seq?: number
+}
+
 /** 助手消息 (后端 AgentMessage 实体; role: user/assistant/tool) */
 export interface AgentMessage {
   id: number
@@ -45,6 +54,8 @@ export interface AgentMessage {
   role: string
   content: string
   referencesJson?: string
+  /** KB 引用 (仅 live SSE DONE 事件到达; GET messages 无引用列, 历史回放不带) */
+  kbCitations?: KbCitation[]
   toolName?: string
   toolStatus?: string
   /** 工具调用 ID（关联同一次调用的发起和结果） */

@@ -322,11 +322,11 @@ const OUTPUT_TYPES = /* @__PURE__ */ new Set([
   "ERROR",
   "CANCELLED"
 ]);
-function isRecord$2(value) {
+function isRecord$3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function getApiPayloadMessage(payload) {
-  if (!isRecord$2(payload)) return null;
+  if (!isRecord$3(payload)) return null;
   const message = payload.msg ?? payload.message;
   return typeof message === "string" && message.trim() ? message.trim() : null;
 }
@@ -367,7 +367,7 @@ function parsePipelineEvent(jsonText) {
   } catch {
     throw new Error("Pipeline SSE data is not valid JSON");
   }
-  if (!isRecord$2(value)) {
+  if (!isRecord$3(value)) {
     throw new Error("Pipeline SSE data must be an object");
   }
   if (value.schemaVersion !== 1) {
@@ -1273,6 +1273,9 @@ function reducePipelineEvent(prev, event) {
       if (event.parentToolCallId || event.agentName) return next;
       next.status = "done";
       next.pendingConfirmation = void 0;
+      if (Array.isArray(event.kbCitations)) {
+        next.kbCitations = [...event.kbCitations];
+      }
       if (event.content) {
         next.timeline = appendContentToTimeline(next.timeline, event.content);
       }
@@ -1633,11 +1636,11 @@ const DEGRADED_SCOPE = Object.freeze({
   resolved: false,
   degraded: true
 });
-function isRecord$1(value) {
+function isRecord$2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function normalizeToolCallScope(scope) {
-  if (!isRecord$1(scope)) return { ...DEGRADED_SCOPE };
+  if (!isRecord$2(scope)) return { ...DEGRADED_SCOPE };
   const summary = typeof scope.summary === "string" && scope.summary.trim() ? scope.summary : void 0;
   const withSummary = (base) => summary ? { ...base, summary } : base;
   if (scope.degraded !== false) {
@@ -10449,6 +10452,7 @@ const zhCN = {
   "assistant.attachment-remove": "移除附件",
   "assistant.attachment-model-required": "请先选择对话模型",
   "assistant.attachment-url-fallback": "大文件将以 URL 引用传输",
+  "assistant.kb-citations-toggle": "引用资料 · {n}",
   "notification.reasoning": "思考",
   "notification.reasoning-duration": "思考 ({s}s)",
   "notification.tool-preparing": "准备中",
@@ -10596,6 +10600,7 @@ const enUS = {
   "assistant.attachment-remove": "Remove attachment",
   "assistant.attachment-model-required": "Select a chat model first",
   "assistant.attachment-url-fallback": "Large file will be sent as a URL reference",
+  "assistant.kb-citations-toggle": "References · {n}",
   "notification.reasoning": "Thinking",
   "notification.reasoning-duration": "Thinking ({s}s)",
   "notification.tool-preparing": "Preparing",
@@ -10711,13 +10716,13 @@ function selectedBatchDecision(toolCallIds, decisions) {
   const firstDecision = decisions[toolCallIds[0] ?? ""];
   return toolCallIds.every((toolCallId) => decisions[toolCallId] === firstDecision) ? firstDecision : void 0;
 }
-const _hoisted_1$h = ["type", "disabled"];
-const _hoisted_2$d = {
+const _hoisted_1$i = ["type", "disabled"];
+const _hoisted_2$e = {
   key: 0,
   class: "ri-loader-4-line is-spinning",
   "aria-hidden": "true"
 };
-const _sfc_main$h = /* @__PURE__ */ defineComponent({
+const _sfc_main$i = /* @__PURE__ */ defineComponent({
   ...{ name: "IaButton", inheritAttrs: false },
   __name: "IaButton",
   props: {
@@ -10753,13 +10758,13 @@ const _sfc_main$h = /* @__PURE__ */ defineComponent({
         type: __props.nativeType,
         disabled: __props.disabled || __props.loading
       }, _ctx.$attrs, { onClick }), [
-        __props.loading ? (openBlock(), createElementBlock("i", _hoisted_2$d)) : createCommentVNode("", true),
+        __props.loading ? (openBlock(), createElementBlock("i", _hoisted_2$e)) : createCommentVNode("", true),
         renderSlot(_ctx.$slots, "default", {}, void 0)
-      ], 16, _hoisted_1$h);
+      ], 16, _hoisted_1$i);
     };
   }
 });
-const _style_0$h = "\n.ia-button[data-v-d5b5e96c] {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 5px;\n  padding: 7px 14px;\n  border: 1px solid transparent;\n  border-radius: var(--app-radius-md, 8px);\n  font-weight: 600;\n  line-height: 1.2;\n  cursor: pointer;\n  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;\n  user-select: none;\n}\n.ia-button[data-v-d5b5e96c]:active:not(.is-disabled) { transform: scale(0.97);\n}\n.ia-button.is-disabled[data-v-d5b5e96c] {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n.ia-button.is-block[data-v-d5b5e96c] { width: 100%; display: flex;\n}\n.ia-button.is-circle[data-v-d5b5e96c] { border-radius: 9999px; padding-left: 10px; padding-right: 10px;\n}\n.ia-button.size-sm[data-v-d5b5e96c] { font-size: 12px; padding: 5px 10px;\n}\n.ia-button.size-md[data-v-d5b5e96c] { font-size: 13px;\n}\n.ia-button.size-lg[data-v-d5b5e96c] { font-size: 14px; padding: 9px 18px;\n}\n.ia-button.variant-primary[data-v-d5b5e96c]:not(.is-disabled) {\n  background: var(--app-primary, var(--ia-primary, #409eff));\n  border-color: var(--app-primary, var(--ia-primary, #409eff));\n  color: var(--app-on-primary, var(--ia-primary-contrast, #fff));\n}\n.ia-button.variant-primary[data-v-d5b5e96c]:not(.is-disabled):hover {\n  filter: brightness(0.95);\n  box-shadow: var(--app-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));\n}\n.ia-button.variant-secondary[data-v-d5b5e96c] {\n  background: var(--app-bg-card, var(--ia-bg-card, #fff));\n  border-color: var(--app-separator, var(--ia-separator, #dcdfe6));\n  color: var(--app-text, var(--ia-text, #303133));\n}\n.ia-button.variant-secondary[data-v-d5b5e96c]:not(.is-disabled):hover {\n  border-color: var(--app-primary, var(--ia-primary, #409eff));\n  color: var(--app-primary, var(--ia-primary, #409eff));\n}\n.ia-button.variant-text[data-v-d5b5e96c] {\n  background: none;\n  border-color: transparent;\n  color: var(--app-primary, var(--ia-primary, #409eff));\n}\n.ia-button.variant-text[data-v-d5b5e96c]:not(.is-disabled):hover { background: rgba(64, 158, 255, 0.08);\n}\n.ia-button.variant-danger[data-v-d5b5e96c]:not(.is-disabled) {\n  background: var(--app-color-danger, var(--ia-danger, #f56c6c));\n  border-color: var(--app-color-danger, var(--ia-danger, #f56c6c));\n  color: #fff;\n}\n.ia-button.variant-danger[data-v-d5b5e96c]:not(.is-disabled):hover {\n  filter: brightness(0.95);\n  box-shadow: var(--app-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));\n}\n.is-spinning[data-v-d5b5e96c] { animation: ia-button-spin-d5b5e96c 1s linear infinite;\n}\n@keyframes ia-button-spin-d5b5e96c {\nfrom { transform: rotate(0deg);\n}\nto { transform: rotate(360deg);\n}\n}\n";
+const _style_0$i = "\n.ia-button[data-v-d5b5e96c] {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 5px;\n  padding: 7px 14px;\n  border: 1px solid transparent;\n  border-radius: var(--app-radius-md, 8px);\n  font-weight: 600;\n  line-height: 1.2;\n  cursor: pointer;\n  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;\n  user-select: none;\n}\n.ia-button[data-v-d5b5e96c]:active:not(.is-disabled) { transform: scale(0.97);\n}\n.ia-button.is-disabled[data-v-d5b5e96c] {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n.ia-button.is-block[data-v-d5b5e96c] { width: 100%; display: flex;\n}\n.ia-button.is-circle[data-v-d5b5e96c] { border-radius: 9999px; padding-left: 10px; padding-right: 10px;\n}\n.ia-button.size-sm[data-v-d5b5e96c] { font-size: 12px; padding: 5px 10px;\n}\n.ia-button.size-md[data-v-d5b5e96c] { font-size: 13px;\n}\n.ia-button.size-lg[data-v-d5b5e96c] { font-size: 14px; padding: 9px 18px;\n}\n.ia-button.variant-primary[data-v-d5b5e96c]:not(.is-disabled) {\n  background: var(--app-primary, var(--ia-primary, #409eff));\n  border-color: var(--app-primary, var(--ia-primary, #409eff));\n  color: var(--app-on-primary, var(--ia-primary-contrast, #fff));\n}\n.ia-button.variant-primary[data-v-d5b5e96c]:not(.is-disabled):hover {\n  filter: brightness(0.95);\n  box-shadow: var(--app-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));\n}\n.ia-button.variant-secondary[data-v-d5b5e96c] {\n  background: var(--app-bg-card, var(--ia-bg-card, #fff));\n  border-color: var(--app-separator, var(--ia-separator, #dcdfe6));\n  color: var(--app-text, var(--ia-text, #303133));\n}\n.ia-button.variant-secondary[data-v-d5b5e96c]:not(.is-disabled):hover {\n  border-color: var(--app-primary, var(--ia-primary, #409eff));\n  color: var(--app-primary, var(--ia-primary, #409eff));\n}\n.ia-button.variant-text[data-v-d5b5e96c] {\n  background: none;\n  border-color: transparent;\n  color: var(--app-primary, var(--ia-primary, #409eff));\n}\n.ia-button.variant-text[data-v-d5b5e96c]:not(.is-disabled):hover { background: rgba(64, 158, 255, 0.08);\n}\n.ia-button.variant-danger[data-v-d5b5e96c]:not(.is-disabled) {\n  background: var(--app-color-danger, var(--ia-danger, #f56c6c));\n  border-color: var(--app-color-danger, var(--ia-danger, #f56c6c));\n  color: #fff;\n}\n.ia-button.variant-danger[data-v-d5b5e96c]:not(.is-disabled):hover {\n  filter: brightness(0.95);\n  box-shadow: var(--app-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));\n}\n.is-spinning[data-v-d5b5e96c] { animation: ia-button-spin-d5b5e96c 1s linear infinite;\n}\n@keyframes ia-button-spin-d5b5e96c {\nfrom { transform: rotate(0deg);\n}\nto { transform: rotate(360deg);\n}\n}\n";
 const _export_sfc = (sfc, props) => {
   const target = sfc.__vccOpts || sfc;
   for (const [key, val] of props) {
@@ -10767,15 +10772,15 @@ const _export_sfc = (sfc, props) => {
   }
   return target;
 };
-const IaButton = /* @__PURE__ */ _export_sfc(_sfc_main$h, [["styles", [_style_0$h]], ["__scopeId", "data-v-d5b5e96c"]]);
-const _hoisted_1$g = { class: "ia-dialog__head" };
-const _hoisted_2$c = { class: "ia-dialog__title" };
-const _hoisted_3$a = { class: "ia-dialog__body" };
-const _hoisted_4$9 = {
+const IaButton = /* @__PURE__ */ _export_sfc(_sfc_main$i, [["styles", [_style_0$i]], ["__scopeId", "data-v-d5b5e96c"]]);
+const _hoisted_1$h = { class: "ia-dialog__head" };
+const _hoisted_2$d = { class: "ia-dialog__title" };
+const _hoisted_3$b = { class: "ia-dialog__body" };
+const _hoisted_4$a = {
   key: 0,
   class: "ia-dialog__footer"
 };
-const _sfc_main$g = /* @__PURE__ */ defineComponent({
+const _sfc_main$h = /* @__PURE__ */ defineComponent({
   ...{ name: "IaDialog", inheritAttrs: false },
   __name: "IaDialog",
   props: {
@@ -10826,8 +10831,8 @@ const _sfc_main$g = /* @__PURE__ */ defineComponent({
           class: "ia-dialog__card",
           style: normalizeStyle({ width: typeof __props.width === "number" ? `${__props.width}px` : __props.width })
         }, [
-          createBaseVNode("header", _hoisted_1$g, [
-            createBaseVNode("h3", _hoisted_2$c, toDisplayString(__props.title), 1),
+          createBaseVNode("header", _hoisted_1$h, [
+            createBaseVNode("h3", _hoisted_2$d, toDisplayString(__props.title), 1),
             createBaseVNode("button", {
               type: "button",
               class: "ia-dialog__close",
@@ -10840,10 +10845,10 @@ const _sfc_main$g = /* @__PURE__ */ defineComponent({
               }, null, -1)
             ])])
           ]),
-          createBaseVNode("div", _hoisted_3$a, [
+          createBaseVNode("div", _hoisted_3$b, [
             renderSlot(_ctx.$slots, "default", {}, void 0)
           ]),
-          _ctx.$slots.footer ? (openBlock(), createElementBlock("footer", _hoisted_4$9, [
+          _ctx.$slots.footer ? (openBlock(), createElementBlock("footer", _hoisted_4$a, [
             renderSlot(_ctx.$slots, "footer", {}, void 0)
           ])) : createCommentVNode("", true)
         ], 4)
@@ -10851,22 +10856,22 @@ const _sfc_main$g = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const _style_0$g = "\n.ia-dialog[data-v-2385a08f] {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: grid;\n  place-items: center;\n}\n.ia-dialog__mask[data-v-2385a08f] {\n  position: absolute;\n  inset: 0;\n  background: rgba(0, 0, 0, 0.45);\n}\n.ia-dialog__card[data-v-2385a08f] {\n  position: relative;\n  max-width: calc(100vw - 48px);\n  border-radius: 12px;\n  background: var(--app-bg-card, var(--ia-bg-card, #fff));\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);\n  overflow: hidden;\n}\n.ia-dialog__head[data-v-2385a08f] {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 14px 16px 10px;\n}\n.ia-dialog__title[data-v-2385a08f] {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 600;\n  color: var(--app-text, var(--ia-text, #303133));\n}\n.ia-dialog__close[data-v-2385a08f] {\n  display: grid;\n  place-items: center;\n  width: 24px;\n  height: 24px;\n  border: none;\n  border-radius: 6px;\n  background: none;\n  cursor: pointer;\n  color: var(--app-text-secondary, var(--ia-text-secondary, #606266));\n}\n.ia-dialog__close[data-v-2385a08f]:hover { background: var(--app-bg-muted, var(--ia-bg-muted, #f5f5f7));\n}\n.ia-dialog__body[data-v-2385a08f] {\n  padding: 0 16px 16px;\n  font-size: 13px;\n  color: var(--app-text, var(--ia-text, #303133));\n  line-height: 1.6;\n}\n.ia-dialog__footer[data-v-2385a08f] {\n  display: flex;\n  justify-content: flex-end;\n  gap: 8px;\n  padding: 10px 16px 14px;\n}\n";
-const IaDialog = /* @__PURE__ */ _export_sfc(_sfc_main$g, [["styles", [_style_0$g]], ["__scopeId", "data-v-2385a08f"]]);
-const _hoisted_1$f = { class: "assistant-nav__head" };
-const _hoisted_2$b = { class: "assistant-nav__title" };
-const _hoisted_3$9 = { class: "assistant-nav__sub" };
-const _hoisted_4$8 = {
+const _style_0$h = "\n.ia-dialog[data-v-2385a08f] {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: grid;\n  place-items: center;\n}\n.ia-dialog__mask[data-v-2385a08f] {\n  position: absolute;\n  inset: 0;\n  background: rgba(0, 0, 0, 0.45);\n}\n.ia-dialog__card[data-v-2385a08f] {\n  position: relative;\n  max-width: calc(100vw - 48px);\n  border-radius: 12px;\n  background: var(--app-bg-card, var(--ia-bg-card, #fff));\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);\n  overflow: hidden;\n}\n.ia-dialog__head[data-v-2385a08f] {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 14px 16px 10px;\n}\n.ia-dialog__title[data-v-2385a08f] {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 600;\n  color: var(--app-text, var(--ia-text, #303133));\n}\n.ia-dialog__close[data-v-2385a08f] {\n  display: grid;\n  place-items: center;\n  width: 24px;\n  height: 24px;\n  border: none;\n  border-radius: 6px;\n  background: none;\n  cursor: pointer;\n  color: var(--app-text-secondary, var(--ia-text-secondary, #606266));\n}\n.ia-dialog__close[data-v-2385a08f]:hover { background: var(--app-bg-muted, var(--ia-bg-muted, #f5f5f7));\n}\n.ia-dialog__body[data-v-2385a08f] {\n  padding: 0 16px 16px;\n  font-size: 13px;\n  color: var(--app-text, var(--ia-text, #303133));\n  line-height: 1.6;\n}\n.ia-dialog__footer[data-v-2385a08f] {\n  display: flex;\n  justify-content: flex-end;\n  gap: 8px;\n  padding: 10px 16px 14px;\n}\n";
+const IaDialog = /* @__PURE__ */ _export_sfc(_sfc_main$h, [["styles", [_style_0$h]], ["__scopeId", "data-v-2385a08f"]]);
+const _hoisted_1$g = { class: "assistant-nav__head" };
+const _hoisted_2$c = { class: "assistant-nav__title" };
+const _hoisted_3$a = { class: "assistant-nav__sub" };
+const _hoisted_4$9 = {
   key: 0,
   class: "assistant-nav__empty",
   "data-testid": "assistant-nav-empty"
 };
-const _hoisted_5$8 = ["data-testid", "onClick", "onKeydown"];
-const _hoisted_6$8 = { class: "assistant-nav__main" };
+const _hoisted_5$9 = ["data-testid", "onClick", "onKeydown"];
+const _hoisted_6$9 = { class: "assistant-nav__main" };
 const _hoisted_7$8 = ["title"];
 const _hoisted_8$7 = { class: "assistant-nav__meta" };
 const _hoisted_9$6 = ["title"];
-const _hoisted_10$6 = ["title", "disabled", "data-testid", "onClick"];
+const _hoisted_10$6 = ["title", "aria-label", "disabled", "data-testid", "onClick"];
 const _hoisted_11$5 = {
   key: 1,
   class: "assistant-nav__loading"
@@ -10878,7 +10883,7 @@ const _hoisted_13$3 = {
   "data-testid": "assistant-delete-error"
 };
 const _hoisted_14$3 = { class: "assistant-nav__delete-actions" };
-const _sfc_main$f = /* @__PURE__ */ defineComponent({
+const _sfc_main$g = /* @__PURE__ */ defineComponent({
   ...{ name: "AssistantConversationNav" },
   __name: "AssistantConversationNav",
   emits: ["selected"],
@@ -10949,10 +10954,10 @@ const _sfc_main$f = /* @__PURE__ */ defineComponent({
           class: "assistant-nav__mask",
           onClick: _cache[0] || (_cache[0] = ($event) => unref(store).setDrawerOpen(false))
         })) : createCommentVNode("", true),
-        createBaseVNode("div", _hoisted_1$f, [
+        createBaseVNode("div", _hoisted_1$g, [
           createBaseVNode("div", null, [
-            createBaseVNode("p", _hoisted_2$b, toDisplayString(unref(t)("assistant.conversations")), 1),
-            createBaseVNode("p", _hoisted_3$9, toDisplayString(unref(t)("assistant.conversations-only")), 1)
+            createBaseVNode("p", _hoisted_2$c, toDisplayString(unref(t)("assistant.conversations")), 1),
+            createBaseVNode("p", _hoisted_3$a, toDisplayString(unref(t)("assistant.conversations-only")), 1)
           ]),
           createVNode(IaButton, {
             class: "assistant-nav__close",
@@ -10974,6 +10979,7 @@ const _sfc_main$f = /* @__PURE__ */ defineComponent({
             size: "sm",
             circle: "",
             title: unref(t)("assistant.new-conversation"),
+            "aria-label": unref(t)("assistant.new-conversation"),
             "data-testid": "assistant-new-conversation",
             onClick: _cache[2] || (_cache[2] = ($event) => unref(store).startNewConversation())
           }, {
@@ -10981,13 +10987,13 @@ const _sfc_main$f = /* @__PURE__ */ defineComponent({
               createBaseVNode("i", { class: "ri-add-line" }, null, -1)
             ])]),
             _: 1
-          }, 8, ["title"])
+          }, 8, ["title", "aria-label"])
         ]),
         createBaseVNode("div", {
           class: "assistant-nav__list",
           onScroll
         }, [
-          unref(store).conversations.length === 0 && !unref(store).conversationsLoading ? (openBlock(), createElementBlock("div", _hoisted_4$8, [
+          unref(store).conversations.length === 0 && !unref(store).conversationsLoading ? (openBlock(), createElementBlock("div", _hoisted_4$9, [
             _cache[9] || (_cache[9] = createBaseVNode("i", { class: "ri-chat-new-line" }, null, -1)),
             createBaseVNode("p", null, toDisplayString(unref(t)("assistant.empty-conversations")), 1),
             createVNode(IaButton, {
@@ -11030,7 +11036,7 @@ const _sfc_main$f = /* @__PURE__ */ defineComponent({
                   ) === "running" }
                 ]])
               }, null, 2),
-              createBaseVNode("span", _hoisted_6$8, [
+              createBaseVNode("span", _hoisted_6$9, [
                 createBaseVNode("span", {
                   class: "assistant-nav__name",
                   title: conversation.title
@@ -11052,13 +11058,14 @@ const _sfc_main$f = /* @__PURE__ */ defineComponent({
                 type: "button",
                 class: "assistant-nav__delete fc-button-ghost",
                 title: isRunningStatus(unref(store).conversationStates[conversation.conversationId]?.status) ? unref(t)("assistant.running-delete-disabled") : unref(t)("assistant.delete-conversation"),
+                "aria-label": isRunningStatus(unref(store).conversationStates[conversation.conversationId]?.status) ? unref(t)("assistant.running-delete-disabled") : unref(t)("assistant.delete-conversation"),
                 disabled: isRunningStatus(unref(store).conversationStates[conversation.conversationId]?.status),
                 "data-testid": `assistant-delete-${conversation.conversationId}`,
                 onClick: withModifiers(($event) => askDelete(conversation.conversationId, conversation.id, conversation.title), ["stop"])
               }, [..._cache[11] || (_cache[11] = [
                 createBaseVNode("i", { class: "ri-delete-bin-line" }, null, -1)
               ])], 8, _hoisted_10$6)
-            ], 42, _hoisted_5$8);
+            ], 42, _hoisted_5$9);
           }), 128)),
           unref(store).conversationsLoading ? (openBlock(), createElementBlock("p", _hoisted_11$5, [
             _cache[12] || (_cache[12] = createBaseVNode("i", { class: "ri-loader-4-line is-spinning" }, null, -1)),
@@ -11113,41 +11120,41 @@ const _sfc_main$f = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const _style_0$f = ".assistant-nav__mask[data-v-50f126bd] {\n  position: fixed;\n  inset: 0;\n  z-index: 55;\n  background: rgba(0, 0, 0, 0.4);\n}\n.assistant-nav__close[data-v-50f126bd] {\n  display: none;\n}\n.assistant-nav[data-v-50f126bd] {\n  width: 220px;\n  position: relative;\n}\n@media (max-width: 768px) {\n.assistant-nav[data-v-50f126bd]:not(.is-drawer) {\n    display: none;\n}\n.assistant-nav.is-drawer[data-v-50f126bd] {\n    position: fixed;\n    inset: 0 auto 0 0;\n    width: 260px;\n    z-index: 60;\n    background: var(--app-bg, var(--el-bg-color));\n    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);\n}\n.assistant-nav.is-drawer .assistant-nav__close[data-v-50f126bd] {\n    display: inline-flex;\n}\n}\n.assistant-nav[data-v-50f126bd] {\n  flex-shrink: 0;\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  border-right: 1px solid var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-nav__head[data-v-50f126bd] {\n  flex-shrink: 0;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 12px 12px 10px;\n  border-bottom: 1px solid var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-nav__head > div[data-v-50f126bd] {\n  min-width: 0;\n}\n.assistant-nav__title[data-v-50f126bd] {\n  margin: 0;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--app-text);\n}\n.assistant-nav__sub[data-v-50f126bd] {\n  margin: 2px 0 0;\n  font-size: 10px;\n  color: var(--app-text-tertiary, var(--app-text-secondary));\n}\n.assistant-nav__list[data-v-50f126bd] {\n  flex: 1;\n  min-height: 0;\n  overflow-y: auto;\n  padding: 8px;\n}\n.assistant-nav__empty[data-v-50f126bd] {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 8px;\n  padding: 28px 12px;\n  text-align: center;\n  color: var(--app-text-secondary);\n  font-size: 12px;\n}\n.assistant-nav__empty i[data-v-50f126bd] {\n  font-size: 26px;\n  opacity: 0.4;\n}\n.assistant-nav__empty p[data-v-50f126bd] {\n  margin: 0;\n}\n.assistant-nav__item[data-v-50f126bd] {\n  width: 100%;\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  padding: 8px 10px;\n  margin-bottom: 2px;\n  border: none;\n  border-radius: 10px;\n  background: none;\n  cursor: pointer;\n  text-align: left;\n  transition: background 0.15s;\n}\n.assistant-nav__item[data-v-50f126bd]:hover {\n  background: var(--app-sidebar-item-hover-bg);\n}\n.assistant-nav__item:hover .assistant-nav__delete[data-v-50f126bd] {\n  opacity: 1;\n}\n.assistant-nav__item.is-selected[data-v-50f126bd] {\n  background: var(--el-color-primary-light-9, #ecf5ff);\n}\n.assistant-nav__status[data-v-50f126bd] {\n  flex-shrink: 0;\n  margin-top: 2px;\n  font-size: 13px;\n}\n.assistant-nav__status.is-running[data-v-50f126bd] {\n  color: var(--el-color-primary, #409eff);\n}\n.assistant-nav__status.is-waiting[data-v-50f126bd] {\n  color: var(--el-color-warning, #e6a23c);\n}\n.assistant-nav__status.is-failed[data-v-50f126bd] {\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-nav__status.is-cancelled[data-v-50f126bd] {\n  color: var(--app-text-tertiary, #a8abb2);\n}\n.assistant-nav__status.is-unread[data-v-50f126bd] {\n  color: var(--el-color-warning, #e6a23c);\n}\n.assistant-nav__status.is-done[data-v-50f126bd] {\n  color: var(--el-color-success, #67c23a);\n}\n.assistant-nav__status.is-spinning[data-v-50f126bd] {\n  animation: assistant-nav-spin-50f126bd 1s linear infinite;\n}\n@keyframes assistant-nav-spin-50f126bd {\nfrom {\n    transform: rotate(0deg);\n}\nto {\n    transform: rotate(360deg);\n}\n}\n.assistant-nav__main[data-v-50f126bd] {\n  flex: 1;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n}\n.assistant-nav__name[data-v-50f126bd] {\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--app-text);\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.assistant-nav__meta[data-v-50f126bd] {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  margin-top: 2px;\n  font-size: 10px;\n  color: var(--app-text-secondary);\n}\n.assistant-nav__unread[data-v-50f126bd] {\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: var(--el-color-primary, #409eff);\n}\n.assistant-nav__delete[data-v-50f126bd] {\n  flex-shrink: 0;\n  border: none;\n  background: none;\n  cursor: pointer;\n  padding: 2px 4px;\n  border-radius: 6px;\n  font-size: 13px;\n  color: var(--app-text-tertiary, var(--app-text-secondary));\n  opacity: 0;\n  transition: opacity 0.15s, color 0.15s;\n}\n.assistant-nav__delete[data-v-50f126bd]:hover:not(:disabled) {\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-nav__delete[data-v-50f126bd]:disabled {\n  cursor: not-allowed;\n  opacity: 0.35;\n}\n.assistant-nav__loading[data-v-50f126bd],\n.assistant-nav__more[data-v-50f126bd] {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  width: 100%;\n  padding: 10px 0;\n  font-size: 11px;\n  color: var(--app-text-secondary);\n  background: none;\n  border: none;\n  cursor: pointer;\n}\n.assistant-nav__loading[data-v-50f126bd]:hover,\n.assistant-nav__more[data-v-50f126bd]:hover {\n  color: var(--app-text);\n}\n.is-spinning[data-v-50f126bd] {\n  animation: assistant-nav-spin-50f126bd 1s linear infinite;\n}\n.assistant-nav__delete-desc[data-v-50f126bd] {\n  margin: 0;\n  font-size: 13px;\n  color: var(--app-text);\n  line-height: 1.6;\n}\n.assistant-nav__delete-error[data-v-50f126bd] {\n  margin: 8px 0 0;\n  font-size: 12px;\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-nav__delete-actions[data-v-50f126bd] {\n  display: flex;\n  justify-content: flex-end;\n  gap: 8px;\n}";
-const AssistantConversationNav = /* @__PURE__ */ _export_sfc(_sfc_main$f, [["styles", [_style_0$f]], ["__scopeId", "data-v-50f126bd"]]);
-const _hoisted_1$e = {
+const _style_0$g = ".assistant-nav__mask[data-v-ce1df2dc] {\n  position: fixed;\n  inset: 0;\n  z-index: 55;\n  background: rgba(0, 0, 0, 0.4);\n}\n.assistant-nav__close[data-v-ce1df2dc] {\n  display: none;\n}\n.assistant-nav[data-v-ce1df2dc] {\n  width: 220px;\n  position: relative;\n}\n@media (max-width: 768px) {\n.assistant-nav[data-v-ce1df2dc]:not(.is-drawer) {\n    display: none;\n}\n.assistant-nav.is-drawer[data-v-ce1df2dc] {\n    position: fixed;\n    inset: 0 auto 0 0;\n    width: 260px;\n    z-index: 60;\n    background: var(--app-bg, var(--el-bg-color));\n    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);\n}\n.assistant-nav.is-drawer .assistant-nav__close[data-v-ce1df2dc] {\n    display: inline-flex;\n}\n}\n.assistant-nav[data-v-ce1df2dc] {\n  flex-shrink: 0;\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  border-right: 1px solid var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-nav__head[data-v-ce1df2dc] {\n  flex-shrink: 0;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 12px 12px 10px;\n  border-bottom: 1px solid var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-nav__head > div[data-v-ce1df2dc] {\n  min-width: 0;\n}\n.assistant-nav__title[data-v-ce1df2dc] {\n  margin: 0;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--app-text);\n}\n.assistant-nav__sub[data-v-ce1df2dc] {\n  margin: 2px 0 0;\n  font-size: 10px;\n  color: var(--app-text-tertiary, var(--app-text-secondary));\n}\n.assistant-nav__list[data-v-ce1df2dc] {\n  flex: 1;\n  min-height: 0;\n  overflow-y: auto;\n  padding: 8px;\n}\n.assistant-nav__empty[data-v-ce1df2dc] {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 8px;\n  padding: 28px 12px;\n  text-align: center;\n  color: var(--app-text-secondary);\n  font-size: 12px;\n}\n.assistant-nav__empty i[data-v-ce1df2dc] {\n  font-size: 26px;\n  opacity: 0.4;\n}\n.assistant-nav__empty p[data-v-ce1df2dc] {\n  margin: 0;\n}\n.assistant-nav__item[data-v-ce1df2dc] {\n  width: 100%;\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  padding: 8px 10px;\n  margin-bottom: 2px;\n  border: none;\n  border-radius: 10px;\n  background: none;\n  cursor: pointer;\n  text-align: left;\n  transition: background 0.15s;\n}\n.assistant-nav__item[data-v-ce1df2dc]:hover {\n  background: var(--app-sidebar-item-hover-bg);\n}\n.assistant-nav__item:hover .assistant-nav__delete[data-v-ce1df2dc] {\n  opacity: 1;\n}\n.assistant-nav__item.is-selected[data-v-ce1df2dc] {\n  background: var(--el-color-primary-light-9, #ecf5ff);\n}\n.assistant-nav__status[data-v-ce1df2dc] {\n  flex-shrink: 0;\n  margin-top: 2px;\n  font-size: 13px;\n}\n.assistant-nav__status.is-running[data-v-ce1df2dc] {\n  color: var(--el-color-primary, #409eff);\n}\n.assistant-nav__status.is-waiting[data-v-ce1df2dc] {\n  color: var(--el-color-warning, #e6a23c);\n}\n.assistant-nav__status.is-failed[data-v-ce1df2dc] {\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-nav__status.is-cancelled[data-v-ce1df2dc] {\n  color: var(--app-text-tertiary, #a8abb2);\n}\n.assistant-nav__status.is-unread[data-v-ce1df2dc] {\n  color: var(--el-color-warning, #e6a23c);\n}\n.assistant-nav__status.is-done[data-v-ce1df2dc] {\n  color: var(--el-color-success, #67c23a);\n}\n.assistant-nav__status.is-spinning[data-v-ce1df2dc] {\n  animation: assistant-nav-spin-ce1df2dc 1s linear infinite;\n}\n@keyframes assistant-nav-spin-ce1df2dc {\nfrom {\n    transform: rotate(0deg);\n}\nto {\n    transform: rotate(360deg);\n}\n}\n.assistant-nav__main[data-v-ce1df2dc] {\n  flex: 1;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n}\n.assistant-nav__name[data-v-ce1df2dc] {\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--app-text);\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.assistant-nav__meta[data-v-ce1df2dc] {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  margin-top: 2px;\n  font-size: 10px;\n  color: var(--app-text-secondary);\n}\n.assistant-nav__unread[data-v-ce1df2dc] {\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: var(--el-color-primary, #409eff);\n}\n.assistant-nav__delete[data-v-ce1df2dc] {\n  flex-shrink: 0;\n  border: none;\n  background: none;\n  cursor: pointer;\n  padding: 2px 4px;\n  border-radius: 6px;\n  font-size: 13px;\n  color: var(--app-text-tertiary, var(--app-text-secondary));\n  opacity: 0;\n  transition: opacity 0.15s, color 0.15s;\n}\n.assistant-nav__delete[data-v-ce1df2dc]:hover:not(:disabled) {\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-nav__delete[data-v-ce1df2dc]:disabled {\n  cursor: not-allowed;\n  opacity: 0.35;\n}\n.assistant-nav__loading[data-v-ce1df2dc],\n.assistant-nav__more[data-v-ce1df2dc] {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  width: 100%;\n  padding: 10px 0;\n  font-size: 11px;\n  color: var(--app-text-secondary);\n  background: none;\n  border: none;\n  cursor: pointer;\n}\n.assistant-nav__loading[data-v-ce1df2dc]:hover,\n.assistant-nav__more[data-v-ce1df2dc]:hover {\n  color: var(--app-text);\n}\n.is-spinning[data-v-ce1df2dc] {\n  animation: assistant-nav-spin-ce1df2dc 1s linear infinite;\n}\n.assistant-nav__delete-desc[data-v-ce1df2dc] {\n  margin: 0;\n  font-size: 13px;\n  color: var(--app-text);\n  line-height: 1.6;\n}\n.assistant-nav__delete-error[data-v-ce1df2dc] {\n  margin: 8px 0 0;\n  font-size: 12px;\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-nav__delete-actions[data-v-ce1df2dc] {\n  display: flex;\n  justify-content: flex-end;\n  gap: 8px;\n}";
+const AssistantConversationNav = /* @__PURE__ */ _export_sfc(_sfc_main$g, [["styles", [_style_0$g]], ["__scopeId", "data-v-ce1df2dc"]]);
+const _hoisted_1$f = {
   key: 0,
   class: "ia-empty__icon"
 };
-const _hoisted_2$a = {
+const _hoisted_2$b = {
   key: 0,
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
   "stroke-width": "1.5"
 };
-const _hoisted_3$8 = {
+const _hoisted_3$9 = {
   key: 1,
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
   "stroke-width": "1.5"
 };
-const _hoisted_4$7 = {
+const _hoisted_4$8 = {
   key: 2,
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
   "stroke-width": "1.5"
 };
-const _hoisted_5$7 = {
+const _hoisted_5$8 = {
   key: 3,
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
   "stroke-width": "1.5"
 };
-const _hoisted_6$7 = {
+const _hoisted_6$8 = {
   key: 1,
   class: "ia-empty__icon"
 };
@@ -11167,7 +11174,7 @@ const _hoisted_10$5 = {
   key: 5,
   class: "ia-empty__action"
 };
-const _sfc_main$e = /* @__PURE__ */ defineComponent({
+const _sfc_main$f = /* @__PURE__ */ defineComponent({
   ...{ name: "IaEmpty" },
   __name: "IaEmpty",
   props: {
@@ -11186,14 +11193,14 @@ const _sfc_main$e = /* @__PURE__ */ defineComponent({
         class: normalizeClass(["ia-empty", [`type-${__props.type}`]]),
         role: "status"
       }, [
-        !hasCustomIcon.value ? (openBlock(), createElementBlock("div", _hoisted_1$e, [
-          __props.type === "empty" ? (openBlock(), createElementBlock("svg", _hoisted_2$a, [..._cache[0] || (_cache[0] = [
+        !hasCustomIcon.value ? (openBlock(), createElementBlock("div", _hoisted_1$f, [
+          __props.type === "empty" ? (openBlock(), createElementBlock("svg", _hoisted_2$b, [..._cache[0] || (_cache[0] = [
             createBaseVNode("path", {
               d: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10",
               "stroke-linecap": "round",
               "stroke-linejoin": "round"
             }, null, -1)
-          ])])) : __props.type === "error" ? (openBlock(), createElementBlock("svg", _hoisted_3$8, [..._cache[1] || (_cache[1] = [
+          ])])) : __props.type === "error" ? (openBlock(), createElementBlock("svg", _hoisted_3$9, [..._cache[1] || (_cache[1] = [
             createBaseVNode("circle", {
               cx: "12",
               cy: "12",
@@ -11203,7 +11210,7 @@ const _sfc_main$e = /* @__PURE__ */ defineComponent({
               d: "M12 8v4m0 4h.01",
               "stroke-linecap": "round"
             }, null, -1)
-          ])])) : __props.type === "search" ? (openBlock(), createElementBlock("svg", _hoisted_4$7, [..._cache[2] || (_cache[2] = [
+          ])])) : __props.type === "search" ? (openBlock(), createElementBlock("svg", _hoisted_4$8, [..._cache[2] || (_cache[2] = [
             createBaseVNode("circle", {
               cx: "11",
               cy: "11",
@@ -11213,7 +11220,7 @@ const _sfc_main$e = /* @__PURE__ */ defineComponent({
               d: "m21 21-4.35-4.35",
               "stroke-linecap": "round"
             }, null, -1)
-          ])])) : (openBlock(), createElementBlock("svg", _hoisted_5$7, [..._cache[3] || (_cache[3] = [
+          ])])) : (openBlock(), createElementBlock("svg", _hoisted_5$8, [..._cache[3] || (_cache[3] = [
             createBaseVNode("circle", {
               cx: "11",
               cy: "11",
@@ -11224,7 +11231,7 @@ const _sfc_main$e = /* @__PURE__ */ defineComponent({
               "stroke-linecap": "round"
             }, null, -1)
           ])]))
-        ])) : (openBlock(), createElementBlock("div", _hoisted_6$7, [
+        ])) : (openBlock(), createElementBlock("div", _hoisted_6$8, [
           renderSlot(_ctx.$slots, "icon", {}, void 0)
         ])),
         !_ctx.$slots.default ? (openBlock(), createElementBlock("p", _hoisted_7$7, toDisplayString(resolvedTitle.value), 1)) : (openBlock(), createElementBlock("p", _hoisted_8$6, [
@@ -11238,8 +11245,8 @@ const _sfc_main$e = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const _style_0$e = "\n.ia-empty[data-v-052bbcb7] {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  padding: 32px;\n  text-align: center;\n  color: var(--app-text-secondary, var(--ia-text-secondary, #606266));\n}\n.ia-empty__icon[data-v-052bbcb7] {\n  width: 64px;\n  height: 64px;\n  color: var(--app-text-tertiary, var(--ia-text-tertiary, #a8abb2));\n  margin-bottom: 12px;\n}\n.ia-empty__icon svg[data-v-052bbcb7] { width: 100%; height: 100%; display: block;\n}\n.ia-empty__title[data-v-052bbcb7] {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 500;\n  color: var(--app-text-secondary, var(--ia-text-secondary, #606266));\n}\n.ia-empty__desc[data-v-052bbcb7] {\n  margin: 6px 0 0;\n  font-size: 12px;\n  color: var(--app-text-tertiary, var(--ia-text-tertiary, #a8abb2));\n  max-width: 320px;\n}\n.ia-empty__action[data-v-052bbcb7] {\n  margin-top: 12px;\n  display: flex;\n  gap: 8px;\n  align-items: center;\n}\n";
-const IaEmpty = /* @__PURE__ */ _export_sfc(_sfc_main$e, [["styles", [_style_0$e]], ["__scopeId", "data-v-052bbcb7"]]);
+const _style_0$f = "\n.ia-empty[data-v-052bbcb7] {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  padding: 32px;\n  text-align: center;\n  color: var(--app-text-secondary, var(--ia-text-secondary, #606266));\n}\n.ia-empty__icon[data-v-052bbcb7] {\n  width: 64px;\n  height: 64px;\n  color: var(--app-text-tertiary, var(--ia-text-tertiary, #a8abb2));\n  margin-bottom: 12px;\n}\n.ia-empty__icon svg[data-v-052bbcb7] { width: 100%; height: 100%; display: block;\n}\n.ia-empty__title[data-v-052bbcb7] {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 500;\n  color: var(--app-text-secondary, var(--ia-text-secondary, #606266));\n}\n.ia-empty__desc[data-v-052bbcb7] {\n  margin: 6px 0 0;\n  font-size: 12px;\n  color: var(--app-text-tertiary, var(--ia-text-tertiary, #a8abb2));\n  max-width: 320px;\n}\n.ia-empty__action[data-v-052bbcb7] {\n  margin-top: 12px;\n  display: flex;\n  gap: 8px;\n  align-items: center;\n}\n";
+const IaEmpty = /* @__PURE__ */ _export_sfc(_sfc_main$f, [["styles", [_style_0$f]], ["__scopeId", "data-v-052bbcb7"]]);
 function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -11389,8 +11396,8 @@ function renderMarkdown(source) {
   flushAll();
   return blocks.join("");
 }
-const _hoisted_1$d = ["innerHTML"];
-const _sfc_main$d = /* @__PURE__ */ defineComponent({
+const _hoisted_1$e = ["innerHTML"];
+const _sfc_main$e = /* @__PURE__ */ defineComponent({
   ...{ name: "AssistantMarkdown" },
   __name: "AssistantMarkdown",
   props: {
@@ -11405,12 +11412,12 @@ const _sfc_main$d = /* @__PURE__ */ defineComponent({
         class: normalizeClass(["assistant-markdown", { "is-compact": __props.compact }]),
         "data-testid": "assistant-markdown",
         innerHTML: html.value
-      }, null, 10, _hoisted_1$d);
+      }, null, 10, _hoisted_1$e);
     };
   }
 });
-const _style_0$d = ".assistant-markdown[data-v-3e16e316] {\n  min-width: 0;\n  font-size: 13px;\n  line-height: 1.7;\n  color: var(--app-text);\n  word-break: break-word;\n}\n.assistant-markdown[data-v-3e16e316] .md-p {\n  margin: 0 0 8px;\n  white-space: pre-wrap;\n}\n.assistant-markdown[data-v-3e16e316] .md-p:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-heading {\n  margin: 10px 0 6px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n.assistant-markdown[data-v-3e16e316] .md-heading:first-child {\n  margin-top: 0;\n}\n.assistant-markdown[data-v-3e16e316] h1.md-heading {\n  font-size: 17px;\n}\n.assistant-markdown[data-v-3e16e316] h2.md-heading {\n  font-size: 16px;\n}\n.assistant-markdown[data-v-3e16e316] h3.md-heading {\n  font-size: 15px;\n}\n.assistant-markdown[data-v-3e16e316] h4.md-heading {\n  font-size: 14px;\n}\n.assistant-markdown[data-v-3e16e316] h5.md-heading, .assistant-markdown[data-v-3e16e316] h6.md-heading {\n  font-size: 13px;\n}\n.assistant-markdown[data-v-3e16e316] .md-list {\n  margin: 0 0 8px;\n  padding-left: 20px;\n}\n.assistant-markdown[data-v-3e16e316] .md-list:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-list li {\n  margin: 2px 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-quote {\n  margin: 0 0 8px;\n  padding: 4px 10px;\n  border-left: 3px solid var(--app-separator, var(--el-border-color, #dcdfe6));\n  color: var(--app-text-secondary);\n}\n.assistant-markdown[data-v-3e16e316] .md-quote:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-hr {\n  margin: 10px 0;\n  border: none;\n  border-top: 1px solid var(--app-separator, var(--el-border-color-lighter, #ebeef5));\n}\n.assistant-markdown[data-v-3e16e316] .md-table {\n  display: block;\n  width: 100%;\n  margin: 0 0 8px;\n  overflow-x: auto;\n  border-collapse: collapse;\n  font-size: 12px;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter, #ebeef5));\n  border-radius: 6px;\n}\n.assistant-markdown[data-v-3e16e316] .md-table:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-table th, .assistant-markdown[data-v-3e16e316] .md-table td {\n  padding: 6px 10px;\n  text-align: left;\n  border-bottom: 1px solid var(--app-separator, var(--el-border-color-lighter, #ebeef5));\n}\n.assistant-markdown[data-v-3e16e316] .md-table th {\n  font-weight: 600;\n  white-space: nowrap;\n  background: var(--app-bg-muted, #f5f5f7);\n}\n.assistant-markdown[data-v-3e16e316] .md-table tbody tr:last-child td {\n  border-bottom: none;\n}\n.assistant-markdown[data-v-3e16e316] .md-codeblock {\n  margin: 0 0 8px;\n  overflow: hidden;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter, #ebeef5));\n  border-radius: 8px;\n}\n.assistant-markdown[data-v-3e16e316] .md-codeblock:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-codeblock__head {\n  display: flex;\n  align-items: center;\n  padding: 4px 10px;\n  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;\n  font-size: 11px;\n  font-weight: 600;\n  color: var(--app-text-secondary);\n  background: var(--app-bg-muted, #f5f5f7);\n}\n.assistant-markdown[data-v-3e16e316] .md-pre {\n  margin: 0;\n  padding: 10px 12px;\n  overflow-x: auto;\n  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;\n  font-size: 12px;\n  line-height: 1.6;\n  background: var(--app-bg-muted, #f5f5f7);\n}\n.assistant-markdown[data-v-3e16e316] .md-code {\n  padding: 1px 5px;\n  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;\n  font-size: 0.86em;\n  border-radius: 4px;\n  background: var(--app-bg-muted, #f5f5f7);\n}\n.assistant-markdown[data-v-3e16e316] .md-pre .md-code {\n  padding: 0;\n  background: transparent;\n}\n.assistant-markdown[data-v-3e16e316] a {\n  color: var(--el-color-primary, #409eff);\n  text-decoration: none;\n}\n.assistant-markdown[data-v-3e16e316] a:hover {\n  text-decoration: underline;\n}\n.assistant-markdown[data-v-3e16e316] .md-img {\n  max-width: 100%;\n  border-radius: 8px;\n}\n.assistant-markdown.is-compact[data-v-3e16e316] {\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--app-text-secondary);\n}\n.assistant-markdown.is-compact[data-v-3e16e316] .md-heading {\n  font-size: 12px;\n}";
-const AssistantMarkdown = /* @__PURE__ */ _export_sfc(_sfc_main$d, [["styles", [_style_0$d]], ["__scopeId", "data-v-3e16e316"]]);
+const _style_0$e = ".assistant-markdown[data-v-3e16e316] {\n  min-width: 0;\n  font-size: 13px;\n  line-height: 1.7;\n  color: var(--app-text);\n  word-break: break-word;\n}\n.assistant-markdown[data-v-3e16e316] .md-p {\n  margin: 0 0 8px;\n  white-space: pre-wrap;\n}\n.assistant-markdown[data-v-3e16e316] .md-p:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-heading {\n  margin: 10px 0 6px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n.assistant-markdown[data-v-3e16e316] .md-heading:first-child {\n  margin-top: 0;\n}\n.assistant-markdown[data-v-3e16e316] h1.md-heading {\n  font-size: 17px;\n}\n.assistant-markdown[data-v-3e16e316] h2.md-heading {\n  font-size: 16px;\n}\n.assistant-markdown[data-v-3e16e316] h3.md-heading {\n  font-size: 15px;\n}\n.assistant-markdown[data-v-3e16e316] h4.md-heading {\n  font-size: 14px;\n}\n.assistant-markdown[data-v-3e16e316] h5.md-heading, .assistant-markdown[data-v-3e16e316] h6.md-heading {\n  font-size: 13px;\n}\n.assistant-markdown[data-v-3e16e316] .md-list {\n  margin: 0 0 8px;\n  padding-left: 20px;\n}\n.assistant-markdown[data-v-3e16e316] .md-list:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-list li {\n  margin: 2px 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-quote {\n  margin: 0 0 8px;\n  padding: 4px 10px;\n  border-left: 3px solid var(--app-separator, var(--el-border-color, #dcdfe6));\n  color: var(--app-text-secondary);\n}\n.assistant-markdown[data-v-3e16e316] .md-quote:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-hr {\n  margin: 10px 0;\n  border: none;\n  border-top: 1px solid var(--app-separator, var(--el-border-color-lighter, #ebeef5));\n}\n.assistant-markdown[data-v-3e16e316] .md-table {\n  display: block;\n  width: 100%;\n  margin: 0 0 8px;\n  overflow-x: auto;\n  border-collapse: collapse;\n  font-size: 12px;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter, #ebeef5));\n  border-radius: 6px;\n}\n.assistant-markdown[data-v-3e16e316] .md-table:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-table th, .assistant-markdown[data-v-3e16e316] .md-table td {\n  padding: 6px 10px;\n  text-align: left;\n  border-bottom: 1px solid var(--app-separator, var(--el-border-color-lighter, #ebeef5));\n}\n.assistant-markdown[data-v-3e16e316] .md-table th {\n  font-weight: 600;\n  white-space: nowrap;\n  background: var(--app-bg-muted, #f5f5f7);\n}\n.assistant-markdown[data-v-3e16e316] .md-table tbody tr:last-child td {\n  border-bottom: none;\n}\n.assistant-markdown[data-v-3e16e316] .md-codeblock {\n  margin: 0 0 8px;\n  overflow: hidden;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter, #ebeef5));\n  border-radius: 8px;\n}\n.assistant-markdown[data-v-3e16e316] .md-codeblock:last-child {\n  margin-bottom: 0;\n}\n.assistant-markdown[data-v-3e16e316] .md-codeblock__head {\n  display: flex;\n  align-items: center;\n  padding: 4px 10px;\n  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;\n  font-size: 11px;\n  font-weight: 600;\n  color: var(--app-text-secondary);\n  background: var(--app-bg-muted, #f5f5f7);\n}\n.assistant-markdown[data-v-3e16e316] .md-pre {\n  margin: 0;\n  padding: 10px 12px;\n  overflow-x: auto;\n  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;\n  font-size: 12px;\n  line-height: 1.6;\n  background: var(--app-bg-muted, #f5f5f7);\n}\n.assistant-markdown[data-v-3e16e316] .md-code {\n  padding: 1px 5px;\n  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;\n  font-size: 0.86em;\n  border-radius: 4px;\n  background: var(--app-bg-muted, #f5f5f7);\n}\n.assistant-markdown[data-v-3e16e316] .md-pre .md-code {\n  padding: 0;\n  background: transparent;\n}\n.assistant-markdown[data-v-3e16e316] a {\n  color: var(--el-color-primary, #409eff);\n  text-decoration: none;\n}\n.assistant-markdown[data-v-3e16e316] a:hover {\n  text-decoration: underline;\n}\n.assistant-markdown[data-v-3e16e316] .md-img {\n  max-width: 100%;\n  border-radius: 8px;\n}\n.assistant-markdown.is-compact[data-v-3e16e316] {\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--app-text-secondary);\n}\n.assistant-markdown.is-compact[data-v-3e16e316] .md-heading {\n  font-size: 12px;\n}";
+const AssistantMarkdown = /* @__PURE__ */ _export_sfc(_sfc_main$e, [["styles", [_style_0$e]], ["__scopeId", "data-v-3e16e316"]]);
 const REASONING_TIMER_INTERVAL_MS = 100;
 function useReasoningElapsedMs(startedAtMs, durationMs, active2) {
   const now = /* @__PURE__ */ ref(Date.now());
@@ -11450,8 +11457,8 @@ function useReasoningElapsedMs(startedAtMs, durationMs, active2) {
     return Math.max(0, now.value - startedAtMs.value);
   });
 }
-const _hoisted_1$c = { class: "assistant-reasoning" };
-const _sfc_main$c = /* @__PURE__ */ defineComponent({
+const _hoisted_1$d = { class: "assistant-reasoning" };
+const _sfc_main$d = /* @__PURE__ */ defineComponent({
   ...{ name: "AssistantReasoning" },
   __name: "AssistantReasoning",
   props: {
@@ -11474,7 +11481,7 @@ const _sfc_main$c = /* @__PURE__ */ defineComponent({
       return t("notification.reasoning");
     });
     return (_ctx, _cache) => {
-      return openBlock(), createElementBlock("details", _hoisted_1$c, [
+      return openBlock(), createElementBlock("details", _hoisted_1$d, [
         createBaseVNode("summary", null, toDisplayString(title.value), 1),
         createVNode(AssistantMarkdown, {
           compact: "",
@@ -11484,10 +11491,10 @@ const _sfc_main$c = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const _style_0$c = ".assistant-reasoning[data-v-f2aa0c94] {\n  min-width: 0;\n}\n.assistant-reasoning summary[data-v-f2aa0c94] {\n  cursor: pointer;\n  font-size: 12px;\n  color: var(--app-text-secondary, var(--app-text));\n  user-select: none;\n}";
-const AssistantReasoning = /* @__PURE__ */ _export_sfc(_sfc_main$c, [["styles", [_style_0$c]], ["__scopeId", "data-v-f2aa0c94"]]);
-const _hoisted_1$b = ["title"];
-const _sfc_main$b = /* @__PURE__ */ defineComponent({
+const _style_0$d = ".assistant-reasoning[data-v-f2aa0c94] {\n  min-width: 0;\n}\n.assistant-reasoning summary[data-v-f2aa0c94] {\n  cursor: pointer;\n  font-size: 12px;\n  color: var(--app-text-secondary, var(--app-text));\n  user-select: none;\n}";
+const AssistantReasoning = /* @__PURE__ */ _export_sfc(_sfc_main$d, [["styles", [_style_0$d]], ["__scopeId", "data-v-f2aa0c94"]]);
+const _hoisted_1$c = ["title"];
+const _sfc_main$c = /* @__PURE__ */ defineComponent({
   ...{ name: "AssistantScopeChip" },
   __name: "AssistantScopeChip",
   props: {
@@ -11505,12 +11512,12 @@ const _sfc_main$b = /* @__PURE__ */ defineComponent({
           class: normalizeClass(__props.scope.degraded ? "ri-shield-keyhole-line" : "ri-guide-line")
         }, null, 2),
         createBaseVNode("span", null, toDisplayString(__props.scope.degraded ? unref(t)("assistant.confirm-scope-degraded") : __props.scope.summary ? unref(t)("assistant.confirm-scope-resolved", { summary: __props.scope.summary }) : unref(t)("assistant.confirm-scope-resolved-default")), 1)
-      ], 10, _hoisted_1$b);
+      ], 10, _hoisted_1$c);
     };
   }
 });
-const _style_0$b = '@charset "UTF-8";\n.assistant-scope-chip[data-v-a46d18b1] {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  max-width: 100%;\n  margin: 4px 0 0;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.assistant-scope-chip > i[data-v-a46d18b1] {\n  flex-shrink: 0;\n  font-size: 12px;\n}\n.assistant-scope-chip[data-v-a46d18b1] {\n  /* resolved:信息性标记 */\n  color: var(--app-text-secondary);\n  background: var(--app-bg-muted, #f5f5f7);\n  /* degraded:弱警示(PRD §6.1.4 降级语义,不阻塞确认流) */\n}\n.assistant-scope-chip.is-degraded[data-v-a46d18b1] {\n  color: var(--app-color-warning, var(--el-color-warning, #e6a23c));\n  background: var(--el-color-warning-light-9, #fdf6ec);\n}';
-const AssistantScopeChip = /* @__PURE__ */ _export_sfc(_sfc_main$b, [["styles", [_style_0$b]], ["__scopeId", "data-v-a46d18b1"]]);
+const _style_0$c = '@charset "UTF-8";\n.assistant-scope-chip[data-v-a46d18b1] {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  max-width: 100%;\n  margin: 4px 0 0;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.assistant-scope-chip > i[data-v-a46d18b1] {\n  flex-shrink: 0;\n  font-size: 12px;\n}\n.assistant-scope-chip[data-v-a46d18b1] {\n  /* resolved:信息性标记 */\n  color: var(--app-text-secondary);\n  background: var(--app-bg-muted, #f5f5f7);\n  /* degraded:弱警示(PRD §6.1.4 降级语义,不阻塞确认流) */\n}\n.assistant-scope-chip.is-degraded[data-v-a46d18b1] {\n  color: var(--app-color-warning, var(--el-color-warning, #e6a23c));\n  background: var(--el-color-warning-light-9, #fdf6ec);\n}';
+const AssistantScopeChip = /* @__PURE__ */ _export_sfc(_sfc_main$c, [["styles", [_style_0$c]], ["__scopeId", "data-v-a46d18b1"]]);
 const TASK_MEDIA_URL_LINE_REGEXP = /((?:视频地址|下载地址)[:：]\s*)(https?:\/\/[^\s)]+|\/media\/[^\s)]+)/g;
 function parseTaskMediaLinks(content) {
   const mediaLinks = [];
@@ -11594,21 +11601,21 @@ function useToolConfirmationCountdown(expiresAt, updateEverySecond = true) {
     };
   });
 }
-const _hoisted_1$a = {
+const _hoisted_1$b = {
   class: "assistant-timeline",
   "data-testid": "assistant-timeline"
 };
-const _hoisted_2$9 = {
+const _hoisted_2$a = {
   key: 0,
   class: "assistant-timeline__tool-wrap"
 };
-const _hoisted_3$7 = ["data-testid"];
-const _hoisted_4$6 = { class: "assistant-timeline__tool-name" };
-const _hoisted_5$6 = {
+const _hoisted_3$8 = ["data-testid"];
+const _hoisted_4$7 = { class: "assistant-timeline__tool-name" };
+const _hoisted_5$7 = {
   key: 0,
   class: "assistant-timeline__countdown"
 };
-const _hoisted_6$6 = {
+const _hoisted_6$7 = {
   key: 2,
   class: "assistant-timeline__plan"
 };
@@ -11648,7 +11655,7 @@ const _hoisted_21$2 = { class: "assistant-media-card__info" };
 const _hoisted_22$2 = { class: "assistant-media-card__label" };
 const _hoisted_23$2 = ["href", "title"];
 const _hoisted_24$1 = ["href"];
-const _sfc_main$a = /* @__PURE__ */ defineComponent({
+const _sfc_main$b = /* @__PURE__ */ defineComponent({
   ...{ name: "AssistantTimeline" },
   __name: "AssistantTimeline",
   props: {
@@ -11727,12 +11734,12 @@ const _sfc_main$a = /* @__PURE__ */ defineComponent({
       }
     }
     return (_ctx, _cache) => {
-      return openBlock(), createElementBlock("div", _hoisted_1$a, [
+      return openBlock(), createElementBlock("div", _hoisted_1$b, [
         (openBlock(true), createElementBlock(Fragment, null, renderList(__props.items, (item, index) => {
           return openBlock(), createElementBlock(Fragment, {
             key: `${item.type}-${index}`
           }, [
-            item.type === "tool" ? (openBlock(), createElementBlock("div", _hoisted_2$9, [
+            item.type === "tool" ? (openBlock(), createElementBlock("div", _hoisted_2$a, [
               createBaseVNode("div", {
                 class: "assistant-timeline__tool",
                 "data-testid": `assistant-tool-${index}`
@@ -11741,16 +11748,16 @@ const _sfc_main$a = /* @__PURE__ */ defineComponent({
                   class: "ri-tools-line",
                   "aria-hidden": "true"
                 }, null, -1)),
-                createBaseVNode("span", _hoisted_4$6, toDisplayString(unref(getToolDisplayName)(item.name)), 1),
+                createBaseVNode("span", _hoisted_4$7, toDisplayString(unref(getToolDisplayName)(item.name)), 1),
                 createBaseVNode("span", {
                   class: normalizeClass(["assistant-timeline__tool-status", `is-${item.status}`])
                 }, toDisplayString(unref(t)(toolStatusKey(item.status))), 3),
-                isConfirmedTool(item.id, void 0) && item.status === "awaiting_approval" && singleToolBatch.value && unref(countdown) && !unref(countdown).expired ? (openBlock(), createElementBlock("span", _hoisted_5$6, toDisplayString(unref(t)("assistant.tool-awaiting", { time: unref(countdown).label })), 1)) : createCommentVNode("", true),
+                isConfirmedTool(item.id, void 0) && item.status === "awaiting_approval" && singleToolBatch.value && unref(countdown) && !unref(countdown).expired ? (openBlock(), createElementBlock("span", _hoisted_5$7, toDisplayString(unref(t)("assistant.tool-awaiting", { time: unref(countdown).label })), 1)) : createCommentVNode("", true),
                 isConfirmedTool(item.id, void 0) && item.status === "awaiting_approval" && singleToolBatch.value?.scope ? (openBlock(), createBlock(AssistantScopeChip, {
                   key: 1,
                   scope: singleToolBatch.value.scope
                 }, null, 8, ["scope"])) : createCommentVNode("", true),
-                item.plan ? (openBlock(), createElementBlock("div", _hoisted_6$6, [
+                item.plan ? (openBlock(), createElementBlock("div", _hoisted_6$7, [
                   createBaseVNode("p", _hoisted_7$6, toDisplayString(item.plan.summary), 1),
                   (openBlock(true), createElementBlock(Fragment, null, renderList(item.plan.changes, (change, ci) => {
                     return openBlock(), createElementBlock("p", {
@@ -11875,7 +11882,7 @@ const _sfc_main$a = /* @__PURE__ */ defineComponent({
                   compact: "",
                   content: item.result
                 }, null, 8, ["content"])) : createCommentVNode("", true)
-              ], 8, _hoisted_3$7)
+              ], 8, _hoisted_3$8)
             ])) : item.type === "reasoning" ? (openBlock(), createBlock(AssistantReasoning, {
               key: 1,
               class: "assistant-timeline__reasoning",
@@ -11942,22 +11949,22 @@ const _sfc_main$a = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const _style_0$a = '@charset "UTF-8";\n.assistant-timeline[data-v-69560def] {\n  min-width: 0;\n  width: 100%;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n.assistant-timeline__content[data-v-69560def] {\n  margin: 0;\n  font-size: 13px;\n  line-height: 1.7;\n  color: var(--app-text);\n  word-break: break-word;\n}\n\n/* 媒体链接卡片 (对齐旧 TaskMediaLinks: 标签+链接+下载视频) */\n.assistant-timeline__media-list[data-v-69560def] {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  margin-top: 8px;\n}\n.assistant-media-card[data-v-69560def] {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 12px;\n  padding: 12px 14px;\n  border: 1px solid var(--app-border, rgba(0, 0, 0, 0.1));\n  border-radius: 12px;\n  background: var(--app-surface-muted, rgba(0, 0, 0, 0.03));\n}\n.assistant-media-card__info[data-v-69560def] {\n  min-width: 0;\n  flex: 1;\n}\n.assistant-media-card__label[data-v-69560def] {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--app-text-secondary, var(--app-text));\n}\n.assistant-media-card__url[data-v-69560def] {\n  display: block;\n  margin-top: 4px;\n  font-size: 12px;\n  line-height: 1.6;\n  word-break: break-all;\n  color: var(--app-text-secondary, var(--app-text));\n  text-decoration: underline dotted;\n  text-underline-offset: 2px;\n}\n.assistant-media-card__url[data-v-69560def]:hover {\n  color: var(--app-text);\n}\n.assistant-media-card__dl-icon[data-v-69560def] {\n  width: 14px;\n  height: 14px;\n}\n.assistant-media-card__download[data-v-69560def] {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n  padding: 8px 12px;\n  border: 1px solid var(--app-primary, #409eff);\n  border-radius: 8px;\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--app-primary, #409eff);\n  text-decoration: none;\n}\n.assistant-media-card__download[data-v-69560def]:hover {\n  background: color-mix(in srgb, var(--app-primary, #409eff) 12%, transparent);\n}\n.assistant-timeline__reasoning[data-v-69560def] {\n  font-size: 12px;\n  color: var(--app-text-secondary);\n}\n.assistant-timeline__reasoning summary[data-v-69560def] {\n  cursor: pointer;\n  color: var(--app-text-tertiary, var(--app-text-secondary));\n}\n.assistant-timeline__reasoning .assistant-timeline__reasoning-text[data-v-69560def] {\n  margin: 6px 0 0;\n}\n.assistant-timeline__tool-wrap[data-v-69560def] {\n  /* 长会话性能: 视口外工具行跳过布局/绘制 (旧 timeline.tsx:44-49) */\n  content-visibility: auto;\n  contain-intrinsic-size: auto 48px;\n}\n.assistant-timeline__tool[data-v-69560def],\n.assistant-timeline__child-tool[data-v-69560def] {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  padding: 8px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter));\n  font-size: 12px;\n}\n.assistant-timeline__tool > i[data-v-69560def],\n.assistant-timeline__child-tool > i[data-v-69560def] {\n  color: var(--app-text-tertiary, var(--app-text-secondary));\n}\n.assistant-timeline__child-tool[data-v-69560def] {\n  padding: 6px 8px;\n}\n.assistant-timeline__tool-name[data-v-69560def] {\n  font-weight: 500;\n  color: var(--app-text);\n}\n.assistant-timeline__tool-status[data-v-69560def] {\n  margin-left: auto;\n  font-size: 11px;\n}\n.assistant-timeline__tool-status.is-awaiting_approval[data-v-69560def] {\n  color: var(--el-color-warning, #e6a23c);\n}\n.assistant-timeline__tool-status.is-done[data-v-69560def] {\n  color: var(--el-color-success, #67c23a);\n}\n.assistant-timeline__tool-status.is-error[data-v-69560def] {\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-timeline__tool-status.is-cancelled[data-v-69560def], .assistant-timeline__tool-status.is-rejected[data-v-69560def], .assistant-timeline__tool-status.is-expired[data-v-69560def] {\n  color: var(--app-text-tertiary, #a8abb2);\n}\n.assistant-timeline__tool-status.is-calling[data-v-69560def], .assistant-timeline__tool-status.is-approved[data-v-69560def], .assistant-timeline__tool-status.is-preparing[data-v-69560def] {\n  color: var(--el-color-primary, #409eff);\n}\n.assistant-timeline__countdown[data-v-69560def] {\n  font-size: 11px;\n  color: var(--el-color-warning, #e6a23c);\n  font-variant-numeric: tabular-nums;\n}\n.assistant-timeline__confirm[data-v-69560def] {\n  width: 100%;\n  display: flex;\n  justify-content: flex-end;\n  gap: 8px;\n  padding-top: 6px;\n  border-top: 1px dashed var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-timeline__plan[data-v-69560def] {\n  width: 100%;\n  padding-top: 6px;\n  border-top: 1px dashed var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-timeline__plan-summary[data-v-69560def] {\n  margin: 0 0 4px;\n  color: var(--app-text);\n}\n.assistant-timeline__plan-change[data-v-69560def] {\n  margin: 2px 0 0;\n  font-size: 11px;\n  color: var(--app-text-secondary);\n  font-variant-numeric: tabular-nums;\n}\n.assistant-timeline__children-wrap[data-v-69560def] {\n  width: 100%;\n}\n.assistant-timeline__children-toggle[data-v-69560def] {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  padding: 2px 6px;\n  margin: 4px 0;\n  border: none;\n  border-radius: 6px;\n  background: transparent;\n  font-size: 12px;\n  color: var(--app-text-secondary, var(--app-text));\n  cursor: pointer;\n}\n.assistant-timeline__children-toggle[data-v-69560def]:hover {\n  background: var(--app-fill-color, rgba(0, 0, 0, 0.04));\n}\n.assistant-timeline__children[data-v-69560def] {\n  width: 100%;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 8px 10px;\n  border-top: 1px dashed var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-timeline__sub-content[data-v-69560def] {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--app-text-secondary);\n  word-break: break-word;\n}\n.assistant-timeline__result[data-v-69560def] {\n  width: 100%;\n  margin: 0;\n  font-size: 11px;\n  color: var(--app-text-secondary);\n  word-break: break-word;\n  max-height: 120px;\n  overflow-y: auto;\n}';
-const AssistantTimeline = /* @__PURE__ */ _export_sfc(_sfc_main$a, [["styles", [_style_0$a]], ["__scopeId", "data-v-69560def"]]);
-const _hoisted_1$9 = {
+const _style_0$b = '@charset "UTF-8";\n.assistant-timeline[data-v-69560def] {\n  min-width: 0;\n  width: 100%;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n.assistant-timeline__content[data-v-69560def] {\n  margin: 0;\n  font-size: 13px;\n  line-height: 1.7;\n  color: var(--app-text);\n  word-break: break-word;\n}\n\n/* 媒体链接卡片 (对齐旧 TaskMediaLinks: 标签+链接+下载视频) */\n.assistant-timeline__media-list[data-v-69560def] {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  margin-top: 8px;\n}\n.assistant-media-card[data-v-69560def] {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 12px;\n  padding: 12px 14px;\n  border: 1px solid var(--app-border, rgba(0, 0, 0, 0.1));\n  border-radius: 12px;\n  background: var(--app-surface-muted, rgba(0, 0, 0, 0.03));\n}\n.assistant-media-card__info[data-v-69560def] {\n  min-width: 0;\n  flex: 1;\n}\n.assistant-media-card__label[data-v-69560def] {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--app-text-secondary, var(--app-text));\n}\n.assistant-media-card__url[data-v-69560def] {\n  display: block;\n  margin-top: 4px;\n  font-size: 12px;\n  line-height: 1.6;\n  word-break: break-all;\n  color: var(--app-text-secondary, var(--app-text));\n  text-decoration: underline dotted;\n  text-underline-offset: 2px;\n}\n.assistant-media-card__url[data-v-69560def]:hover {\n  color: var(--app-text);\n}\n.assistant-media-card__dl-icon[data-v-69560def] {\n  width: 14px;\n  height: 14px;\n}\n.assistant-media-card__download[data-v-69560def] {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n  padding: 8px 12px;\n  border: 1px solid var(--app-primary, #409eff);\n  border-radius: 8px;\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--app-primary, #409eff);\n  text-decoration: none;\n}\n.assistant-media-card__download[data-v-69560def]:hover {\n  background: color-mix(in srgb, var(--app-primary, #409eff) 12%, transparent);\n}\n.assistant-timeline__reasoning[data-v-69560def] {\n  font-size: 12px;\n  color: var(--app-text-secondary);\n}\n.assistant-timeline__reasoning summary[data-v-69560def] {\n  cursor: pointer;\n  color: var(--app-text-tertiary, var(--app-text-secondary));\n}\n.assistant-timeline__reasoning .assistant-timeline__reasoning-text[data-v-69560def] {\n  margin: 6px 0 0;\n}\n.assistant-timeline__tool-wrap[data-v-69560def] {\n  /* 长会话性能: 视口外工具行跳过布局/绘制 (旧 timeline.tsx:44-49) */\n  content-visibility: auto;\n  contain-intrinsic-size: auto 48px;\n}\n.assistant-timeline__tool[data-v-69560def],\n.assistant-timeline__child-tool[data-v-69560def] {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  padding: 8px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter));\n  font-size: 12px;\n}\n.assistant-timeline__tool > i[data-v-69560def],\n.assistant-timeline__child-tool > i[data-v-69560def] {\n  color: var(--app-text-tertiary, var(--app-text-secondary));\n}\n.assistant-timeline__child-tool[data-v-69560def] {\n  padding: 6px 8px;\n}\n.assistant-timeline__tool-name[data-v-69560def] {\n  font-weight: 500;\n  color: var(--app-text);\n}\n.assistant-timeline__tool-status[data-v-69560def] {\n  margin-left: auto;\n  font-size: 11px;\n}\n.assistant-timeline__tool-status.is-awaiting_approval[data-v-69560def] {\n  color: var(--el-color-warning, #e6a23c);\n}\n.assistant-timeline__tool-status.is-done[data-v-69560def] {\n  color: var(--el-color-success, #67c23a);\n}\n.assistant-timeline__tool-status.is-error[data-v-69560def] {\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-timeline__tool-status.is-cancelled[data-v-69560def], .assistant-timeline__tool-status.is-rejected[data-v-69560def], .assistant-timeline__tool-status.is-expired[data-v-69560def] {\n  color: var(--app-text-tertiary, #a8abb2);\n}\n.assistant-timeline__tool-status.is-calling[data-v-69560def], .assistant-timeline__tool-status.is-approved[data-v-69560def], .assistant-timeline__tool-status.is-preparing[data-v-69560def] {\n  color: var(--el-color-primary, #409eff);\n}\n.assistant-timeline__countdown[data-v-69560def] {\n  font-size: 11px;\n  color: var(--el-color-warning, #e6a23c);\n  font-variant-numeric: tabular-nums;\n}\n.assistant-timeline__confirm[data-v-69560def] {\n  width: 100%;\n  display: flex;\n  justify-content: flex-end;\n  gap: 8px;\n  padding-top: 6px;\n  border-top: 1px dashed var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-timeline__plan[data-v-69560def] {\n  width: 100%;\n  padding-top: 6px;\n  border-top: 1px dashed var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-timeline__plan-summary[data-v-69560def] {\n  margin: 0 0 4px;\n  color: var(--app-text);\n}\n.assistant-timeline__plan-change[data-v-69560def] {\n  margin: 2px 0 0;\n  font-size: 11px;\n  color: var(--app-text-secondary);\n  font-variant-numeric: tabular-nums;\n}\n.assistant-timeline__children-wrap[data-v-69560def] {\n  width: 100%;\n}\n.assistant-timeline__children-toggle[data-v-69560def] {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  padding: 2px 6px;\n  margin: 4px 0;\n  border: none;\n  border-radius: 6px;\n  background: transparent;\n  font-size: 12px;\n  color: var(--app-text-secondary, var(--app-text));\n  cursor: pointer;\n}\n.assistant-timeline__children-toggle[data-v-69560def]:hover {\n  background: var(--app-fill-color, rgba(0, 0, 0, 0.04));\n}\n.assistant-timeline__children[data-v-69560def] {\n  width: 100%;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 8px 10px;\n  border-top: 1px dashed var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-timeline__sub-content[data-v-69560def] {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--app-text-secondary);\n  word-break: break-word;\n}\n.assistant-timeline__result[data-v-69560def] {\n  width: 100%;\n  margin: 0;\n  font-size: 11px;\n  color: var(--app-text-secondary);\n  word-break: break-word;\n  max-height: 120px;\n  overflow-y: auto;\n}';
+const AssistantTimeline = /* @__PURE__ */ _export_sfc(_sfc_main$b, [["styles", [_style_0$b]], ["__scopeId", "data-v-69560def"]]);
+const _hoisted_1$a = {
   key: 0,
   class: "assistant-confirm-bar",
   "aria-live": "polite",
   "data-testid": "assistant-batch-approval"
 };
-const _hoisted_2$8 = { class: "assistant-confirm-bar__main" };
-const _hoisted_3$6 = { class: "assistant-confirm-bar__title" };
-const _hoisted_4$5 = { class: "assistant-confirm-bar__hint" };
-const _hoisted_5$5 = {
+const _hoisted_2$9 = { class: "assistant-confirm-bar__main" };
+const _hoisted_3$7 = { class: "assistant-confirm-bar__title" };
+const _hoisted_4$6 = { class: "assistant-confirm-bar__hint" };
+const _hoisted_5$6 = {
   key: 0,
   class: "assistant-confirm-bar__actions"
 };
-const _hoisted_6$5 = {
+const _hoisted_6$6 = {
   key: 0,
   class: "ri-loader-4-line is-spinning"
 };
@@ -11969,7 +11976,7 @@ const _hoisted_8$4 = {
   key: 1,
   class: "ri-check-double-line"
 };
-const _sfc_main$9 = /* @__PURE__ */ defineComponent({
+const _sfc_main$a = /* @__PURE__ */ defineComponent({
   ...{ name: "AssistantToolConfirmBar" },
   __name: "AssistantToolConfirmBar",
   props: {
@@ -12001,7 +12008,7 @@ const _sfc_main$9 = /* @__PURE__ */ defineComponent({
       });
     });
     return (_ctx, _cache) => {
-      return visible.value && __props.toolCallIds.length >= 2 ? (openBlock(), createElementBlock("section", _hoisted_1$9, [
+      return visible.value && __props.toolCallIds.length >= 2 ? (openBlock(), createElementBlock("section", _hoisted_1$a, [
         createBaseVNode("span", {
           class: normalizeClass(["assistant-confirm-bar__icon", { "is-spinning": __props.submitting && !expired.value }])
         }, [
@@ -12009,15 +12016,15 @@ const _sfc_main$9 = /* @__PURE__ */ defineComponent({
             class: normalizeClass(expired.value ? "ri-time-line" : __props.submitting ? "ri-loader-4-line" : "ri-shield-check-line")
           }, null, 2)
         ], 2),
-        createBaseVNode("div", _hoisted_2$8, [
-          createBaseVNode("p", _hoisted_3$6, toDisplayString(unref(t)("assistant.confirm-batch-title")), 1),
-          createBaseVNode("p", _hoisted_4$5, toDisplayString(hint.value), 1),
+        createBaseVNode("div", _hoisted_2$9, [
+          createBaseVNode("p", _hoisted_3$7, toDisplayString(unref(t)("assistant.confirm-batch-title")), 1),
+          createBaseVNode("p", _hoisted_4$6, toDisplayString(hint.value), 1),
           __props.scopeDigest ? (openBlock(), createBlock(AssistantScopeChip, {
             key: 0,
             scope: __props.scopeDigest
           }, null, 8, ["scope"])) : createCommentVNode("", true)
         ]),
-        !expired.value ? (openBlock(), createElementBlock("div", _hoisted_5$5, [
+        !expired.value ? (openBlock(), createElementBlock("div", _hoisted_5$6, [
           createVNode(IaButton, {
             variant: "secondary",
             size: "sm",
@@ -12026,7 +12033,7 @@ const _sfc_main$9 = /* @__PURE__ */ defineComponent({
             onClick: _cache[0] || (_cache[0] = ($event) => emit2("decision", false))
           }, {
             default: withCtx(() => [
-              __props.submitting && batchDecision.value === false ? (openBlock(), createElementBlock("i", _hoisted_6$5)) : createCommentVNode("", true),
+              __props.submitting && batchDecision.value === false ? (openBlock(), createElementBlock("i", _hoisted_6$6)) : createCommentVNode("", true),
               createTextVNode(" " + toDisplayString(unref(t)("assistant.confirm-reject-all")), 1)
             ]),
             _: 1
@@ -12048,11 +12055,11 @@ const _sfc_main$9 = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const _style_0$9 = ".assistant-confirm-bar[data-v-fecc2fa5] {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 10px 12px;\n  border-radius: 12px;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter));\n  background: var(--app-sidebar-item-hover-bg, var(--el-fill-color-light));\n}\n.assistant-confirm-bar__icon[data-v-fecc2fa5] {\n  flex-shrink: 0;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 50%;\n  background: var(--el-color-primary-light-9, #ecf5ff);\n  color: var(--el-color-primary, #409eff);\n  font-size: 15px;\n}\n.assistant-confirm-bar__icon.is-spinning[data-v-fecc2fa5] {\n  animation: assistant-confirm-spin-fecc2fa5 1s linear infinite;\n}\n@keyframes assistant-confirm-spin-fecc2fa5 {\nfrom {\n    transform: rotate(0deg);\n}\nto {\n    transform: rotate(360deg);\n}\n}\n.assistant-confirm-bar__main[data-v-fecc2fa5] {\n  flex: 1;\n  min-width: 0;\n}\n.assistant-confirm-bar__main p[data-v-fecc2fa5] {\n  margin: 0;\n}\n.assistant-confirm-bar__title[data-v-fecc2fa5] {\n  font-size: 13px;\n  font-weight: 500;\n  color: var(--app-text);\n}\n.assistant-confirm-bar__hint[data-v-fecc2fa5] {\n  margin-top: 2px;\n  font-size: 11px;\n  color: var(--app-text-secondary);\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.assistant-confirm-bar__actions[data-v-fecc2fa5] {\n  flex-shrink: 0;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n.is-spinning[data-v-fecc2fa5] {\n  animation: assistant-confirm-spin-fecc2fa5 1s linear infinite;\n}";
-const AssistantToolConfirmBar = /* @__PURE__ */ _export_sfc(_sfc_main$9, [["styles", [_style_0$9]], ["__scopeId", "data-v-fecc2fa5"]]);
-const _hoisted_1$8 = ["src", "alt"];
-const _hoisted_2$7 = ["aria-label"];
-const _sfc_main$8 = /* @__PURE__ */ defineComponent({
+const _style_0$a = ".assistant-confirm-bar[data-v-fecc2fa5] {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 10px 12px;\n  border-radius: 12px;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter));\n  background: var(--app-sidebar-item-hover-bg, var(--el-fill-color-light));\n}\n.assistant-confirm-bar__icon[data-v-fecc2fa5] {\n  flex-shrink: 0;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 50%;\n  background: var(--el-color-primary-light-9, #ecf5ff);\n  color: var(--el-color-primary, #409eff);\n  font-size: 15px;\n}\n.assistant-confirm-bar__icon.is-spinning[data-v-fecc2fa5] {\n  animation: assistant-confirm-spin-fecc2fa5 1s linear infinite;\n}\n@keyframes assistant-confirm-spin-fecc2fa5 {\nfrom {\n    transform: rotate(0deg);\n}\nto {\n    transform: rotate(360deg);\n}\n}\n.assistant-confirm-bar__main[data-v-fecc2fa5] {\n  flex: 1;\n  min-width: 0;\n}\n.assistant-confirm-bar__main p[data-v-fecc2fa5] {\n  margin: 0;\n}\n.assistant-confirm-bar__title[data-v-fecc2fa5] {\n  font-size: 13px;\n  font-weight: 500;\n  color: var(--app-text);\n}\n.assistant-confirm-bar__hint[data-v-fecc2fa5] {\n  margin-top: 2px;\n  font-size: 11px;\n  color: var(--app-text-secondary);\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.assistant-confirm-bar__actions[data-v-fecc2fa5] {\n  flex-shrink: 0;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n.is-spinning[data-v-fecc2fa5] {\n  animation: assistant-confirm-spin-fecc2fa5 1s linear infinite;\n}";
+const AssistantToolConfirmBar = /* @__PURE__ */ _export_sfc(_sfc_main$a, [["styles", [_style_0$a]], ["__scopeId", "data-v-fecc2fa5"]]);
+const _hoisted_1$9 = ["src", "alt"];
+const _hoisted_2$8 = ["aria-label"];
+const _sfc_main$9 = /* @__PURE__ */ defineComponent({
   ...{ name: "IaSafeImage" },
   __name: "SafeImage",
   props: {
@@ -12079,7 +12086,7 @@ const _sfc_main$8 = /* @__PURE__ */ defineComponent({
           emit2("error");
         }),
         onLoad: _cache[1] || (_cache[1] = ($event) => emit2("load"))
-      }, null, 40, _hoisted_1$8)) : (openBlock(), createElementBlock("span", {
+      }, null, 40, _hoisted_1$9)) : (openBlock(), createElementBlock("span", {
         key: 1,
         class: normalizeClass(["safe-image__fallback", { "is-error": failed.value }]),
         role: "img",
@@ -12110,12 +12117,12 @@ const _sfc_main$8 = /* @__PURE__ */ defineComponent({
             "stroke-linejoin": "round"
           })
         ], -1)
-      ])], 10, _hoisted_2$7));
+      ])], 10, _hoisted_2$8));
     };
   }
 });
-const _style_0$8 = "\nimg[data-v-9b5df25a] {\n  display: block;\n  max-width: 100%;\n}\n.safe-image__fallback[data-v-9b5df25a] {\n  display: grid;\n  place-items: center;\n  width: 100%;\n  height: 100%;\n  min-height: 44px;\n  border-radius: var(--app-radius-sm, 6px);\n  background: var(--app-bg-muted, var(--ia-bg-muted, #f5f5f7));\n  color: var(--app-text-tertiary, var(--ia-text-tertiary, #a8abb2));\n}\n.safe-image__fallback.is-error[data-v-9b5df25a] { color: var(--app-color-danger, var(--ia-danger, #f56c6c));\n}\n.safe-image__fallback svg[data-v-9b5df25a] { width: 55%; height: 55%;\n}\n";
-const SafeImage = /* @__PURE__ */ _export_sfc(_sfc_main$8, [["styles", [_style_0$8]], ["__scopeId", "data-v-9b5df25a"]]);
+const _style_0$9 = "\nimg[data-v-9b5df25a] {\n  display: block;\n  max-width: 100%;\n}\n.safe-image__fallback[data-v-9b5df25a] {\n  display: grid;\n  place-items: center;\n  width: 100%;\n  height: 100%;\n  min-height: 44px;\n  border-radius: var(--app-radius-sm, 6px);\n  background: var(--app-bg-muted, var(--ia-bg-muted, #f5f5f7));\n  color: var(--app-text-tertiary, var(--ia-text-tertiary, #a8abb2));\n}\n.safe-image__fallback.is-error[data-v-9b5df25a] { color: var(--app-color-danger, var(--ia-danger, #f56c6c));\n}\n.safe-image__fallback svg[data-v-9b5df25a] { width: 55%; height: 55%;\n}\n";
+const SafeImage = /* @__PURE__ */ _export_sfc(_sfc_main$9, [["styles", [_style_0$9]], ["__scopeId", "data-v-9b5df25a"]]);
 const MAX_INPUT_COUNT = 8;
 const MAX_BASE64_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_TOTAL_BASE64_SIZE = 20 * 1024 * 1024;
@@ -12343,21 +12350,21 @@ function formatFileSize(bytes) {
 function attachmentUrlFallbackHint(attachment) {
   return attachment.transport === "url" && attachment.size > MAX_BASE64_FILE_SIZE ? { key: "assistant.attachment-url-fallback", params: {} } : null;
 }
-const _hoisted_1$7 = ["data-testid", "title"];
-const _hoisted_2$6 = {
+const _hoisted_1$8 = ["data-testid", "title"];
+const _hoisted_2$7 = {
   key: 1,
   class: "assistant-attachment-chip__icon"
 };
-const _hoisted_3$5 = { class: "assistant-attachment-chip__meta" };
-const _hoisted_4$4 = { class: "assistant-attachment-chip__name" };
-const _hoisted_5$4 = { class: "assistant-attachment-chip__size" };
-const _hoisted_6$4 = {
+const _hoisted_3$6 = { class: "assistant-attachment-chip__meta" };
+const _hoisted_4$5 = { class: "assistant-attachment-chip__name" };
+const _hoisted_5$5 = { class: "assistant-attachment-chip__size" };
+const _hoisted_6$5 = {
   key: 0,
   class: "assistant-attachment-chip__hint",
   "data-testid": "assistant-attachment-url-hint"
 };
 const _hoisted_7$4 = ["data-testid", "disabled", "aria-label"];
-const _sfc_main$7 = /* @__PURE__ */ defineComponent({
+const _sfc_main$8 = /* @__PURE__ */ defineComponent({
   ...{ name: "AssistantAttachmentChip" },
   __name: "AssistantAttachmentChip",
   props: {
@@ -12389,15 +12396,15 @@ const _sfc_main$7 = /* @__PURE__ */ defineComponent({
           src: __props.attachment.previewUrl,
           alt: __props.attachment.name,
           class: "assistant-attachment-chip__thumb"
-        }, null, 8, ["src", "alt"])) : (openBlock(), createElementBlock("span", _hoisted_2$6, [
+        }, null, 8, ["src", "alt"])) : (openBlock(), createElementBlock("span", _hoisted_2$7, [
           createBaseVNode("i", {
             class: normalizeClass(iconFor(__props.attachment.inputType))
           }, null, 2)
         ])),
-        createBaseVNode("span", _hoisted_3$5, [
-          createBaseVNode("span", _hoisted_4$4, toDisplayString(__props.attachment.name), 1),
-          createBaseVNode("span", _hoisted_5$4, toDisplayString(unref(formatFileSize)(__props.attachment.size)) + " · " + toDisplayString(__props.attachment.transport.toUpperCase()), 1),
-          __props.hint ? (openBlock(), createElementBlock("span", _hoisted_6$4, toDisplayString(__props.hint), 1)) : createCommentVNode("", true)
+        createBaseVNode("span", _hoisted_3$6, [
+          createBaseVNode("span", _hoisted_4$5, toDisplayString(__props.attachment.name), 1),
+          createBaseVNode("span", _hoisted_5$5, toDisplayString(unref(formatFileSize)(__props.attachment.size)) + " · " + toDisplayString(__props.attachment.transport.toUpperCase()), 1),
+          __props.hint ? (openBlock(), createElementBlock("span", _hoisted_6$5, toDisplayString(__props.hint), 1)) : createCommentVNode("", true)
         ]),
         __props.removable ? (openBlock(), createElementBlock("button", {
           key: 2,
@@ -12410,13 +12417,72 @@ const _sfc_main$7 = /* @__PURE__ */ defineComponent({
         }, [..._cache[1] || (_cache[1] = [
           createBaseVNode("i", { class: "ri-close-line" }, null, -1)
         ])], 8, _hoisted_7$4)) : createCommentVNode("", true)
-      ], 8, _hoisted_1$7);
+      ], 8, _hoisted_1$8);
     };
   }
 });
-const _style_0$7 = ".assistant-attachment-chip[data-v-7745d843] {\n  position: relative;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 140px;\n  max-width: 190px;\n  padding: 6px;\n  border-radius: var(--app-radius-md);\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter));\n  background: var(--app-bg-card, transparent);\n}\n.assistant-attachment-chip__thumb[data-v-7745d843] {\n  width: 44px;\n  height: 44px;\n  flex-shrink: 0;\n  border-radius: var(--app-radius-sm);\n  object-fit: cover;\n}\n.assistant-attachment-chip__icon[data-v-7745d843] {\n  display: grid;\n  place-items: center;\n  width: 44px;\n  height: 44px;\n  flex-shrink: 0;\n  border-radius: var(--app-radius-sm);\n  color: var(--app-text-secondary);\n  font-size: 18px;\n}\n.assistant-attachment-chip__meta[data-v-7745d843] {\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n  gap: 4px;\n}\n.assistant-attachment-chip__name[data-v-7745d843] {\n  font-size: 10px;\n  font-weight: 600;\n  color: var(--app-text);\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.assistant-attachment-chip__size[data-v-7745d843] {\n  font-size: 9px;\n  color: var(--app-text-secondary);\n}\n.assistant-attachment-chip__hint[data-v-7745d843] {\n  font-size: 9px;\n  color: var(--app-color-warning, var(--el-color-warning, #e6a23c));\n}\n.assistant-attachment-chip__remove[data-v-7745d843] {\n  position: absolute;\n  top: 2px;\n  right: 2px;\n  display: grid;\n  place-items: center;\n  width: 18px;\n  height: 18px;\n  padding: 0;\n  border: none;\n  border-radius: var(--app-radius-full, 9999px);\n  background: none;\n  cursor: pointer;\n  font-size: 12px;\n  color: var(--app-text-secondary);\n}\n.assistant-attachment-chip__remove[data-v-7745d843]:hover {\n  color: var(--app-text);\n}";
-const AssistantAttachmentChip = /* @__PURE__ */ _export_sfc(_sfc_main$7, [["styles", [_style_0$7]], ["__scopeId", "data-v-7745d843"]]);
-function isRecord(value) {
+const _style_0$8 = ".assistant-attachment-chip[data-v-7745d843] {\n  position: relative;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 140px;\n  max-width: 190px;\n  padding: 6px;\n  border-radius: var(--app-radius-md);\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter));\n  background: var(--app-bg-card, transparent);\n}\n.assistant-attachment-chip__thumb[data-v-7745d843] {\n  width: 44px;\n  height: 44px;\n  flex-shrink: 0;\n  border-radius: var(--app-radius-sm);\n  object-fit: cover;\n}\n.assistant-attachment-chip__icon[data-v-7745d843] {\n  display: grid;\n  place-items: center;\n  width: 44px;\n  height: 44px;\n  flex-shrink: 0;\n  border-radius: var(--app-radius-sm);\n  color: var(--app-text-secondary);\n  font-size: 18px;\n}\n.assistant-attachment-chip__meta[data-v-7745d843] {\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n  gap: 4px;\n}\n.assistant-attachment-chip__name[data-v-7745d843] {\n  font-size: 10px;\n  font-weight: 600;\n  color: var(--app-text);\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.assistant-attachment-chip__size[data-v-7745d843] {\n  font-size: 9px;\n  color: var(--app-text-secondary);\n}\n.assistant-attachment-chip__hint[data-v-7745d843] {\n  font-size: 9px;\n  color: var(--app-color-warning, var(--el-color-warning, #e6a23c));\n}\n.assistant-attachment-chip__remove[data-v-7745d843] {\n  position: absolute;\n  top: 2px;\n  right: 2px;\n  display: grid;\n  place-items: center;\n  width: 18px;\n  height: 18px;\n  padding: 0;\n  border: none;\n  border-radius: var(--app-radius-full, 9999px);\n  background: none;\n  cursor: pointer;\n  font-size: 12px;\n  color: var(--app-text-secondary);\n}\n.assistant-attachment-chip__remove[data-v-7745d843]:hover {\n  color: var(--app-text);\n}";
+const AssistantAttachmentChip = /* @__PURE__ */ _export_sfc(_sfc_main$8, [["styles", [_style_0$8]], ["__scopeId", "data-v-7745d843"]]);
+const _hoisted_1$7 = {
+  class: "assistant-kb-citations",
+  "data-testid": "assistant-kb-citations"
+};
+const _hoisted_2$6 = ["aria-expanded"];
+const _hoisted_3$5 = {
+  key: 0,
+  class: "assistant-kb-citations__list",
+  "data-testid": "assistant-kb-citations-list"
+};
+const _hoisted_4$4 = ["data-testid", "title"];
+const _hoisted_5$4 = { class: "assistant-kb-citations__doc" };
+const _hoisted_6$4 = {
+  key: 0,
+  class: "assistant-kb-citations__anchor"
+};
+const _sfc_main$7 = /* @__PURE__ */ defineComponent({
+  ...{ name: "AssistantKbCitations" },
+  __name: "AssistantKbCitations",
+  props: {
+    citations: { type: Array }
+  },
+  setup(__props) {
+    const { t } = useI18n();
+    const expanded = /* @__PURE__ */ ref(false);
+    return (_ctx, _cache) => {
+      return openBlock(), createElementBlock("div", _hoisted_1$7, [
+        createBaseVNode("button", {
+          type: "button",
+          class: "assistant-kb-citations__toggle",
+          "data-testid": "assistant-kb-citations-toggle",
+          "aria-expanded": expanded.value ? "true" : "false",
+          onClick: _cache[0] || (_cache[0] = ($event) => expanded.value = !expanded.value)
+        }, [
+          createBaseVNode("i", {
+            class: normalizeClass(expanded.value ? "ri-arrow-down-s-line" : "ri-arrow-right-s-line"),
+            "aria-hidden": "true"
+          }, null, 2),
+          createTextVNode(" " + toDisplayString(unref(t)("assistant.kb-citations-toggle", { n: __props.citations.length })), 1)
+        ], 8, _hoisted_2$6),
+        expanded.value ? (openBlock(), createElementBlock("ul", _hoisted_3$5, [
+          (openBlock(true), createElementBlock(Fragment, null, renderList(__props.citations, (citation, index) => {
+            return openBlock(), createElementBlock("li", {
+              key: `assistant-kb-citation-${index}`,
+              class: "assistant-kb-citations__item",
+              "data-testid": `assistant-kb-citation-${index}`,
+              title: citation.content
+            }, [
+              createBaseVNode("span", _hoisted_5$4, toDisplayString(citation.documentTitle), 1),
+              citation.anchor ? (openBlock(), createElementBlock("span", _hoisted_6$4, "§ " + toDisplayString(citation.anchor), 1)) : createCommentVNode("", true)
+            ], 8, _hoisted_4$4);
+          }), 128))
+        ])) : createCommentVNode("", true)
+      ]);
+    };
+  }
+});
+const _style_0$7 = ".assistant-kb-citations[data-v-726e5225] {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 4px;\n  font-size: 12px;\n}\n.assistant-kb-citations__toggle[data-v-726e5225] {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  padding: 2px 6px;\n  border: none;\n  border-radius: 6px;\n  background: transparent;\n  color: var(--app-text-secondary, var(--el-text-color-secondary));\n  font-size: 12px;\n  line-height: 1.5;\n  cursor: pointer;\n  transition: background 0.15s ease;\n}\n.assistant-kb-citations__toggle[data-v-726e5225]:hover {\n  background: var(--app-sidebar-item-hover-bg, #f5f5f7);\n}\n.assistant-kb-citations__list[data-v-726e5225] {\n  margin: 0;\n  padding: 4px 0 4px 10px;\n  list-style: none;\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 4px;\n  border-left: 2px solid var(--app-separator, var(--el-border-color-lighter));\n}\n.assistant-kb-citations__item[data-v-726e5225] {\n  display: flex;\n  align-items: baseline;\n  gap: 6px;\n  min-width: 0;\n  color: var(--app-text, var(--el-text-color-primary));\n  word-break: break-word;\n}\n.assistant-kb-citations__anchor[data-v-726e5225] {\n  color: var(--app-text-secondary, var(--el-text-color-secondary));\n}";
+const AssistantKbCitations = /* @__PURE__ */ _export_sfc(_sfc_main$7, [["styles", [_style_0$7]], ["__scopeId", "data-v-726e5225"]]);
+function isRecord$1(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 const INPUT_TYPES = /* @__PURE__ */ new Set(["image", "video", "audio", "file"]);
@@ -12429,10 +12495,10 @@ function messageAttachments(message) {
   } catch {
     return [];
   }
-  if (!isRecord(parsed) || !Array.isArray(parsed.attachments)) return [];
+  if (!isRecord$1(parsed) || !Array.isArray(parsed.attachments)) return [];
   const views = [];
   for (const item of parsed.attachments) {
-    if (!isRecord(item)) continue;
+    if (!isRecord$1(item)) continue;
     const id = typeof item.id === "string" && item.id.trim() ? item.id : "";
     const name = typeof item.name === "string" && item.name.trim() ? item.name : "";
     if (!id || !name) continue;
@@ -12450,6 +12516,50 @@ function messageAttachments(message) {
     });
   }
   return views;
+}
+const CONTENT_PREVIEW_LIMIT = 120;
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function finiteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function citationView(raw) {
+  if (!isRecord(raw)) return void 0;
+  const documentTitle = typeof raw.documentTitle === "string" && raw.documentTitle.trim() ? raw.documentTitle : "";
+  if (!documentTitle) return void 0;
+  const chunkId = finiteNumber(raw.chunkId);
+  const documentId = finiteNumber(raw.documentId);
+  const anchor = typeof raw.anchor === "string" && raw.anchor.trim() ? raw.anchor : void 0;
+  const seq = finiteNumber(raw.seq);
+  const content = typeof raw.content === "string" && raw.content.trim() ? raw.content.slice(0, CONTENT_PREVIEW_LIMIT) : void 0;
+  return {
+    documentTitle,
+    ...chunkId !== void 0 ? { chunkId } : {},
+    ...documentId !== void 0 ? { documentId } : {},
+    ...anchor ? { anchor } : {},
+    ...seq !== void 0 ? { seq } : {},
+    ...content ? { content } : {}
+  };
+}
+function kbCitationViews(raw) {
+  if (!Array.isArray(raw)) return [];
+  const views = [];
+  for (const item of raw) {
+    const view = citationView(item);
+    if (view) views.push(view);
+  }
+  return views;
+}
+function messageKbCitations(message) {
+  return kbCitationViews(message?.kbCitations);
+}
+function segmentKbCitations(assistantMessages, pipelineCitations) {
+  for (let index = assistantMessages.length - 1; index >= 0; index--) {
+    const views = messageKbCitations(assistantMessages[index]);
+    if (views.length > 0) return views;
+  }
+  return kbCitationViews(pipelineCitations);
 }
 const AT_BOTTOM_THRESHOLD_PX = 30;
 const FOLLOW_SCROLL_DURATION_MS = 100;
@@ -12717,12 +12827,22 @@ const _sfc_main$6 = /* @__PURE__ */ defineComponent({
     const contentReady = computed(() => !!runtime2.value && (runtime2.value.messagesLoaded || !!runtime2.value.messagesError || showPipelineTimeline.value && runtime2.value.pipeline.timeline.length > 0));
     const showPipelineTimeline = computed(() => !!runtime2.value && (running.value || !runtime2.value.messagesLoaded));
     const activeRunId = computed(() => showPipelineTimeline.value ? runtime2.value?.pipeline.runId ?? runtime2.value?.knownRunId : void 0);
-    const segments = computed(() => buildSegments(runtime2.value?.messages ?? [], activeRunId.value).map((segment) => ({
-      ...segment,
-      timeline: messagesToTimeline(segment.assistant),
-      // [P2 #14] 用户消息附件视图(发送后气泡与历史回放同路径)
-      attachments: segment.user ? messageAttachments(segment.user) : []
-    })));
+    const segments = computed(() => {
+      const list = buildSegments(runtime2.value?.messages ?? [], activeRunId.value).map((segment) => ({
+        ...segment,
+        timeline: messagesToTimeline(segment.assistant),
+        // [P2 #14] 用户消息附件视图(发送后气泡与历史回放同路径)
+        attachments: segment.user ? messageAttachments(segment.user) : []
+      }));
+      const pipelineCitations = runtime2.value?.messagesLoaded ? runtime2.value.pipeline.kbCitations : void 0;
+      return list.map((segment, index) => ({
+        ...segment,
+        citations: segmentKbCitations(
+          segment.assistant,
+          index === list.length - 1 ? pipelineCitations : void 0
+        )
+      }));
+    });
     const liveTimeline = computed(() => runtime2.value && showPipelineTimeline.value ? runtime2.value.pipeline.timeline : []);
     const errorMessage = computed(() => runtime2.value?.messagesError || runtime2.value?.pipeline.error || runtime2.value?.connectionError);
     const reconnecting = computed(() => !!runtime2.value?.reconnecting);
@@ -12856,7 +12976,11 @@ const _sfc_main$6 = /* @__PURE__ */ defineComponent({
                 createVNode(AssistantTimeline, {
                   class: "assistant-timeline-host",
                   items: segment.timeline
-                }, null, 8, ["items"])
+                }, null, 8, ["items"]),
+                segment.citations?.length ? (openBlock(), createBlock(AssistantKbCitations, {
+                  key: 1,
+                  citations: segment.citations
+                }, null, 8, ["citations"])) : createCommentVNode("", true)
               ], 64);
             }), 128)),
             createVNode(AssistantTimeline, {
@@ -12929,8 +13053,8 @@ const _sfc_main$6 = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const _style_0$6 = '@charset "UTF-8";\n.assistant-messages[data-v-9e089995] {\n  position: relative;\n  min-height: 0;\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n}\n.assistant-messages__scroll[data-v-9e089995] {\n  min-height: 0;\n  flex: 1;\n  overflow-y: auto;\n  /* 揭示前不可见 (贴底初始化两帧后揭示, 旧 viewportReady opacity 过渡) */\n}\n.assistant-messages__scroll[data-ready=false][data-v-9e089995] {\n  opacity: 0;\n}\n.assistant-messages__scroll[data-ready=true][data-v-9e089995] {\n  opacity: 1;\n}\n.assistant-messages__scroll[data-v-9e089995] {\n  transition: opacity 0.4s ease-out;\n}\n.assistant-messages__back[data-v-9e089995] {\n  position: absolute;\n  left: 50%;\n  bottom: 12px;\n  z-index: 10;\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  transform: translateX(-50%);\n  padding: 6px 12px;\n  border-radius: 999px;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter));\n  background: var(--app-bg-card, #fff);\n  color: var(--app-text);\n  font-size: 12px;\n  cursor: pointer;\n  box-shadow: var(--app-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));\n  transition: background 0.15s ease;\n}\n.assistant-messages__back[data-v-9e089995]:hover {\n  background: var(--app-sidebar-item-hover-bg, #f5f5f7);\n}\n.assistant-messages__content[data-v-9e089995] {\n  max-width: 720px;\n  margin: 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n  padding: 18px 16px 28px;\n}\n.assistant-messages__loading[data-v-9e089995],\n.assistant-messages__thinking[data-v-9e089995] {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  margin: 0;\n  padding: 10px 0;\n  font-size: 12px;\n  color: var(--app-text-secondary);\n}\n\n/* [P1 #5] 断流静默提示条(非阻断状态条, 对齐 Figma/Linear 断网横幅范式) */\n.assistant-messages__reconnecting[data-v-9e089995] {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  margin: 0;\n  padding: 8px 10px;\n  border-radius: 10px;\n  border: 1px solid var(--el-color-warning-light-7, #f3d19e);\n  background: var(--el-color-warning-light-9, #fdf6ec);\n  font-size: 12px;\n  color: var(--app-color-warning, var(--el-color-warning, #e6a23c));\n}\n.is-spinning[data-v-9e089995] {\n  animation: assistant-msg-spin-9e089995 1s linear infinite;\n}\n@keyframes assistant-msg-spin-9e089995 {\nfrom {\n    transform: rotate(0deg);\n}\nto {\n    transform: rotate(360deg);\n}\n}\n.assistant-messages__user[data-v-9e089995],\n.assistant-timeline-host[data-v-9e089995] {\n  /* 长会话性能: 视口外行跳过布局/绘制, DOM 保持完整 (旧 timeline.tsx:44-49 同口径) */\n  content-visibility: auto;\n  contain-intrinsic-size: auto 72px;\n}\n.assistant-messages__user[data-v-9e089995] {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 6px;\n}\n.assistant-messages__user p[data-v-9e089995] {\n  margin: 0;\n  max-width: 85%;\n  padding: 9px 12px;\n  border-radius: 14px;\n  background: var(--el-color-primary-light-9, #ecf5ff);\n  color: var(--app-text);\n  font-size: 13px;\n  line-height: 1.6;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* [P2 #14] 消息区附件行(缩略图/文件卡, 复用 composer chip 组件) */\n.assistant-messages__user-attachments[data-v-9e089995] {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: 8px;\n  max-width: 85%;\n}\n.assistant-messages__error[data-v-9e089995] {\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  padding: 8px 10px;\n  border-radius: 10px;\n  border: 1px solid var(--el-color-danger-light-7, #fde2e2);\n  background: var(--el-color-danger-light-9, #fef0f0);\n  font-size: 12px;\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-messages__error > i[data-v-9e089995] {\n  margin-top: 1px;\n}\n.assistant-messages__error-text[data-v-9e089995] {\n  flex: 1;\n  min-width: 0;\n  word-break: break-word;\n}\n.assistant-messages__veil[data-v-9e089995] {\n  position: absolute;\n  inset: 0;\n  z-index: 5;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  font-size: 12px;\n  color: var(--app-text-secondary);\n  background: color-mix(in srgb, var(--app-bg, #fff) 60%, transparent);\n}\n.assistant-messages__batch[data-v-9e089995] {\n  position: absolute;\n  left: 0;\n  right: 0;\n  bottom: 10px;\n  z-index: 6;\n  padding: 0 14px;\n  display: flex;\n  justify-content: center;\n}\n.assistant-messages__batch[data-v-9e089995] > * {\n  max-width: 720px;\n  width: 100%;\n}';
-const AssistantMessageList = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["styles", [_style_0$6]], ["__scopeId", "data-v-9e089995"]]);
+const _style_0$6 = '@charset "UTF-8";\n.assistant-messages[data-v-e8a8fb77] {\n  position: relative;\n  min-height: 0;\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n}\n.assistant-messages__scroll[data-v-e8a8fb77] {\n  min-height: 0;\n  flex: 1;\n  overflow-y: auto;\n  /* 揭示前不可见 (贴底初始化两帧后揭示, 旧 viewportReady opacity 过渡) */\n}\n.assistant-messages__scroll[data-ready=false][data-v-e8a8fb77] {\n  opacity: 0;\n}\n.assistant-messages__scroll[data-ready=true][data-v-e8a8fb77] {\n  opacity: 1;\n}\n.assistant-messages__scroll[data-v-e8a8fb77] {\n  transition: opacity 0.4s ease-out;\n}\n.assistant-messages__back[data-v-e8a8fb77] {\n  position: absolute;\n  left: 50%;\n  bottom: 12px;\n  z-index: 10;\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  transform: translateX(-50%);\n  padding: 6px 12px;\n  border-radius: 999px;\n  border: 1px solid var(--app-separator, var(--el-border-color-lighter));\n  background: var(--app-bg-card, #fff);\n  color: var(--app-text);\n  font-size: 12px;\n  cursor: pointer;\n  box-shadow: var(--app-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));\n  transition: background 0.15s ease;\n}\n.assistant-messages__back[data-v-e8a8fb77]:hover {\n  background: var(--app-sidebar-item-hover-bg, #f5f5f7);\n}\n.assistant-messages__content[data-v-e8a8fb77] {\n  max-width: 720px;\n  margin: 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n  padding: 18px 16px 28px;\n}\n.assistant-messages__loading[data-v-e8a8fb77],\n.assistant-messages__thinking[data-v-e8a8fb77] {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  margin: 0;\n  padding: 10px 0;\n  font-size: 12px;\n  color: var(--app-text-secondary);\n}\n\n/* [P1 #5] 断流静默提示条(非阻断状态条, 对齐 Figma/Linear 断网横幅范式) */\n.assistant-messages__reconnecting[data-v-e8a8fb77] {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  margin: 0;\n  padding: 8px 10px;\n  border-radius: 10px;\n  border: 1px solid var(--el-color-warning-light-7, #f3d19e);\n  background: var(--el-color-warning-light-9, #fdf6ec);\n  font-size: 12px;\n  color: var(--app-color-warning, var(--el-color-warning, #e6a23c));\n}\n.is-spinning[data-v-e8a8fb77] {\n  animation: assistant-msg-spin-e8a8fb77 1s linear infinite;\n}\n@keyframes assistant-msg-spin-e8a8fb77 {\nfrom {\n    transform: rotate(0deg);\n}\nto {\n    transform: rotate(360deg);\n}\n}\n.assistant-messages__user[data-v-e8a8fb77],\n.assistant-timeline-host[data-v-e8a8fb77] {\n  /* 长会话性能: 视口外行跳过布局/绘制, DOM 保持完整 (旧 timeline.tsx:44-49 同口径) */\n  content-visibility: auto;\n  contain-intrinsic-size: auto 72px;\n}\n.assistant-messages__user[data-v-e8a8fb77] {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 6px;\n}\n.assistant-messages__user p[data-v-e8a8fb77] {\n  margin: 0;\n  max-width: 85%;\n  padding: 9px 12px;\n  border-radius: 14px;\n  background: var(--el-color-primary-light-9, #ecf5ff);\n  color: var(--app-text);\n  font-size: 13px;\n  line-height: 1.6;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* [P2 #14] 消息区附件行(缩略图/文件卡, 复用 composer chip 组件) */\n.assistant-messages__user-attachments[data-v-e8a8fb77] {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: 8px;\n  max-width: 85%;\n}\n.assistant-messages__error[data-v-e8a8fb77] {\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  padding: 8px 10px;\n  border-radius: 10px;\n  border: 1px solid var(--el-color-danger-light-7, #fde2e2);\n  background: var(--el-color-danger-light-9, #fef0f0);\n  font-size: 12px;\n  color: var(--el-color-danger, #f56c6c);\n}\n.assistant-messages__error > i[data-v-e8a8fb77] {\n  margin-top: 1px;\n}\n.assistant-messages__error-text[data-v-e8a8fb77] {\n  flex: 1;\n  min-width: 0;\n  word-break: break-word;\n}\n.assistant-messages__veil[data-v-e8a8fb77] {\n  position: absolute;\n  inset: 0;\n  z-index: 5;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  font-size: 12px;\n  color: var(--app-text-secondary);\n  background: color-mix(in srgb, var(--app-bg, #fff) 60%, transparent);\n}\n.assistant-messages__batch[data-v-e8a8fb77] {\n  position: absolute;\n  left: 0;\n  right: 0;\n  bottom: 10px;\n  z-index: 6;\n  padding: 0 14px;\n  display: flex;\n  justify-content: center;\n}\n.assistant-messages__batch[data-v-e8a8fb77] > * {\n  max-width: 720px;\n  width: 100%;\n}';
+const AssistantMessageList = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["styles", [_style_0$6]], ["__scopeId", "data-v-e8a8fb77"]]);
 const _hoisted_1$5 = ["value", "disabled"];
 const _hoisted_2$4 = ["disabled"];
 const _hoisted_3$3 = ["value", "disabled"];

@@ -20,7 +20,7 @@ import type {
   AiChatStreamEvent,
   PendingToolCallPlan,
 } from '../runs'
-import type { AgentConversation, AgentMessage } from '../conversations'
+import type { AgentConversation, AgentMessage, KbCitation } from '../conversations'
 import type { SubTimelineItem, TimelineItem, ToolTimelineStatus } from './types'
 import { subAgentToolNames } from '../displayNames'
 
@@ -47,6 +47,8 @@ export interface AgentPipelineState {
   conversationId?: string
   error?: string
   pendingConfirmation?: AssistantPendingConfirmation
+  /** 根终态 DONE 捕获的 KB 引用 (消息体无引用列, merge 重拉后仍存活于此) */
+  kbCitations?: KbCitation[]
 }
 
 export function createInitialPipelineState(): AgentPipelineState {
@@ -821,6 +823,10 @@ export function reducePipelineEvent(
       if (event.parentToolCallId || event.agentName) return next
       next.status = 'done'
       next.pendingConfirmation = undefined
+      // [P4-W14] 根终态 DONE 捕获 KB 引用: 无字段不设置 (不残留), 空数组原样保留
+      if (Array.isArray(event.kbCitations)) {
+        next.kbCitations = [...event.kbCitations]
+      }
       if (event.content) {
         next.timeline = appendContentToTimeline(next.timeline, event.content)
       }

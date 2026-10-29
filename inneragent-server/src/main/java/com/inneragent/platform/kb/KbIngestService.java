@@ -10,6 +10,7 @@ import com.inneragent.platform.kb.mapper.IaKbDocumentMapper;
 import com.inneragent.platform.toolhub.ToolAuditService;
 import com.inneragent.platform.toolhub.ToolDecisionSource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -48,19 +51,34 @@ public class KbIngestService {
     private final KbChunkStore chunkStore;
     private final ToolAuditService auditService;
     private final ObjectMapper objectMapper;
+    private final KbEmbeddingPort embeddingPort;
 
+    @Autowired
     public KbIngestService(KbProperties properties,
                            KbSearchConfigResolver searchConfig,
                            IaKbDocumentMapper documentMapper,
                            KbChunkStore chunkStore,
                            ToolAuditService auditService,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           KbEmbeddingPort embeddingPort) {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.searchConfig = Objects.requireNonNull(searchConfig, "searchConfig must not be null");
         this.documentMapper = Objects.requireNonNull(documentMapper, "documentMapper must not be null");
         this.chunkStore = Objects.requireNonNull(chunkStore, "chunkStore must not be null");
         this.auditService = Objects.requireNonNull(auditService, "auditService must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.embeddingPort = Objects.requireNonNull(embeddingPort, "embeddingPort must not be null");
+    }
+
+    /** 直构兼容口(缺语义端口):no-op 端口永不外呼,embedding_json 全 NULL。 */
+    public KbIngestService(KbProperties properties,
+                           KbSearchConfigResolver searchConfig,
+                           IaKbDocumentMapper documentMapper,
+                           KbChunkStore chunkStore,
+                           ToolAuditService auditService,
+                           ObjectMapper objectMapper) {
+        this(properties, searchConfig, documentMapper, chunkStore, auditService,
+                objectMapper, KbEmbeddingPort.noop());
     }
 
     // ------------------------------------------------------------------
@@ -98,7 +116,8 @@ public class KbIngestService {
         row.setContentSha256(sha256(safeContent));
         row.setMetadataJson(requireMetadata(metadataJson));
         documentMapper.insert(row);
-        chunkStore.insertChunks(appId, row.getId(), searchConfig.effectiveConfig(), chunks);
+        embedAndStore(appId, row.getId(), chunkStore.insertChunks(
+                appId, row.getId(), searchConfig.effectiveConfig(), chunks), chunks);
 
         audit(appId, row.getId(), "definition-imported", "imported",
                 safeTitle, chunks.size());
@@ -172,13 +191,19 @@ public class KbIngestService {
 
     /**
      * 重建索引:按当前生效检索配置重算该文档全部分段 tsv
-     * (search-config 变更或降级恢复后,使存量列与查询配置一致)。
+     * (search-config 变更或降级恢复后,使存量列与查询配置一致);
+     * 语义层开启时顺带回填存量分段向量(与 import 共用 embedAndStore)。
      */
     @Transactional
     public KbDocumentView rebuildIndex(long appId, long id, Long operatorId) {
         IaKbDocument row = requireRow(appId, id);
-        int rebuilt = chunkStore.rebuildTsv(appId,
-                searchConfig.effectiveConfig(), chunkStore.listChunks(appId, id));
+        List<KbChunkStore.ChunkRow> rows = chunkStore.listChunks(appId, id);
+        int rebuilt = chunkStore.rebuildTsv(appId, searchConfig.effectiveConfig(), rows);
+        embedAndStore(appId, id, rows.stream().map(KbChunkStore.ChunkRow::id).toList(),
+                rows.stream()
+                        .map(chunkRow -> new DocumentChunker.Chunk(
+                                chunkRow.seq(), null, chunkRow.content()))
+                        .toList());
         audit(appId, id, "definition-updated", "rebuilt", row.getTitle(), rebuilt);
         log.info("KB 索引重建: appId={}, id={}, chunks={}, config={}",
                 appId, id, rebuilt, searchConfig.effectiveConfig());
@@ -214,9 +239,41 @@ public class KbIngestService {
     private void rechunk(IaKbDocument row, String content, int size, int overlap) {
         List<DocumentChunker.Chunk> chunks = chunk(content, size, overlap);
         documentMapper.deleteChunks(row.getId());
-        chunkStore.insertChunks(row.getAppId(), row.getId(),
-                searchConfig.effectiveConfig(), chunks);
+        embedAndStore(row.getAppId(), row.getId(), chunkStore.insertChunks(
+                row.getAppId(), row.getId(), searchConfig.effectiveConfig(), chunks), chunks);
         row.setChunkCount(chunks.size());
+    }
+
+    /**
+     * 语义接线(升级战役 D2;import/更新重分块/重建索引共用):enabled 时
+     * 对新分段批量 embed 并以 float[] JSON 数组回写 embedding_json
+     * (TEXT,DEF-08 铁律);embed/回写任一失败仅 WARN,分段照常入库
+     * (embedding_json 留 NULL,降级哲学:检索失败不阻断)。disabled 零调用。
+     */
+    private void embedAndStore(long appId, long documentId, List<Long> chunkIds,
+                               List<DocumentChunker.Chunk> chunks) {
+        if (!properties.getSemantic().isEnabled() || chunks.isEmpty()) {
+            return;
+        }
+        try {
+            List<String> texts = chunks.stream()
+                    .map(DocumentChunker.Chunk::content).toList();
+            List<float[]> vectors = embeddingPort.embed(texts);
+            if (vectors.size() != chunkIds.size()) {
+                log.warn("KB 语义向量数与分段数不一致,跳过回写: appId={}, documentId={}, "
+                        + "chunks={}, vectors={}", appId, documentId, chunkIds.size(), vectors.size());
+                return;
+            }
+            Map<Long, String> embeddingJsonByChunkId = new LinkedHashMap<>();
+            for (int i = 0; i < chunkIds.size(); i++) {
+                embeddingJsonByChunkId.put(
+                        chunkIds.get(i), objectMapper.writeValueAsString(vectors.get(i)));
+            }
+            chunkStore.storeEmbeddings(appId, documentId, embeddingJsonByChunkId);
+        } catch (Exception degradation) {
+            log.warn("KB 摄取向量化失败,分段照常入库(embedding_json 为 NULL): "
+                    + "appId={}, documentId={}", appId, documentId, degradation);
+        }
     }
 
     private List<DocumentChunker.Chunk> chunk(String content, int size, int overlap) {

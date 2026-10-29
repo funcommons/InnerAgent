@@ -69,6 +69,7 @@ export {
   deleteConversationByConversationId,
   type AgentConversation,
   type AgentMessage,
+  type KbCitation,
   type AssistantPageResult,
   type AssistantReferenceOptions,
   type AssistantSkillReferenceOption,

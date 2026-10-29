@@ -151,6 +151,8 @@ export interface BaseAiChatStreamEvent {
   decisions?: ToolConfirmationDecision[]
   expiresAt?: string
   cancellationReason?: string
+  /** 根终态 DONE 投影的 KB 引用 (事件载荷透传优先, 否则仅 DONE 从运行记录回填) */
+  kbCitations?: import('./conversations').KbCitation[]
 }
 
 export interface PendingToolCallPlanFieldChange {

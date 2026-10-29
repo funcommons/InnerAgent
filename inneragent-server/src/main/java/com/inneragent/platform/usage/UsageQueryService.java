@@ -8,6 +8,7 @@ import com.inneragent.platform.common.PageResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +86,53 @@ public class UsageQueryService {
             String granularity,
             int pageNo,
             int pageSize) {
+    }
+
+    // ------------------------------------------------------------------
+    // 用量时序(admin):按统计周期分桶的次数与 token SUM,一行一桶。
+    // ------------------------------------------------------------------
+
+    /**
+     * 时序桶数上限(约 27 年 × 日桶):时序接口不分页,桶数即行数,
+     * 超宽窗口(如百年 × DAY)直接拒绝,防御 GROUP BY 实时聚合拖垮库。
+     */
+    static final int MAX_TIMESERIES_BUCKETS = 10_000;
+
+    /**
+     * 用量时序查询(不分页):窗口/粒度/桶数 fail-fast 校验,不合法抛
+     * IllegalArgumentException(→ 400),不触 mapper;归桶与计数口径见
+     * {@code selectUsageTimeseries}。粒度当前仅 DAY(大小写不敏感),
+     * MONTH 随需求另接(格式 YYYY-MM,桶数上限按月折算)。
+     */
+    public List<UsageTimeseriesRow> timeseries(TimeseriesFilter filter) {
+        if (filter.from() == null || filter.to() == null) {
+            throw new IllegalArgumentException("from / to 必填");
+        }
+        if (!filter.from().isBefore(filter.to())) {
+            throw new IllegalArgumentException(
+                    "from 必须早于 to: " + filter.from() + " / " + filter.to());
+        }
+        if (!GRANULARITY_DAY.equalsIgnoreCase(filter.granularity())) {
+            throw new IllegalArgumentException(
+                    "granularity 仅支持 DAY: " + filter.granularity());
+        }
+        if (Duration.between(filter.from(), filter.to()).toDays()
+                > MAX_TIMESERIES_BUCKETS) {
+            throw new IllegalArgumentException("窗口超过时序桶数上限 "
+                    + MAX_TIMESERIES_BUCKETS + " 天: " + filter.from() + " / " + filter.to());
+        }
+        return usageMapper.selectUsageTimeseries(new UsageTimeseriesQuery(
+                filter.from(), filter.to(), "YYYY-MM-DD",
+                filter.provider(), filter.modelCode()));
+    }
+
+    /** 时序过滤(granularity 见 {@link #timeseries};provider/modelCode 可选)。 */
+    public record TimeseriesFilter(
+            LocalDateTime from,
+            LocalDateTime to,
+            String granularity,
+            String provider,
+            String modelCode) {
     }
 
     // ------------------------------------------------------------------

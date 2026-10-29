@@ -4,6 +4,7 @@ import com.inneragent.platform.common.CommonResult;
 import com.inneragent.platform.common.PageResult;
 import com.inneragent.platform.usage.UsageQueryService;
 import com.inneragent.platform.usage.UsageSummaryRow;
+import com.inneragent.platform.usage.UsageTimeseriesRow;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static com.inneragent.platform.common.CommonResult.success;
 
@@ -75,5 +77,21 @@ public class AdminUsageController {
             LocalDateTime to) {
         return success(usageQueryService.northStar(
                 new UsageQueryService.NorthStarFilter(appId, from, to)));
+    }
+
+    /** 用量时序:一行一桶,无维度下钻;校验与口径见 {@link UsageQueryService#timeseries}。 */
+    @GetMapping("/timeseries")
+    @Operation(summary = "用量时序(按日分桶 × 调用次数与 token SUM;"
+            + "计数口径=COMPLETED/FAILED/CANCELLED 终态调用,STARTED 不计)")
+    public CommonResult<List<UsageTimeseriesRow>> timeseries(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime to,
+            @RequestParam(defaultValue = "DAY") String granularity,
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String modelCode) {
+        return success(usageQueryService.timeseries(
+                new UsageQueryService.TimeseriesFilter(from, to, granularity, provider, modelCode)));
     }
 }

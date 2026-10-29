@@ -2,9 +2,17 @@ package com.inneragent.model.provider;
 
 import cn.hutool.core.util.StrUtil;
 import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.OutputConfig;
 import com.inneragent.server.controller.vo.RemoteModelVO;
 import com.inneragent.platform.service.ai.proxy.AiProxySupport;
+import io.agentscope.core.formatter.MediaUtils;
+import io.agentscope.core.message.AudioBlock;
+import io.agentscope.core.message.ContentBlock;
+import io.agentscope.core.message.DataBlock;
+import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.Source;
+import io.agentscope.core.message.VideoBlock;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.transport.ProxyConfig;
@@ -140,6 +148,50 @@ public class AnthropicAiProvider extends AbstractAiProvider {
             paramsBuilder.outputConfig(OutputConfig.builder()
                     .effort(OutputConfig.Effort.of(merged.getReasoningEffort().trim()))
                     .build());
+        }
+
+        /**
+         * A3(升级战役 2026-10):anthropic messages 协议只支持图片多模态。库默认实现会把
+         * video/audio 块静默丢弃(纯 audio 消息整条蒸发)、把非图片 DataBlock 降级为
+         * "[Media - processing failed: …]" 占位文本发给模型;这里在格式化前显式拒绝,
+         * 口径与 OpenAiResponsesAgentScopeModel 的 audio/video 显式不支持一致。
+         */
+        @Override
+        public List<MessageParam> doFormat(List<Msg> msgs) {
+            rejectUnsupportedMultimodalBlocks(msgs);
+            return super.doFormat(msgs);
+        }
+
+        private static void rejectUnsupportedMultimodalBlocks(List<Msg> msgs) {
+            for (Msg msg : msgs) {
+                for (ContentBlock block : msg.getContent()) {
+                    if (block instanceof VideoBlock videoBlock) {
+                        throw new IllegalArgumentException(
+                                "Anthropic API does not support video input blocks: "
+                                        + sourceMimeType(videoBlock.getSource()));
+                    } else if (block instanceof AudioBlock audioBlock) {
+                        throw new IllegalArgumentException(
+                                "Anthropic API does not support audio input blocks: "
+                                        + sourceMimeType(audioBlock.getSource()));
+                    } else if (block instanceof DataBlock dataBlock) {
+                        String mimeType = sourceMimeType(dataBlock.getSource());
+                        if (!mimeType.startsWith("image/")) {
+                            throw new IllegalArgumentException(
+                                    "Anthropic API only supports image DataBlocks; got MIME type: "
+                                            + mimeType);
+                        }
+                    }
+                }
+            }
+        }
+
+        /** MIME 解析不出来时回退占位值,保证拒绝消息始终能拼出完整口径而不是次生异常。 */
+        private static String sourceMimeType(Source source) {
+            try {
+                return MediaUtils.resolveMimeType(source);
+            } catch (RuntimeException e) {
+                return "unknown";
+            }
         }
     }
 

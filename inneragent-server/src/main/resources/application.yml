@@ -220,6 +220,14 @@ inneragent:
       # span 自动生效,缺省 GlobalOpenTelemetry noop。
       capture-content: false
       content-max-chars: 512
+    # OTLP 导出开箱化(B2):整段缺省(如下全注释)=零行为变化;
+    # 配置 endpoint 后服务内自建 SDK 异步导出 OTLP,并单次注册全局。
+    # otlp:
+    #   endpoint: http://127.0.0.1:4318/v1/traces
+    #   timeout-ms: 10000          # 单次导出超时(毫秒)
+    #   headers:
+    #     authorization: Bearer xxx
+    #   sample-ratio: 1.0          # 根 span 采样比例(0<d≤1,越界拒绝启动)
   skillhub:
     # 应用级 Skill 体系(P4-W13 PRD M4;/ia/api/v1/admin/skills/**)。
     # 缺省值:zip 上传 20MB/解压总量 10MB/条目 200/压缩比 100(zip bomb)/

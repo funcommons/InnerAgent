@@ -21,6 +21,7 @@ import com.inneragent.agent.conversation.AgentMessageService;
 import com.inneragent.agent.definition.AiAgentService;
 import com.inneragent.model.config.AiModelService;
 import com.inneragent.model.config.AiModelMultimodalCapabilities;
+import com.inneragent.agent.attachment.AttachmentInlineResolver;
 import com.inneragent.agent.context.ProjectContext;
 import com.inneragent.agent.kernel.AgentKernelSpec;
 import com.inneragent.agent.kernel.AgentKernelSpecFactory;
@@ -122,7 +123,13 @@ public final class AgentScopePipelineRunService {
     private final com.inneragent.agent.kb.AgentKnowledgeBasePort knowledgeBase;
     private final CircuitBreakerAdminService circuitBreakers;
     private final com.inneragent.platform.safety.ContentSafetyGate safetyGate;
+    /**
+     * [adapt] P2-srv 附件断点修复:runs 组装前把 {@code /attachments/{id}} url
+     * 输入内联为 base64/data 形态(可空:测试直构免装配,为 null 跳过内联)。
+     */
+    private final AttachmentInlineResolver attachmentInlines;
 
+    /** 测试直构免装配入口:附件内联解析传 null,runs 组装跳过内联。 */
     public AgentScopePipelineRunService(
             AiModelService modelService,
             AiAgentService agentService,
@@ -147,6 +154,40 @@ public final class AgentScopePipelineRunService {
             com.inneragent.agent.kb.AgentKnowledgeBasePort knowledgeBase,
             CircuitBreakerAdminService circuitBreakers,
             com.inneragent.platform.safety.ContentSafetyGate safetyGate) {
+        this(modelService, agentService, conversations, persistedMessages, specFactory,
+                snapshots, messages, coordinator, runtimeContexts, executionFactory,
+                supervisor, runQueries, replay, instanceIdentity, properties, schedulers,
+                objectMapper, skillRegistry, userSkillService, appSkillCatalog,
+                knowledgeBase, circuitBreakers, safetyGate, null);
+    }
+
+    /** Spring 装配入口(类内多构造器,显式标注注入点)。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public AgentScopePipelineRunService(
+            AiModelService modelService,
+            AiAgentService agentService,
+            AgentConversationService conversations,
+            AgentMessageService persistedMessages,
+            AgentKernelSpecFactory specFactory,
+            AgentKernelSnapshotBuilder snapshots,
+            AgentScopeMessageMapper messages,
+            AgentRunCoordinator coordinator,
+            AgentExecutionRuntimeContextRequests runtimeContexts,
+            AgentExecutionFactory executionFactory,
+            RunExecutionSupervisor supervisor,
+            AgentRunQueryService runQueries,
+            AgentRunReplayService replay,
+            AgentRuntimeInstanceIdentity instanceIdentity,
+            AgentScopeV2Properties properties,
+            AgentRuntimeSchedulers schedulers,
+            ObjectMapper objectMapper,
+            AgentScopeSkillRegistry skillRegistry,
+            AgentUserSkillService userSkillService,
+            com.inneragent.agent.skill.AppSkillCatalogPort appSkillCatalog,
+            com.inneragent.agent.kb.AgentKnowledgeBasePort knowledgeBase,
+            CircuitBreakerAdminService circuitBreakers,
+            com.inneragent.platform.safety.ContentSafetyGate safetyGate,
+            AttachmentInlineResolver attachmentInlines) {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
         this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
         this.conversations = Objects.requireNonNull(conversations, "conversations must not be null");
@@ -177,6 +218,7 @@ public final class AgentScopePipelineRunService {
                 circuitBreakers, "circuitBreakers must not be null");
         this.safetyGate = Objects.requireNonNull(
                 safetyGate, "safetyGate must not be null");
+        this.attachmentInlines = attachmentInlines;
     }
 
     public Flux<AiChatStreamRespVO> stream(AiChatReqVO request, long userId) {
@@ -321,6 +363,14 @@ public final class AgentScopePipelineRunService {
         String systemPrompt = systemPrompt(request, definition, promptVariables, activeSkills);
         AiModel model = AiModelRequestOptions.withReasoningEffort(
                 model(request.getModelId()), request.getReasoningEffort(), objectMapper);
+        // [adapt] P2-srv 附件断点修复:sdk-js 以 API 根相对路径 /attachments/{id}
+        // 提交 url 传输附件,validateUrlInput 强制 http(s) 绝对地址必 400 ——
+        // 在 url 校验前先内联为 base64/data 形态(归属校验/404 借附件读路径
+        // 既有语义,10MB 内联上限自检);仅 runs 链路挂点。
+        if (attachmentInlines != null) {
+            request.setMultimodalInputs(
+                    attachmentInlines.inline(request.getMultimodalInputs(), userId));
+        }
         AiModelMultimodalCapabilities.validateInputs(model, request.getMultimodalInputs());
         ToolExecutionMode toolExecutionMode = toolExecutionMode(request);
         request.setToolExecutionMode(toolExecutionMode.name());

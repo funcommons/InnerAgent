@@ -297,6 +297,21 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- OTLP 导出开箱化(B2):配了 inneragent.observability.otlp.endpoint 才装配
+			(OtlpExportConfiguration);optional=true 不向下传递,classpath 无 exporter
+			时配置整体退场,运行时缺省仍为 api 直连 noop 形态。版本均走
+			opentelemetry-bom(1.66.0),不写死。 -->
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-sdk</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-exporter-otlp</artifactId>
+			<optional>true</optional>
+		</dependency>
+
 		<!-- MCP 宿主桥客户端(P1-T2b:tools/call + X-IA-Act 身份透传)。版本钉在
 			0.17.0 = agentscope-core 2.0.0 的传递版本(显式声明仅将其提为直接依赖):
 			官方 mcp:2.0.1(spike 验证形态)会全工程升版,agentscope-core 的
@@ -317,13 +332,8 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- OTel SDK + InMemorySpanExporter:仅测试侧做四类 span 属性断言
-			(任务 #18b;运行时缺省仍为 noop,不引 exporter) -->
-		<dependency>
-			<groupId>io.opentelemetry</groupId>
-			<artifactId>opentelemetry-sdk</artifactId>
-			<scope>test</scope>
-		</dependency>
+		<!-- InMemorySpanExporter:仅测试侧 span 属性断言(opentelemetry-sdk 已上移
+			为 optional 主依赖,见 B2;测试类路径天然可见) -->
 		<dependency>
 			<groupId>io.opentelemetry</groupId>
 			<artifactId>opentelemetry-sdk-testing</artifactId>

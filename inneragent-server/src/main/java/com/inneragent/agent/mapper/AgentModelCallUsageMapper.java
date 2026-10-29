@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.inneragent.agent.entity.AgentModelCallUsage;
 import com.inneragent.platform.usage.UsageSummaryQuery;
 import com.inneragent.platform.usage.UsageSummaryRow;
+import com.inneragent.platform.usage.UsageTimeseriesQuery;
+import com.inneragent.platform.usage.UsageTimeseriesRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -61,6 +63,36 @@ public interface AgentModelCallUsageMapper extends BaseMapper<AgentModelCallUsag
     IPage<UsageSummaryRow> selectUsageSummary(
             Page<UsageSummaryRow> page,
             @Param("query") UsageSummaryQuery query);
+
+    /**
+     * 用量时序(admin):按统计周期分桶的次数与 token SUM,单表无下钻。
+     * 计次与 token SUM 均只算终态行(STARTED 不计,口径同 selectUsageSummary);
+     * 归桶同 to_char(started_at) 截断惯例,边界同 from 含/to 不含;
+     * GROUP BY 走输出列序号(绑定参数表达式无法参与 GROUP BY 匹配)。
+     */
+    @Select("""
+            <script>
+            SELECT to_char(u.started_at, #{query.granularityFormat}) AS statDate,
+                   COUNT(*) AS calls,
+                   COUNT(*) FILTER (WHERE u.status = 'COMPLETED') AS completedCalls,
+                   COUNT(*) FILTER (WHERE u.status = 'FAILED') AS failedCalls,
+                   COUNT(*) FILTER (WHERE u.status = 'CANCELLED') AS cancelledCalls,
+                   COALESCE(SUM(u.input_tokens), 0) AS inputTokens,
+                   COALESCE(SUM(u.output_tokens), 0) AS outputTokens,
+                   COALESCE(SUM(u.reasoning_tokens), 0) AS reasoningTokens,
+                   COALESCE(SUM(u.cache_tokens), 0) AS cacheTokens
+            FROM ia_agent_model_call_usage u
+            WHERE u.status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+            <if test="query.from != null"> AND u.started_at &gt;= #{query.from}</if>
+            <if test="query.to != null"> AND u.started_at &lt; #{query.to}</if>
+            <if test="query.provider != null"> AND u.provider = #{query.provider}</if>
+            <if test="query.modelCode != null"> AND u.model_code = #{query.modelCode}</if>
+            GROUP BY 1
+            ORDER BY statDate
+            </script>
+            """)
+    List<UsageTimeseriesRow> selectUsageTimeseries(
+            @Param("query") UsageTimeseriesQuery query);
 
     @Update("""
             UPDATE ia_agent_model_call_usage
